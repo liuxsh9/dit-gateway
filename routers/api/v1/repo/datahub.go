@@ -1,0 +1,114 @@
+// Copyright 2024 The Forgejo Authors. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+package repo
+
+import (
+	"io"
+	"net/http"
+
+	"forgejo.org/modules/datahub"
+	"forgejo.org/services/context"
+)
+
+func proxyToDatahub(ctx *context.APIContext, fn func() ([]byte, int, error)) {
+	if !ctx.Repo.Repository.IsDataRepo {
+		ctx.NotFound()
+		return
+	}
+	data, status, err := fn()
+	if err != nil {
+		ctx.Error(http.StatusBadGateway, "datahub proxy", err)
+		return
+	}
+	ctx.Resp.Header().Set("Content-Type", "application/json")
+	ctx.Resp.WriteHeader(status)
+	_, _ = ctx.Resp.Write(data)
+}
+
+func readBody(ctx *context.APIContext) []byte {
+	body, _ := io.ReadAll(ctx.Req.Body)
+	return body
+}
+
+func DatahubListRefs(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().ListRefs(ctx, ctx.Repo.Repository.Name)
+	})
+}
+
+func DatahubGetRef(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), ctx.Params(":name"))
+	})
+}
+
+func DatahubUpdateRef(ctx *context.APIContext) {
+	body := readBody(ctx)
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().UpdateRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), ctx.Params(":name"), body)
+	})
+}
+
+func DatahubGetObject(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetObject(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
+	})
+}
+
+func DatahubPushObjects(ctx *context.APIContext) {
+	body := readBody(ctx)
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().PushObjects(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
+func DatahubGetTree(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetTree(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
+	})
+}
+
+func DatahubGetDiff(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetDiff(ctx, ctx.Repo.Repository.Name, ctx.Params(":old"), ctx.Params(":new"))
+	})
+}
+
+func DatahubGetLog(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetLog(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref"))
+	})
+}
+
+func DatahubListPulls(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().ListPulls(ctx, ctx.Repo.Repository.Name)
+	})
+}
+
+func DatahubCreatePull(ctx *context.APIContext) {
+	body := readBody(ctx)
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().CreatePull(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
+func DatahubGetPull(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetPull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+	})
+}
+
+func DatahubMergePull(ctx *context.APIContext) {
+	body := readBody(ctx)
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().MergePull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+	})
+}
+
+func DatahubGetManifest(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetManifest(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
+	})
+}

@@ -1420,6 +1420,22 @@ func Routes() *web.Route {
 				})
 
 				m.Get("/{ball_type:tarball|zipball|bundle}/*", reqRepoReader(unit.TypeCode), repo.DownloadArchive)
+
+				m.Group("/datahub", func() {
+					m.Get("/refs", repo.DatahubListRefs)
+					m.Get("/refs/{ref_type}/{name}", repo.DatahubGetRef)
+					m.Post("/refs/{ref_type}/{name}", repo.DatahubUpdateRef)
+					m.Get("/objects/{hash}", repo.DatahubGetObject)
+					m.Post("/objects/batch", repo.DatahubPushObjects)
+					m.Get("/tree/{hash}", repo.DatahubGetTree)
+					m.Get("/diff/{old}/{new}", repo.DatahubGetDiff)
+					m.Get("/log/{ref}", repo.DatahubGetLog)
+					m.Get("/pulls", repo.DatahubListPulls)
+					m.Post("/pulls", repo.DatahubCreatePull)
+					m.Get("/pulls/{id}", repo.DatahubGetPull)
+					m.Post("/pulls/{id}/merge", repo.DatahubMergePull)
+					m.Get("/manifest/{hash}", repo.DatahubGetManifest)
+				})
 			}, repoAssignment(), checkTokenPublicOnly())
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryRepository))
 
