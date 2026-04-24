@@ -74,6 +74,11 @@ func index(ctx context.Context, indexer internal.Indexer, repoID int64) error {
 		return nil
 	}
 
+	// skip data repos from being indexed (they have no git objects)
+	if repo.IsDataRepo {
+		return nil
+	}
+
 	sha, err := getDefaultBranchSha(ctx, repo)
 	if err != nil {
 		return err
