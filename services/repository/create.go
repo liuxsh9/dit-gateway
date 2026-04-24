@@ -15,6 +15,7 @@ import (
 	"forgejo.org/models/db"
 	repo_model "forgejo.org/models/repo"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/datahub"
 	"forgejo.org/modules/git"
 	"forgejo.org/modules/gitrepo"
 	"forgejo.org/modules/log"
@@ -253,6 +254,14 @@ func CreateRepositoryDirectly(ctx context.Context, doer, u *user_model.User, opt
 
 		// No need for init mirror.
 		if opts.IsMirror {
+			return nil
+		}
+
+		// No git init for data repos — storage is in datahub-core.
+		if opts.IsDataRepo {
+			if err := datahub.DefaultClient().CreateRepo(ctx, repo.Name); err != nil {
+				return fmt.Errorf("datahub create repo: %w", err)
+			}
 			return nil
 		}
 

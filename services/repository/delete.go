@@ -27,6 +27,7 @@ import (
 	user_model "forgejo.org/models/user"
 	"forgejo.org/models/webhook"
 	actions_module "forgejo.org/modules/actions"
+	"forgejo.org/modules/datahub"
 	"forgejo.org/modules/lfs"
 	"forgejo.org/modules/log"
 	"forgejo.org/modules/optional"
@@ -332,6 +333,13 @@ func DeleteRepositoryDirectly(ctx context.Context, doer *user_model.User, repoID
 
 	// We should always delete the files after the database transaction succeed. If
 	// we delete the file but the database rollback, the repository will be broken.
+
+	// Clean up datahub-core data for data repos (fail-open).
+	if repo.IsDataRepo {
+		if err := datahub.DefaultClient().DeleteRepo(ctx, repo.Name); err != nil {
+			log.Error("Failed to delete datahub-core repo %s: %v", repo.Name, err)
+		}
+	}
 
 	// Remove repository files.
 	repoPath := repo.RepoPath()
