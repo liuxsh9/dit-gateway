@@ -982,6 +982,11 @@ func renderHomeCode(ctx *context.Context) {
 	ctx.Data["RepositoryUploadEnabled"] = setting.Repository.Upload.Enabled
 	prepareOpenWithEditorApps(ctx)
 
+	if ctx.Repo.Repository.IsDataRepo {
+		ctx.HTML(http.StatusOK, tplRepoHome)
+		return
+	}
+
 	if ctx.Repo.Commit == nil || ctx.Repo.Repository.IsEmpty || ctx.Repo.Repository.IsBroken() {
 		showEmpty := true
 		var err error

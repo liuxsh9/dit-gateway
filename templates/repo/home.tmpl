@@ -163,6 +163,13 @@
 		{{template "repo/code/recently_pushed_new_branches" .}}
 		{{template "repo/code/fork_sync_message" .}}
 
+		{{if .Repository.IsDataRepo}}
+			<div id="data-repo-home"
+				data-owner="{{.Repository.OwnerName}}"
+				data-repo="{{.Repository.Name}}"
+				data-default-branch="{{.Repository.DefaultBranch}}">
+			</div>
+		{{else}}
 		{{if .IsViewFile}}
 			{{template "repo/view_file" .}}
 		{{else if .IsBlame}}
@@ -185,6 +192,7 @@
 				</div>
 			{{end}}
 			{{template "repo/view_list" .}}
+		{{end}}
 		{{end}}
 	</div>
 </div>
