@@ -126,6 +126,12 @@ func httpBase(ctx *context.Context) *serviceHandler {
 		return nil
 	}
 
+	// Data repos have no git backing store; block all git HTTP operations.
+	if repoExist && repo.IsDataRepo {
+		ctx.PlainText(http.StatusForbidden, "Git operations are not supported for data repositories.")
+		return nil
+	}
+
 	// Only public pull don't need auth.
 	isPublicPull := repoExist && !repo.IsPrivate && isPull
 	var (

@@ -801,25 +801,28 @@ func updateBasicProperties(ctx *context.APIContext, opts api.EditRepoOption) err
 		repo.IsTemplate = *opts.Template
 	}
 
-	if ctx.Repo.GitRepo == nil && !repo.IsEmpty {
-		var err error
-		ctx.Repo.GitRepo, err = gitrepo.OpenRepository(ctx, repo)
-		if err != nil {
-			ctx.Error(http.StatusInternalServerError, "Unable to OpenRepository", err)
-			return err
-		}
-		defer ctx.Repo.GitRepo.Close()
-	}
-
-	// Default branch only updated if changed and exist or the repository is empty
-	if opts.DefaultBranch != nil && repo.DefaultBranch != *opts.DefaultBranch && (repo.IsEmpty || ctx.Repo.GitRepo.IsBranchExist(*opts.DefaultBranch)) {
-		if !repo.IsEmpty {
-			if err := gitrepo.SetDefaultBranch(ctx, ctx.Repo.Repository, *opts.DefaultBranch); err != nil {
-				ctx.Error(http.StatusInternalServerError, "SetDefaultBranch", err)
+	// Data repos have no git backing store; skip git-specific operations.
+	if !repo.IsDataRepo {
+		if ctx.Repo.GitRepo == nil && !repo.IsEmpty {
+			var err error
+			ctx.Repo.GitRepo, err = gitrepo.OpenRepository(ctx, repo)
+			if err != nil {
+				ctx.Error(http.StatusInternalServerError, "Unable to OpenRepository", err)
 				return err
 			}
+			defer ctx.Repo.GitRepo.Close()
 		}
-		repo.DefaultBranch = *opts.DefaultBranch
+
+		// Default branch only updated if changed and exist or the repository is empty
+		if opts.DefaultBranch != nil && repo.DefaultBranch != *opts.DefaultBranch && (repo.IsEmpty || ctx.Repo.GitRepo.IsBranchExist(*opts.DefaultBranch)) {
+			if !repo.IsEmpty {
+				if err := gitrepo.SetDefaultBranch(ctx, ctx.Repo.Repository, *opts.DefaultBranch); err != nil {
+					ctx.Error(http.StatusInternalServerError, "SetDefaultBranch", err)
+					return err
+				}
+			}
+			repo.DefaultBranch = *opts.DefaultBranch
+		}
 	}
 
 	// Wiki branch is updated if changed
