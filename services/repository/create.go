@@ -46,6 +46,7 @@ type CreateRepoOptions struct {
 	MirrorInterval   string
 	ObjectFormatName string
 	Website          string
+	IsDataRepo       bool
 }
 
 func prepareRepoCommit(ctx context.Context, repo *repo_model.Repository, tmpDir, repoPath string, opts CreateRepoOptions) error {
@@ -229,17 +230,18 @@ func CreateRepositoryDirectly(ctx context.Context, doer, u *user_model.User, opt
 		OriginalURL:                     opts.OriginalURL,
 		OriginalServiceType:             opts.GitServiceType,
 		IsPrivate:                       opts.IsPrivate,
-		IsFsckEnabled:                   !opts.IsMirror,
+		IsFsckEnabled:                   !opts.IsMirror && !opts.IsDataRepo,
 		IsTemplate:                      opts.IsTemplate,
 		CloseIssuesViaCommitInAnyBranch: setting.Repository.DefaultCloseIssuesViaCommitsInAnyBranch,
 		Status:                          opts.Status,
-		IsEmpty:                         !opts.AutoInit,
+		IsEmpty:                         !opts.AutoInit || opts.IsDataRepo,
 		TrustModel:                      opts.TrustModel,
 		IsMirror:                        opts.IsMirror,
 		DefaultBranch:                   opts.DefaultBranch,
 		WikiBranch:                      setting.Repository.DefaultBranch,
 		ObjectFormatName:                opts.ObjectFormatName,
 		Website:                         opts.Website,
+		IsDataRepo:                      opts.IsDataRepo,
 	}
 
 	var rollbackRepo *repo_model.Repository

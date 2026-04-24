@@ -166,6 +166,7 @@ type Repository struct {
 	Units                  []*RepoUnit       `xorm:"-"`
 	PrimaryLanguage        *LanguageStat     `xorm:"-"`
 
+	IsDataRepo                      bool               `xorm:"INDEX NOT NULL DEFAULT false"`
 	IsFork                          bool               `xorm:"INDEX NOT NULL DEFAULT false"`
 	ForkID                          int64              `xorm:"INDEX"`
 	BaseRepo                        *Repository        `xorm:"-"`
