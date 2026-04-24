@@ -1,0 +1,75 @@
+version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.datahub
+    ports:
+      - "3000:3000"
+    environment:
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: db:5432
+      FORGEJO__database__NAME: forgejo
+      FORGEJO__database__USER: forgejo
+      FORGEJO__database__PASSWD: forgejo
+      FORGEJO__datahub__ENABLED: "true"
+      FORGEJO__datahub__CORE_URL: "http://core:8000"
+      FORGEJO__datahub__SERVICE_TOKEN: "${SERVICE_TOKEN}"
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    volumes:
+      - forgejo-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  core:
+    build:
+      context: ../datahub
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://datahub:datahub@db:5432/datahub"
+      DATA_DIR: "/data/objects"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - core-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: forgejo
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-forgejo}"
+      POSTGRES_DB: forgejo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgejo"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    restart: unless-stopped
+
+volumes:
+  forgejo-data:
+  core-data:
+  pg-data:
