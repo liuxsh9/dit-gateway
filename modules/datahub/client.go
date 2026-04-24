@@ -1,0 +1,146 @@
+// Copyright 2024 The Forgejo Authors. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+package datahub
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+
+	"forgejo.org/modules/setting"
+)
+
+type Client struct {
+	baseURL      string
+	serviceToken string
+	httpClient   *http.Client
+}
+
+var (
+	defaultClient     *Client
+	defaultClientOnce sync.Once
+)
+
+func DefaultClient() *Client {
+	defaultClientOnce.Do(func() {
+		defaultClient = &Client{
+			baseURL:      strings.TrimRight(setting.DataHub.CoreURL, "/"),
+			serviceToken: setting.DataHub.ServiceToken,
+			httpClient:   &http.Client{},
+		}
+	})
+	return defaultClient
+}
+
+func ResetDefaultClient() {
+	defaultClientOnce = sync.Once{}
+	defaultClient = nil
+}
+
+func (c *Client) do(ctx context.Context, method, path string, body []byte) ([]byte, int, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
+	if err != nil {
+		return nil, 0, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.serviceToken)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("read response: %w", err)
+	}
+	return data, resp.StatusCode, nil
+}
+
+func (c *Client) CreateRepo(ctx context.Context, repoName string) error {
+	payload := []byte(fmt.Sprintf(`{"name":%q}`, repoName))
+	_, status, err := c.do(ctx, http.MethodPost, "/api/v1/repos", payload)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("datahub-core returned status %d for CreateRepo", status)
+	}
+	return nil
+}
+
+func (c *Client) DeleteRepo(ctx context.Context, repoName string) error {
+	_, status, err := c.do(ctx, http.MethodDelete, "/api/v1/repos/"+repoName, nil)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNotFound {
+		return nil
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("datahub-core returned status %d for DeleteRepo", status)
+	}
+	return nil
+}
+
+func (c *Client) ListRefs(ctx context.Context, repoName string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/refs", nil)
+}
+
+func (c *Client) GetRef(ctx context.Context, repoName, refType, name string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/refs/"+refType+"/"+name, nil)
+}
+
+func (c *Client) UpdateRef(ctx context.Context, repoName, refType, name string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/refs/"+refType+"/"+name, body)
+}
+
+func (c *Client) GetObject(ctx context.Context, repoName, hash string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/objects/"+hash, nil)
+}
+
+func (c *Client) PushObjects(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/objects/batch", body)
+}
+
+func (c *Client) GetTree(ctx context.Context, repoName, hash string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/tree/"+hash, nil)
+}
+
+func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/diff/"+oldHash+"/"+newHash, nil)
+}
+
+func (c *Client) GetLog(ctx context.Context, repoName, ref string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/log/"+ref, nil)
+}
+
+func (c *Client) ListPulls(ctx context.Context, repoName string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/pulls", nil)
+}
+
+func (c *Client) CreatePull(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls", body)
+}
+
+func (c *Client) GetPull(ctx context.Context, repoName, id string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/pulls/"+id, nil)
+}
+
+func (c *Client) MergePull(ctx context.Context, repoName, id string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls/"+id+"/merge", body)
+}
+
+func (c *Client) GetManifest(ctx context.Context, repoName, hash string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/manifest/"+hash, nil)
+}
