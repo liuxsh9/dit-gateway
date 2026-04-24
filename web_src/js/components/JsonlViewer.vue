@@ -60,6 +60,8 @@ export default {
       totalPages: 1,
       expandedCells: new Set(),
       startIndex: 0,
+      chunks: [],
+      loadedChunks: {},
     };
   },
   computed: {
@@ -75,19 +77,27 @@ export default {
     async loadManifest() {
       const manifest = await datahubFetch(this.owner, this.repo, `/manifest/${this.manifestHash}`);
       this.totalRows = manifest.row_count || 0;
+      this.chunks = manifest.chunks || [];
       this.totalPages = Math.ceil(this.totalRows / PAGE_SIZE);
-      if (manifest.chunks && manifest.chunks.length > 0) {
-        await this.loadChunk(manifest.chunks[0]);
+      if (this.chunks.length > 0) {
+        await this.loadChunk(0);
       }
     },
-    async loadChunk(chunkHash) {
+    async loadChunk(chunkIndex) {
+      if (chunkIndex >= this.chunks.length || this.loadedChunks[chunkIndex]) return;
+      const chunkHash = this.chunks[chunkIndex];
       const data = await datahubFetch(this.owner, this.repo, `/objects/${chunkHash}`);
+      let newRows;
       if (typeof data === 'string') {
-        this.rows = data.split('\n').filter(Boolean).map((line) => JSON.parse(line));
+        newRows = data.split('\n').filter(Boolean).map((line) => JSON.parse(line));
       } else if (Array.isArray(data)) {
-        this.rows = data;
+        newRows = data;
+      } else {
+        newRows = [];
       }
-      if (this.rows.length > 0) {
+      this.rows = [...this.rows, ...newRows];
+      this.loadedChunks[chunkIndex] = true;
+      if (this.rows.length > 0 && this.columns.length === 0) {
         this.columns = Object.keys(this.rows[0]);
       }
     },
@@ -107,10 +117,14 @@ export default {
     isExpanded(rowIdx, col) {
       return this.expandedCells.has(`${rowIdx}:${col}`);
     },
-    goPage(page) {
+    async goPage(page) {
       if (page < 1 || page > this.totalPages) return;
       this.currentPage = page;
       this.startIndex = (page - 1) * PAGE_SIZE;
+      const neededRows = page * PAGE_SIZE;
+      while (this.rows.length < neededRows && Object.keys(this.loadedChunks).length < this.chunks.length) {
+        await this.loadChunk(Object.keys(this.loadedChunks).length);
+      }
     },
     onScroll() {
       // placeholder for virtual scroll enhancement

@@ -8,10 +8,15 @@ import (
 	"net/http"
 
 	"forgejo.org/modules/datahub"
+	"forgejo.org/modules/setting"
 	"forgejo.org/services/context"
 )
 
 func proxyToDatahub(ctx *context.APIContext, fn func() ([]byte, int, error)) {
+	if !setting.DataHub.Enabled {
+		ctx.NotFound()
+		return
+	}
 	if !ctx.Repo.Repository.IsDataRepo {
 		ctx.NotFound()
 		return
@@ -26,9 +31,13 @@ func proxyToDatahub(ctx *context.APIContext, fn func() ([]byte, int, error)) {
 	_, _ = ctx.Resp.Write(data)
 }
 
-func readBody(ctx *context.APIContext) []byte {
-	body, _ := io.ReadAll(ctx.Req.Body)
-	return body
+func readBody(ctx *context.APIContext) ([]byte, bool) {
+	body, err := io.ReadAll(ctx.Req.Body)
+	if err != nil {
+		ctx.Error(http.StatusBadRequest, "readBody", err)
+		return nil, false
+	}
+	return body, true
 }
 
 func DatahubListRefs(ctx *context.APIContext) {
@@ -44,7 +53,10 @@ func DatahubGetRef(ctx *context.APIContext) {
 }
 
 func DatahubUpdateRef(ctx *context.APIContext) {
-	body := readBody(ctx)
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().UpdateRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), ctx.Params(":name"), body)
 	})
@@ -57,7 +69,10 @@ func DatahubGetObject(ctx *context.APIContext) {
 }
 
 func DatahubPushObjects(ctx *context.APIContext) {
-	body := readBody(ctx)
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().PushObjects(ctx, ctx.Repo.Repository.Name, body)
 	})
@@ -88,7 +103,10 @@ func DatahubListPulls(ctx *context.APIContext) {
 }
 
 func DatahubCreatePull(ctx *context.APIContext) {
-	body := readBody(ctx)
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().CreatePull(ctx, ctx.Repo.Repository.Name, body)
 	})
@@ -101,7 +119,10 @@ func DatahubGetPull(ctx *context.APIContext) {
 }
 
 func DatahubMergePull(ctx *context.APIContext) {
-	body := readBody(ctx)
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().MergePull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
 	})

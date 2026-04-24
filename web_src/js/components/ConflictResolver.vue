@@ -97,7 +97,7 @@ export default {
   },
   methods: {
     resolve(rowHash, choice) {
-      this.resolutions[rowHash] = choice;
+      this.resolutions = {...this.resolutions, [rowHash]: choice};
     },
     getResolution(rowHash) {
       return this.resolutions[rowHash] || null;
