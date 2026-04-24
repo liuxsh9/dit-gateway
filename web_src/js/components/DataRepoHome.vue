@@ -43,7 +43,7 @@
           <tr v-for="entry in tree.entries" :key="entry.name">
             <td>
               <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
-              <a v-if="entry.type === 'manifest'" :href="viewerUrl(entry)">{{ entry.name }}</a>
+              <a v-if="entry.type === 'manifest'" href="#" @click.prevent="selectFile(entry)">{{ entry.name }}</a>
               <span v-else>{{ entry.name }}</span>
             </td>
             <td class="right aligned">{{ entry.row_count || '—' }}</td>
@@ -52,13 +52,29 @@
         </tbody>
       </table>
     </div>
+
+    <!-- JSONL Viewer -->
+    <div class="ui segment" v-if="selectedFile">
+      <div class="ui secondary menu">
+        <a class="item" @click="clearSelection"><i class="arrow left icon"></i> Back to file list</a>
+        <div class="item"><strong>{{ selectedFile.name }}</strong></div>
+      </div>
+      <JsonlViewer
+        :owner="owner"
+        :repo="repo"
+        :manifest-hash="selectedFile.hash"
+        :file-path="selectedFile.name"
+      />
+    </div>
   </div>
 </template>
 
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
+import JsonlViewer from './JsonlViewer.vue';
 
 export default {
+  components: { JsonlViewer },
   props: {
     owner: String,
     repo: String,
@@ -72,6 +88,7 @@ export default {
       stats: null,
       loading: true,
       error: null,
+      selectedFile: null,
     };
   },
   async mounted() {
@@ -111,9 +128,11 @@ export default {
       }
       this.stats = {fileCount, rowCount: totalRows};
     },
-    viewerUrl(entry) {
-      const branch = this.currentBranch.replace('heads/', '');
-      return `/${this.owner}/${this.repo}/src/branch/${branch}/${entry.name}`;
+    selectFile(entry) {
+      this.selectedFile = entry;
+    },
+    clearSelection() {
+      this.selectedFile = null;
     },
     formatSize(bytes) {
       if (!bytes) return '—';

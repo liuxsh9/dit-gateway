@@ -41,6 +41,7 @@
 
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
+import {createVirtualScroll} from '../utils/virtual-scroll.js';
 
 const PAGE_SIZE = 50;
 
@@ -62,16 +63,31 @@ export default {
       startIndex: 0,
       chunks: [],
       loadedChunks: {},
+      virtualScroll: null,
     };
   },
   computed: {
     visibleRows() {
+      if (this.virtualScroll) {
+        return this.virtualScroll.visibleItems;
+      }
       const start = (this.currentPage - 1) * PAGE_SIZE;
       return this.rows.slice(start, start + PAGE_SIZE);
     },
   },
   async mounted() {
     await this.loadManifest();
+  },
+  watch: {
+    rows(newRows) {
+      if (newRows.length > 0) {
+        this.virtualScroll = createVirtualScroll({
+          items: newRows,
+          itemHeight: 36,
+          containerHeight: 600,
+        });
+      }
+    },
   },
   methods: {
     async loadManifest() {
@@ -126,8 +142,11 @@ export default {
         await this.loadChunk(Object.keys(this.loadedChunks).length);
       }
     },
-    onScroll() {
-      // placeholder for virtual scroll enhancement
+    onScroll(event) {
+      if (this.virtualScroll) {
+        this.virtualScroll.onScroll(event);
+        this.startIndex = this.virtualScroll.startIndex;
+      }
     },
   },
 };
