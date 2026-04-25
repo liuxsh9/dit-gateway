@@ -173,3 +173,7 @@ func (c *Client) GetStats(ctx context.Context, repoName, commitHash, pathFilter 
 	}
 	return c.do(ctx, http.MethodGet, path, nil)
 }
+
+func (c *Client) Search(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/search", body)
+}

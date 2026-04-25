@@ -1440,6 +1440,7 @@ func Routes() *web.Route {
 					m.Get("/meta/{commit}/{path}", repo.DatahubMetaGet)
 					m.Get("/meta/{commit}/{path}/summary", repo.DatahubMetaSummary)
 					m.Get("/stats/{commit}", repo.DatahubGetStats)
+					m.Post("/search", repo.DatahubSearch)
 				})
 			}, repoAssignment(), checkTokenPublicOnly())
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryRepository))
