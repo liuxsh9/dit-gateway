@@ -189,3 +189,11 @@ func (c *Client) ReportCheck(ctx context.Context, repoName string, body []byte) 
 func (c *Client) GetChecks(ctx context.Context, repoName, commitHash string) ([]byte, int, error) {
 	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/checks/"+commitHash, nil)
 }
+
+func (c *Client) GetBlame(ctx context.Context, repoName, commitHash, filePath, row string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/blame/" + commitHash + "/" + filePath
+	if row != "" {
+		path += "?row=" + url.QueryEscape(row)
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
+}

@@ -224,3 +224,15 @@ func DatahubGetChecks(ctx *context.APIContext) {
 		return datahub.DefaultClient().GetChecks(ctx, ctx.Repo.Repository.Name, ctx.Params(":commit"))
 	})
 }
+
+func DatahubGetBlame(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetBlame(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.Params("*"),
+			ctx.FormString("row"),
+		)
+	})
+}
