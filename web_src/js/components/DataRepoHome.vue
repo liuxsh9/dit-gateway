@@ -153,6 +153,66 @@
       </div>
     </div>
 
+    <!-- Search bar -->
+    <div class="ui segment" v-if="commitHash">
+      <div class="ui action input" style="width:100%;">
+        <input
+          type="text"
+          placeholder='Search rows (e.g. "LRU缓存")'
+          v-model="searchQuery"
+          @keyup.enter="submitSearch"
+        />
+        <select class="ui compact selection dropdown" v-model="searchField" style="min-width:160px;">
+          <option value="">Full row</option>
+          <option value="instruction">instruction</option>
+          <option value="response">response</option>
+          <option value="messages[0].content">messages[0].content</option>
+        </select>
+        <button class="ui button" :class="{loading: searchLoading}" @click="submitSearch">
+          <i class="search icon"></i> Search
+        </button>
+      </div>
+    </div>
+
+    <!-- Search results (collapsible) -->
+    <div class="ui segment" v-if="searchResults">
+      <div class="ui accordion">
+        <div class="title" @click="searchResultsOpen = !searchResultsOpen" style="cursor:pointer;">
+          <i class="dropdown icon"></i>
+          <strong>Search Results</strong>
+          <span class="ui small label" style="margin-left:8px;">
+            {{ searchResults.matches.length }} match{{ searchResults.matches.length !== 1 ? 'es' : '' }}
+            (scanned {{ searchResults.total_scanned.toLocaleString() }} rows)
+          </span>
+          <span v-if="searchResults.limit_reached" class="ui small yellow label" style="margin-left:4px;">
+            limit reached
+          </span>
+        </div>
+        <div class="content" v-show="searchResultsOpen">
+          <div v-if="searchError" class="ui small negative message">{{ searchError }}</div>
+          <div v-else-if="searchResults.matches.length === 0" class="ui small message">
+            No matches found for "{{ searchResults.query }}".
+          </div>
+          <table v-else class="ui very basic compact table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Row</th>
+                <th>Excerpt</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in searchResults.matches" :key="m.file + ':' + m.row_index">
+                <td>{{ m.file }}</td>
+                <td class="right aligned">{{ m.row_index }}</td>
+                <td style="font-family:monospace;font-size:0.9em;white-space:pre-wrap;">{{ m.highlight }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- JSONL Viewer -->
     <div class="ui segment" v-if="selectedFile">
       <div class="ui secondary menu">
@@ -196,6 +256,12 @@ export default {
       statsLoading: false,
       statsError: null,
       repoStats: null,
+      searchQuery: '',
+      searchField: '',
+      searchLoading: false,
+      searchError: null,
+      searchResults: null,
+      searchResultsOpen: true,
     };
   },
   computed: {
@@ -240,6 +306,9 @@ export default {
       this.commitHash = commitHash;
       this.repoStats = null;
       this.statsOpen = false;
+      this.searchResults = null;
+      this.searchQuery = '';
+      this.searchField = '';
       this.tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
       let totalRows = 0;
       let fileCount = 0;
@@ -319,6 +388,32 @@ export default {
         this.statsError = e.message;
       } finally {
         this.statsLoading = false;
+      }
+    },
+    async submitSearch() {
+      if (!this.searchQuery.trim()) return;
+      this.searchLoading = true;
+      this.searchError = null;
+      this.searchResults = null;
+      try {
+        this.searchResults = await datahubFetch(
+          this.owner, this.repo,
+          '/search',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              ref: this.commitHash,
+              query: this.searchQuery.trim(),
+              field: this.searchField || null,
+              limit: 50,
+            }),
+          },
+        );
+        this.searchResultsOpen = true;
+      } catch (e) {
+        this.searchError = e.message;
+      } finally {
+        this.searchLoading = false;
       }
     },
   },
