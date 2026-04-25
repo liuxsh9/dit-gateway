@@ -14,6 +14,14 @@
           <span class="ui label">{{ stats.fileCount }} files</span>
           <span class="ui label">{{ stats.rowCount }} rows</span>
         </div>
+        <div class="field">
+          <span v-if="checksStatus" class="ui tiny label" :class="checksStatusClass" style="margin-left: 6px;">
+            <i :class="checksStatusIcon"></i> {{ checksStatusText }}
+          </span>
+          <span v-else-if="checksLoading" class="ui tiny label" style="margin-left: 6px;">
+            <i class="spinner loading icon"></i>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -262,9 +270,35 @@ export default {
       searchError: null,
       searchResults: null,
       searchResultsOpen: true,
+      checksLoading: false,
+      checksData: null,
     };
   },
   computed: {
+    checksStatus() {
+      if (!this.checksData || this.checksData.checks.length === 0) return null;
+      const statuses = this.checksData.checks.map(c => c.status);
+      if (statuses.includes('fail')) return 'fail';
+      if (statuses.includes('pending')) return 'pending';
+      return 'pass';
+    },
+    checksStatusClass() {
+      return {
+        'green': this.checksStatus === 'pass',
+        'red':   this.checksStatus === 'fail',
+        'grey':  this.checksStatus === 'pending',
+      };
+    },
+    checksStatusIcon() {
+      return {
+        'pass':    'check icon',
+        'fail':    'times icon',
+        'pending': 'clock icon',
+      }[this.checksStatus] || '';
+    },
+    checksStatusText() {
+      return {'pass': 'CI pass', 'fail': 'CI fail', 'pending': 'CI pending'}[this.checksStatus] || '';
+    },
     topLangs() {
       if (!this.repoStats?.totals?.lang_distribution) return [];
       const dist = this.repoStats.totals.lang_distribution;
@@ -304,6 +338,7 @@ export default {
       const ref = await datahubFetch(this.owner, this.repo, `/refs/${this.currentBranch}`);
       const commitHash = ref.target_hash;
       this.commitHash = commitHash;
+      this.checksData = null;
       this.repoStats = null;
       this.statsOpen = false;
       this.searchResults = null;
@@ -330,6 +365,7 @@ export default {
       }
       this.sidecars = sidecars;
       this.stats = {fileCount, rowCount: totalRows};
+      await this.loadChecks();
     },
     selectFile(entry) {
       this.selectedFile = entry;
@@ -388,6 +424,20 @@ export default {
         this.statsError = e.message;
       } finally {
         this.statsLoading = false;
+      }
+    },
+    async loadChecks() {
+      if (!this.commitHash) return;
+      this.checksLoading = true;
+      try {
+        this.checksData = await datahubFetch(
+          this.owner, this.repo,
+          `/checks/${this.commitHash}`,
+        );
+      } catch {
+        this.checksData = null;
+      } finally {
+        this.checksLoading = false;
       }
     },
     async submitSearch() {
