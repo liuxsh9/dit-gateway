@@ -133,3 +133,47 @@ func DatahubGetManifest(ctx *context.APIContext) {
 		return datahub.DefaultClient().GetManifest(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
 	})
 }
+
+func DatahubMetaCompute(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().MetaCompute(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
+func DatahubMetaGet(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().MetaGet(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.Params(":path"),
+		)
+	})
+}
+
+func DatahubMetaSummary(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().MetaSummary(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.Params(":path"),
+		)
+	})
+}
+
+func DatahubMetaDiff(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().MetaDiff(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":old"),
+			ctx.Params(":new"),
+			ctx.FormString("file"),
+		)
+	})
+}
