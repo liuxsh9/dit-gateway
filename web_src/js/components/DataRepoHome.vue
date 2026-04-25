@@ -55,6 +55,12 @@
               <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
               <a v-if="entry.type === 'manifest'" href="#" @click.prevent="selectFile(entry)">{{ entry.name }}</a>
               <span v-else>{{ entry.name }}</span>
+              <button
+                v-if="entry.type === 'manifest'"
+                class="ui mini basic button"
+                style="margin-left:8px;"
+                @click="loadBlame(entry.name)"
+              >Blame</button>
             </td>
             <td class="right aligned">{{ entry.row_count || '—' }}</td>
             <td class="right aligned">{{ formatSize(entry.size) }}</td>
@@ -84,6 +90,86 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Blame panel -->
+    <div class="ui segment" v-if="blameFile">
+      <div class="ui secondary menu" style="margin-bottom:0.5em;">
+        <div class="item"><strong>Blame: {{ blameFile }}</strong></div>
+        <div class="right menu">
+          <a class="item" @click="closeBlame"><i class="times icon"></i> Close</a>
+        </div>
+      </div>
+
+      <div v-if="blameLoading" class="ui active centered inline loader" style="margin:1em 0;"></div>
+      <div v-else-if="blameError" class="ui negative message"><p>{{ blameError }}</p></div>
+      <template v-else-if="blameData">
+        <div style="margin-bottom:0.75em;">
+          <span class="ui small label">{{ blameData.rows.length }} rows</span>
+          <span class="ui small label">{{ blameData.commit_count }} commits</span>
+          <span class="ui small label">{{ blameData.author_count }} authors</span>
+        </div>
+        <table class="ui very basic compact selectable table">
+          <thead>
+            <tr>
+              <th class="right aligned" style="width:3em;">Row</th>
+              <th style="width:6em;">Commit</th>
+              <th>Author</th>
+              <th>Date</th>
+              <th>Content</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="entry in blameData.rows"
+              :key="entry.row_index"
+              style="cursor:pointer;"
+              @click="loadRowHistory(entry.row_index)"
+            >
+              <td class="right aligned">{{ entry.row_index }}</td>
+              <td style="font-family:monospace;">{{ entry.commit_hash ? entry.commit_hash.slice(0,7) : '—' }}</td>
+              <td>{{ entry.author }}</td>
+              <td>{{ formatBlameDate(entry.timestamp) }}</td>
+              <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.content }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Row history sub-panel -->
+        <div v-if="rowHistoryData || rowHistoryLoading" style="margin-top:1em;">
+          <strong>Row history</strong>
+          <div v-if="rowHistoryLoading" class="ui active centered inline loader" style="margin:0.5em 0;"></div>
+          <table v-else-if="rowHistoryData" class="ui very basic compact table" style="margin-top:0.5em;">
+            <thead>
+              <tr>
+                <th style="width:6em;">Event</th>
+                <th style="width:6em;">Commit</th>
+                <th>Author</th>
+                <th>Date</th>
+                <th>Content</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(ev, idx) in rowHistoryData.events" :key="idx">
+                <td>
+                  <span
+                    class="ui tiny label"
+                    :class="{
+                      'green':  ev.event === 'added',
+                      'blue':   ev.event === 'refresh',
+                      'red':    ev.event === 'removed',
+                    }"
+                  >{{ ev.event }}</span>
+                </td>
+                <td style="font-family:monospace;">{{ ev.commit_hash ? ev.commit_hash.slice(0,7) : '—' }}</td>
+                <td>{{ ev.author }}</td>
+                <td>{{ formatBlameDate(ev.timestamp) }}</td>
+                <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ev.content }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
     </div>
 
     <!-- Stats panel (collapsed by default) -->
@@ -272,6 +358,12 @@ export default {
       searchResultsOpen: true,
       checksLoading: false,
       checksData: null,
+      blameData: null,
+      blameLoading: false,
+      blameError: null,
+      blameFile: null,
+      rowHistoryData: null,
+      rowHistoryLoading: false,
     };
   },
   computed: {
@@ -465,6 +557,53 @@ export default {
       } finally {
         this.searchLoading = false;
       }
+    },
+    async loadBlame(filePath) {
+      this.blameFile = filePath;
+      this.blameData = null;
+      this.blameError = null;
+      this.blameLoading = true;
+      this.rowHistoryData = null;
+      this.rowHistoryLoading = false;
+      try {
+        this.blameData = await datahubFetch(
+          this.owner, this.repo,
+          `/blame/${this.commitHash}/${encodeURIComponent(filePath)}`,
+        );
+      } catch (e) {
+        this.blameError = e.message;
+      } finally {
+        this.blameLoading = false;
+      }
+    },
+    closeBlame() {
+      this.blameFile = null;
+      this.blameData = null;
+      this.blameError = null;
+      this.blameLoading = false;
+      this.rowHistoryData = null;
+      this.rowHistoryLoading = false;
+    },
+    async loadRowHistory(rowIndex) {
+      this.rowHistoryData = null;
+      this.rowHistoryLoading = true;
+      try {
+        this.rowHistoryData = await datahubFetch(
+          this.owner, this.repo,
+          `/blame/${this.commitHash}/${encodeURIComponent(this.blameFile)}?row=${rowIndex}`,
+        );
+      } catch {
+        // Silently ignore; history panel stays hidden
+      } finally {
+        this.rowHistoryLoading = false;
+      }
+    },
+    formatBlameDate(timestamp) {
+      if (!timestamp) return '—';
+      const d = new Date(timestamp * 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+             `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
     },
   },
 };
