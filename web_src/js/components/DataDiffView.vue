@@ -1,5 +1,18 @@
 <template>
   <div class="ui grid">
+    <!-- Metadata delta header -->
+    <div class="sixteen wide column" v-if="metaDiff && metaDiff.length">
+      <div class="ui info message">
+        <div class="ui list">
+          <div class="item" v-for="f in metaDiff" :key="f.path">
+            <strong>{{ f.path }}</strong>:
+            <span v-if="formatDelta(f.delta)">{{ formatDelta(f.delta) }}</span>
+            <span v-else class="dimmed">no metadata change</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- File sidebar -->
     <div class="four wide column">
       <div class="ui segment">
@@ -81,6 +94,7 @@ export default {
       activeFile: null,
       activeChanges: null,
       loading: false,
+      metaDiff: null,
     };
   },
   computed: {
@@ -93,6 +107,14 @@ export default {
     refreshedRows() {
       return (this.activeChanges || []).filter((c) => c.type === 'refreshed');
     },
+    metaDeltaByPath() {
+      if (!this.metaDiff) return {};
+      const map = {};
+      for (const f of this.metaDiff) {
+        map[f.path] = f.delta || {};
+      }
+      return map;
+    },
   },
   async mounted() {
     const diff = await datahubFetch(this.owner, this.repo, `/diff/${this.oldCommit}/${this.newCommit}`);
@@ -100,6 +122,15 @@ export default {
     if (this.files.length > 0) {
       this.activeFile = this.files[0].path;
       this.activeChanges = this.files[0].changes || [];
+    }
+    try {
+      const meta = await datahubFetch(
+        this.owner, this.repo,
+        `/meta/diff/${this.oldCommit}/${this.newCommit}`,
+      );
+      this.metaDiff = meta.files || [];
+    } catch {
+      this.metaDiff = null;
     }
   },
   watch: {
@@ -112,6 +143,21 @@ export default {
     formatRow(content) {
       if (!content) return '';
       return JSON.stringify(content, null, 2);
+    },
+    formatDelta(delta) {
+      if (!delta) return null;
+      const parts = [];
+      if (delta.row_count !== null && delta.row_count !== undefined) {
+        const sign = delta.row_count >= 0 ? '+' : '';
+        parts.push(`${sign}${delta.row_count} rows`);
+      }
+      if (delta.token_estimate !== null && delta.token_estimate !== undefined) {
+        const sign = delta.token_estimate >= 0 ? '+' : '';
+        const abs = Math.abs(delta.token_estimate);
+        const fmt = abs >= 1000 ? `${sign}${Math.round(delta.token_estimate / 1000)}K` : `${sign}${delta.token_estimate}`;
+        parts.push(`${fmt} tokens`);
+      }
+      return parts.length ? parts.join(', ') : null;
     },
   },
 };

@@ -37,6 +37,8 @@
             <th>Name</th>
             <th class="right aligned">Rows</th>
             <th class="right aligned">Size</th>
+            <th class="right aligned">Tokens</th>
+            <th class="right aligned">Lang</th>
           </tr>
         </thead>
         <tbody>
@@ -48,6 +50,29 @@
             </td>
             <td class="right aligned">{{ entry.row_count || '—' }}</td>
             <td class="right aligned">{{ formatSize(entry.size) }}</td>
+            <td class="right aligned">
+              <template v-if="entry.type === 'manifest'">
+                <span v-if="sidecars[entry.name]">
+                  {{ formatTokens(sidecars[entry.name].token_estimate) }}
+                </span>
+                <span v-else-if="sidecars[entry.name] === null">
+                  <span>—</span>
+                  <button
+                    class="ui mini basic button"
+                    :class="{loading: computingMeta[entry.name]}"
+                    :disabled="computingMeta[entry.name]"
+                    @click="computeMeta(entry)"
+                  >Compute</button>
+                </span>
+              </template>
+              <span v-else>—</span>
+            </td>
+            <td class="right aligned">
+              <template v-if="entry.type === 'manifest' && sidecars[entry.name]">
+                {{ formatLang(sidecars[entry.name].lang_distribution) }}
+              </template>
+              <span v-else>—</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -74,7 +99,7 @@ import {datahubFetch} from '../utils/datahub-api.js';
 import JsonlViewer from './JsonlViewer.vue';
 
 export default {
-  components: { JsonlViewer },
+  components: {JsonlViewer},
   props: {
     owner: String,
     repo: String,
@@ -89,6 +114,8 @@ export default {
       loading: true,
       error: null,
       selectedFile: null,
+      sidecars: {},
+      computingMeta: {},
     };
   },
   async mounted() {
@@ -117,15 +144,27 @@ export default {
     },
     async loadTree() {
       const ref = await datahubFetch(this.owner, this.repo, `/refs/${this.currentBranch}`);
-      this.tree = await datahubFetch(this.owner, this.repo, `/tree/${ref.target_hash}`);
+      const commitHash = ref.target_hash;
+      this.tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
       let totalRows = 0;
       let fileCount = 0;
+      const sidecars = {};
       for (const entry of this.tree.entries || []) {
         if (entry.type === 'manifest') {
           fileCount++;
           totalRows += entry.row_count || 0;
+          try {
+            const summary = await datahubFetch(
+              this.owner, this.repo,
+              `/meta/${commitHash}/${encodeURIComponent(entry.name)}/summary`,
+            );
+            sidecars[entry.name] = summary;
+          } catch {
+            sidecars[entry.name] = null;
+          }
         }
       }
+      this.sidecars = sidecars;
       this.stats = {fileCount, rowCount: totalRows};
     },
     selectFile(entry) {
@@ -139,6 +178,33 @@ export default {
       if (bytes < 1024) return `${bytes} B`;
       if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
       return `${(bytes / 1048576).toFixed(1)} MB`;
+    },
+    formatTokens(n) {
+      if (!n && n !== 0) return '—';
+      if (n >= 1000000) return `~${(n / 1000000).toFixed(2)}M`;
+      if (n >= 1000) return `~${(n / 1000).toFixed(0)}K`;
+      return String(n);
+    },
+    formatLang(dist) {
+      if (!dist || Object.keys(dist).length === 0) return '—';
+      const top = Object.entries(dist).sort((a, b) => b[1] - a[1])[0];
+      return `${top[0]} ${Math.round(top[1] * 100)}%`;
+    },
+    async computeMeta(entry) {
+      this.computingMeta = {...this.computingMeta, [entry.name]: true};
+      try {
+        await datahubFetch(this.owner, this.repo, '/meta/compute', {
+          method: 'POST',
+          body: JSON.stringify({file: entry.name}),
+        });
+        await this.loadTree();
+      } catch {
+        // Silently ignore; UI shows — still
+      } finally {
+        const next = {...this.computingMeta};
+        delete next[entry.name];
+        this.computingMeta = next;
+      }
     },
   },
 };
