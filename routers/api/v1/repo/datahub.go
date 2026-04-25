@@ -198,3 +198,29 @@ func DatahubSearch(ctx *context.APIContext) {
 		return datahub.DefaultClient().Search(ctx, ctx.Repo.Repository.Name, body)
 	})
 }
+
+func DatahubValidate(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().Validate(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
+func DatahubReportCheck(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().ReportCheck(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
+func DatahubGetChecks(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetChecks(ctx, ctx.Repo.Repository.Name, ctx.Params(":commit"))
+	})
+}

@@ -177,3 +177,15 @@ func (c *Client) GetStats(ctx context.Context, repoName, commitHash, pathFilter 
 func (c *Client) Search(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/search", body)
 }
+
+func (c *Client) Validate(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/validate", body)
+}
+
+func (c *Client) ReportCheck(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/checks", body)
+}
+
+func (c *Client) GetChecks(ctx context.Context, repoName, commitHash string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/checks/"+commitHash, nil)
+}
