@@ -246,3 +246,14 @@ func DatahubRunGC(ctx *context.APIContext) {
 		return datahub.DefaultClient().RunGC(ctx, ctx.Repo.Repository.Name, body)
 	})
 }
+
+func DatahubGetDedup(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetDedup(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.FormString("path"),
+		)
+	})
+}

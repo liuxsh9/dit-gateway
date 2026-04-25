@@ -1446,6 +1446,7 @@ func Routes() *web.Route {
 					m.Get("/checks/{commit}", repo.DatahubGetChecks)
 					m.Get("/blame/{commit}/*", repo.DatahubGetBlame)
 					m.Post("/gc", repo.DatahubRunGC)
+					m.Get("/dedup/{commit}", repo.DatahubGetDedup)
 				})
 			}, repoAssignment(), checkTokenPublicOnly())
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryRepository))

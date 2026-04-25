@@ -201,3 +201,11 @@ func (c *Client) GetBlame(ctx context.Context, repoName, commitHash, filePath, r
 func (c *Client) RunGC(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/gc", body)
 }
+
+func (c *Client) GetDedup(ctx context.Context, repoName, commitHash, pathFilter string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/dedup/" + commitHash
+	if pathFilter != "" {
+		path += "?path=" + url.QueryEscape(pathFilter)
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
+}
