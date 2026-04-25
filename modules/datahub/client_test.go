@@ -166,3 +166,75 @@ func TestMergePull(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status)
 	assert.Contains(t, string(data), "merged")
 }
+
+func TestMetaCompute(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/meta/compute", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		body, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(body), "train.jsonl")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"commit_hash":"abc123","sidecars":[{"file":"train.jsonl","sidecar_hash":"def456"}]}`))
+	}))
+	data, status, err := client.MetaCompute(context.Background(), "myrepo", []byte(`{"file":"train.jsonl"}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "commit_hash")
+}
+
+func TestMetaGet(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train.jsonl", r.URL.Path)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"manifest_hash":"abc123","entries":[]}`))
+	}))
+	data, status, err := client.MetaGet(context.Background(), "myrepo", "abc123", "train.jsonl")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "manifest_hash")
+}
+
+func TestMetaSummary(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train.jsonl/summary", r.URL.Path)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"row_count":1500,"token_estimate":1130250,"lang_distribution":{"zh":0.82}}`))
+	}))
+	data, status, err := client.MetaSummary(context.Background(), "myrepo", "abc123", "train.jsonl")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "row_count")
+}
+
+func TestMetaDiff(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/meta/diff/old123/new456", r.URL.Path)
+		assert.Equal(t, "train.jsonl", r.URL.Query().Get("file"))
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"files":[{"path":"train.jsonl","delta":{"row_count":120}}]}`))
+	}))
+	data, status, err := client.MetaDiff(context.Background(), "myrepo", "old123", "new456", "train.jsonl")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "files")
+}
+
+func TestMetaDiffNoFile(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "", r.URL.Query().Get("file"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"files":[]}`))
+	}))
+	data, status, err := client.MetaDiff(context.Background(), "myrepo", "old123", "new456", "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "files")
+}

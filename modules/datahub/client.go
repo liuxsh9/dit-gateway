@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -143,4 +144,24 @@ func (c *Client) MergePull(ctx context.Context, repoName, id string, body []byte
 
 func (c *Client) GetManifest(ctx context.Context, repoName, hash string) ([]byte, int, error) {
 	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/manifest/"+hash, nil)
+}
+
+func (c *Client) MetaCompute(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/meta/compute", body)
+}
+
+func (c *Client) MetaGet(ctx context.Context, repoName, commit, filePath string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/meta/"+commit+"/"+filePath, nil)
+}
+
+func (c *Client) MetaSummary(ctx context.Context, repoName, commit, filePath string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/meta/"+commit+"/"+filePath+"/summary", nil)
+}
+
+func (c *Client) MetaDiff(ctx context.Context, repoName, oldCommit, newCommit, filePath string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/meta/diff/" + oldCommit + "/" + newCommit
+	if filePath != "" {
+		path += "?file=" + url.QueryEscape(filePath)
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
 }
