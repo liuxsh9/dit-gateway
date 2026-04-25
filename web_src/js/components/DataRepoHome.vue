@@ -78,6 +78,81 @@
       </table>
     </div>
 
+    <!-- Stats panel (collapsed by default) -->
+    <div class="ui segment" v-if="commitHash">
+      <div class="ui accordion">
+        <div class="title" @click="toggleStats" style="cursor:pointer;">
+          <i class="dropdown icon"></i>
+          <strong>Dataset Stats</strong>
+          <span v-if="repoStats" class="ui small label" style="margin-left:8px;">
+            {{ formatTokens(repoStats.totals.token_estimate) }} tokens
+          </span>
+        </div>
+        <div class="content" v-show="statsOpen">
+          <div v-if="statsLoading" class="ui active centered inline loader" style="margin:1em 0;"></div>
+          <div v-else-if="statsError" class="ui small negative message">{{ statsError }}</div>
+          <div v-else-if="repoStats">
+
+            <!-- Totals row -->
+            <div class="ui tiny statistics" style="margin-bottom:1em;">
+              <div class="statistic">
+                <div class="value">{{ repoStats.totals.row_count != null ? repoStats.totals.row_count.toLocaleString() : '—' }}</div>
+                <div class="label">Total Rows</div>
+              </div>
+              <div class="statistic">
+                <div class="value">{{ formatTokens(repoStats.totals.token_estimate) }}</div>
+                <div class="label">Est. Tokens</div>
+              </div>
+              <div class="statistic">
+                <div class="value">{{ formatSize(repoStats.totals.char_count) }}</div>
+                <div class="label">Chars</div>
+              </div>
+              <div class="statistic">
+                <div class="value">{{ repoStats.totals.files_with_sidecar }}/{{ repoStats.totals.file_count }}</div>
+                <div class="label">Files w/ Meta</div>
+              </div>
+            </div>
+
+            <!-- Language distribution bars -->
+            <div v-if="topLangs.length > 0" style="margin-bottom:1em;">
+              <strong>Language distribution</strong>
+              <div v-for="([lang, pct]) in topLangs" :key="lang" style="margin-top:4px;">
+                <span style="display:inline-block;width:4em;">{{ lang }}</span>
+                <span
+                  style="display:inline-block;background:#2185d0;height:10px;vertical-align:middle;"
+                  :style="{width: (pct * 2) + 'px'}"
+                ></span>
+                <span style="margin-left:6px;font-size:0.9em;">{{ Math.round(pct) }}%</span>
+              </div>
+            </div>
+
+            <!-- Per-file breakdown table -->
+            <table class="ui very basic compact table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th class="right aligned">Rows</th>
+                  <th class="right aligned">Tokens</th>
+                  <th class="right aligned">Avg fields</th>
+                  <th class="right aligned">Top lang</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in repoStats.files" :key="f.path">
+                  <td>{{ f.path }}</td>
+                  <td class="right aligned">{{ f.row_count != null ? f.row_count.toLocaleString() : '—' }}</td>
+                  <td class="right aligned">{{ f.has_sidecar ? formatTokens(f.token_estimate) : '—' }}</td>
+                  <td class="right aligned">{{ f.avg_fields != null ? f.avg_fields.toFixed(1) : '—' }}</td>
+                  <td class="right aligned">{{ f.has_sidecar ? formatLang(f.lang_distribution) : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- JSONL Viewer -->
     <div class="ui segment" v-if="selectedFile">
       <div class="ui secondary menu">
@@ -116,7 +191,24 @@ export default {
       selectedFile: null,
       sidecars: {},
       computingMeta: {},
+      commitHash: null,
+      statsOpen: false,
+      statsLoading: false,
+      statsError: null,
+      repoStats: null,
     };
+  },
+  computed: {
+    topLangs() {
+      if (!this.repoStats?.totals?.lang_distribution) return [];
+      const dist = this.repoStats.totals.lang_distribution;
+      const total = Object.values(dist).reduce((a, b) => a + b, 0);
+      if (total === 0) return [];
+      return Object.entries(dist)
+        .map(([lang, count]) => [lang, (count / total) * 100])
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+    },
   },
   async mounted() {
     try {
@@ -145,6 +237,9 @@ export default {
     async loadTree() {
       const ref = await datahubFetch(this.owner, this.repo, `/refs/${this.currentBranch}`);
       const commitHash = ref.target_hash;
+      this.commitHash = commitHash;
+      this.repoStats = null;
+      this.statsOpen = false;
       this.tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
       let totalRows = 0;
       let fileCount = 0;
@@ -204,6 +299,26 @@ export default {
         const next = {...this.computingMeta};
         delete next[entry.name];
         this.computingMeta = next;
+      }
+    },
+    async toggleStats() {
+      this.statsOpen = !this.statsOpen;
+      if (this.statsOpen && !this.repoStats && !this.statsLoading) {
+        await this.loadStats();
+      }
+    },
+    async loadStats() {
+      this.statsLoading = true;
+      this.statsError = null;
+      try {
+        this.repoStats = await datahubFetch(
+          this.owner, this.repo,
+          `/stats/${this.commitHash}`,
+        );
+      } catch (e) {
+        this.statsError = e.message;
+      } finally {
+        this.statsLoading = false;
       }
     },
   },
