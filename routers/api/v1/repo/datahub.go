@@ -236,3 +236,13 @@ func DatahubGetBlame(ctx *context.APIContext) {
 		)
 	})
 }
+
+func DatahubRunGC(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().RunGC(ctx, ctx.Repo.Repository.Name, body)
+	})
+}

@@ -197,3 +197,7 @@ func (c *Client) GetBlame(ctx context.Context, repoName, commitHash, filePath, r
 	}
 	return c.do(ctx, http.MethodGet, path, nil)
 }
+
+func (c *Client) RunGC(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/gc", body)
+}
