@@ -165,3 +165,11 @@ func (c *Client) MetaDiff(ctx context.Context, repoName, oldCommit, newCommit, f
 	}
 	return c.do(ctx, http.MethodGet, path, nil)
 }
+
+func (c *Client) GetStats(ctx context.Context, repoName, commitHash, pathFilter string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/stats/" + commitHash
+	if pathFilter != "" {
+		path += "?path=" + url.QueryEscape(pathFilter)
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
+}

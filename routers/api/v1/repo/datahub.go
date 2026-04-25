@@ -177,3 +177,14 @@ func DatahubMetaDiff(ctx *context.APIContext) {
 		)
 	})
 }
+
+func DatahubGetStats(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().GetStats(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.FormString("path"),
+		)
+	})
+}

@@ -1439,6 +1439,7 @@ func Routes() *web.Route {
 					m.Get("/meta/diff/{old}/{new}", repo.DatahubMetaDiff)
 					m.Get("/meta/{commit}/{path}", repo.DatahubMetaGet)
 					m.Get("/meta/{commit}/{path}/summary", repo.DatahubMetaSummary)
+					m.Get("/stats/{commit}", repo.DatahubGetStats)
 				})
 			}, repoAssignment(), checkTokenPublicOnly())
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryRepository))
