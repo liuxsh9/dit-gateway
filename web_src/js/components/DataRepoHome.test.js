@@ -103,6 +103,60 @@ test('hydrates file list metrics from stats when tree omits row and size fields'
   expect(wrapper.text()).toContain('en 100%');
 });
 
+test('hydrates row counts from manifest totals when sidecar metrics are missing', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {
+            name: 'ml2.jsonl',
+            obj_type: 'manifest',
+            obj_hash: 'manifest123',
+            sidecar_hash: null,
+          },
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {
+            path: 'ml2.jsonl',
+            row_count: null,
+            char_count: null,
+            token_estimate: null,
+            lang_distribution: null,
+            has_sidecar: false,
+          },
+        ],
+        totals: {
+          file_count: 1,
+          row_count: 0,
+          char_count: 0,
+          token_estimate: 0,
+          lang_distribution: {},
+        },
+      };
+    }
+    if (path === '/meta/commit123/ml2.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/manifest/commit123/ml2.jsonl?offset=0&limit=1') {
+      return {total: 1, entries: [{row_hash: 'row1'}]};
+    }
+    if (path === '/checks/commit123') return {checks: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('ml2.jsonl'));
+
+  expect(wrapper.vm.tree.entries[0].row_count).toBe(1);
+  expect(wrapper.text()).toContain('1 rows');
+});
+
 test('shows an empty state when a new data repo has no refs yet', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [];

@@ -493,10 +493,26 @@ export default {
             entry.lang_distribution ??= summary.lang_distribution;
           } catch {
             sidecars[entry.name] = null;
+            if (entry.row_count === null || entry.row_count === undefined) {
+              try {
+                const manifest = await datahubFetch(
+                  this.owner, this.repo,
+                  `/manifest/${commitHash}/${encodeURIComponent(entry.name)}?offset=0&limit=1`,
+                );
+                entry.row_count = manifest.total;
+              } catch {
+                // Leave row_count empty if the manifest itself cannot be read.
+              }
+            }
           }
         }
       }
       this.sidecars = sidecars;
+      if (repoStats?.totals) {
+        totalRows = (this.tree.entries || [])
+          .filter((entry) => entry.type === 'manifest')
+          .reduce((sum, entry) => sum + (entry.row_count || 0), 0);
+      }
       this.stats = {fileCount, rowCount: totalRows, charCount, tokenEstimate};
       await this.loadChecks();
     },

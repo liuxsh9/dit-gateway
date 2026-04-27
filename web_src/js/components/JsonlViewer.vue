@@ -19,7 +19,17 @@
       <div class="ui message">This JSONL manifest has no rows.</div>
     </div>
 
-    <!-- Table -->
+    <!-- ML2/SFT conversation preview -->
+    <div v-else-if="usesStructuredRows" class="datahub-sft-row-list">
+      <JsonlRowRenderer
+        v-for="(row, idx) in visibleRows"
+        :key="startIndex + idx"
+        :row="row"
+        :row-number="startIndex + idx + 1"
+      />
+    </div>
+
+    <!-- Table fallback -->
     <div v-else class="datahub-jsonl-table" ref="scrollContainer" @scroll="onScroll">
       <table class="ui very basic compact table">
         <thead>
@@ -60,10 +70,12 @@
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
 import {createVirtualScroll} from '../utils/virtual-scroll.js';
+import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
 const PAGE_SIZE = 50;
 
 export default {
+  components: {JsonlRowRenderer},
   props: {
     owner: String,
     repo: String,
@@ -87,7 +99,14 @@ export default {
     };
   },
   computed: {
+    usesStructuredRows() {
+      return this.rows.some((row) => Array.isArray(row?.messages));
+    },
     visibleRows() {
+      if (this.usesStructuredRows) {
+        const start = (this.currentPage - 1) * PAGE_SIZE;
+        return this.rows.slice(start, start + PAGE_SIZE);
+      }
       if (this.virtualScroll) {
         return this.virtualScroll.visibleItems;
       }
@@ -134,7 +153,10 @@ export default {
       const rows = [];
       for (const entry of entries) {
         const data = await datahubFetch(this.owner, this.repo, `/objects/rows/${entry.row_hash}`);
-        rows.push(data);
+        rows.push({
+          ...data,
+          __datahubRowHash: entry.row_hash,
+        });
       }
       return rows;
     },
@@ -154,7 +176,9 @@ export default {
     deriveColumns(rows) {
       const seen = new Set();
       for (const row of rows) {
-        for (const key of Object.keys(row)) seen.add(key);
+        for (const key of Object.keys(row)) {
+          if (!key.startsWith('__')) seen.add(key);
+        }
       }
       const preferred = [
         'instruction',
@@ -216,6 +240,15 @@ export default {
   overflow: auto;
   border: 1px solid var(--color-secondary);
   border-top: 0;
+}
+
+.datahub-sft-row-list {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-secondary);
+  border-top: 0;
+  background: var(--color-body);
 }
 .datahub-cell-truncated {
   max-width: 360px;
