@@ -1,46 +1,118 @@
-<div align="center">
-    <img src="./assets/logo.svg" alt="" width="192" align="center" />
-    <h1 align="center">Welcome to Forgejo</h1>
-</div>
+# DIT Gateway
 
-Hi there! Tired of big platforms playing monopoly?
-Providing Git hosting for your project, friends, company or community?
-**Forgejo** (/for'd&#865;ʒe.jo/ inspired by forĝejo – the Esperanto word for *forge*) has you covered with its intuitive interface,
-light and easy hosting and a lot of built-in functionality.
+DIT Gateway is a Forgejo-based Web and collaboration layer for Dit data repositories. It keeps the normal Forgejo account, repository, permission, and UI model, while data repos store SFT dataset objects in `dit-core`.
 
-Forgejo was [created in 2022](https://forgejo.org/2022-12-15-hello-forgejo/)
-because we think that the project should be owned by an independent community.
-If you second that, then Forgejo is for you!
-Our promise: **Independent Free/Libre Software forever!**
+## Architecture
 
-## What does Forgejo offer?
+| Component | Default URL | Purpose |
+|-----------|-------------|---------|
+| PostgreSQL | `db:5432` | Forgejo DB plus the `dit` database used by core |
+| dit-core | `http://core:8000` | FastAPI data-versioning API |
+| gateway | `http://localhost:3000` | Forgejo UI/API with data repo integration |
 
-If you like any of the following, Forgejo is literally meant for you:
+Gateway talks to core with `X-Service-Token`. The gateway `[datahub] SERVICE_TOKEN` value must match core `DIT_SERVER_SERVICE_TOKEN`.
 
-- Lightweight: Forgejo can easily be hosted on nearly **every machine**.
-  Running on a Raspberry? Small cloud instance? No problem!
-- Project management: Besides Git hosting, Forgejo offers issues,
-  pull requests, wikis, kanban boards and much more to **coordinate with your team**.
-- Publishing: Have something to share? Use **releases** to host your software for download,
-  or use the **package registry** to publish it for docker, npm and many other package managers.
-- Customizable: Want to change your look? Change some settings?
-  There are many **config switches** to make Forgejo work exactly like you want.
-- Powerful: Organizations & team permissions, CI integration, Code Search, LDAP, OAuth and much more.
-  If you have **advanced needs**, Forgejo has you covered.
-- Privacy: From update checker to default settings: Forgejo is built to be **privacy first** for you and your crew.
-- Federation: (WIP) We are actively working to connect software forges with each other through **ActivityPub**,
-  and create a collaborative network of personal instances.
+## Quick Docker Deploy
 
-## Learn more
+This repository expects the core repository next to it:
 
-Dive into the [documentation](https://forgejo.org/docs/latest/), subscribe to releases and blog post on [our website](https://forgejo.org), <a href="https://floss.social/@forgejo" rel="me">find us on the Fediverse</a> or hop into [our Matrix room](https://matrix.to/#/#forgejo-chat:matrix.org) if you have any questions or want to get involved.
+```text
+/path/to/datahub
+/path/to/datahub-gateway
+```
 
-## License
+Create `.env`:
 
-Forgejo is distributed under the terms of the [GPL version 3.0](LICENSE) or any later version.
+```bash
+cp .env.example .env
+```
 
-The agreement for this license [was documented in June 2023](https://codeberg.org/forgejo/governance/pulls/24) and implemented during the development of Forgejo v9.0. All Forgejo versions before v9.0 are distributed under the MIT license.
+Fill in:
 
-## Get involved
+```bash
+SERVICE_TOKEN=<generate-a-long-random-secret>
+POSTGRES_PASSWORD=<generate-a-db-password>
+DIT_DB_PASSWORD=<generate-a-dit-db-password>
+```
 
-If you are interested in making Forgejo better, either by reporting a bug or by changing the governance, please [take a look at the contribution guide](CONTRIBUTING.md).
+Build and start:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Health checks:
+
+```bash
+curl -fsS http://localhost:3000/api/healthz
+curl -fsS http://localhost:8000/health
+```
+
+Full smoke from the core repo:
+
+```bash
+cd ../datahub
+CORE_URL=http://localhost:8000 \
+GATEWAY_URL=http://localhost:3000 \
+./scripts/deployment-smoke.sh
+```
+
+## Required Gateway Config
+
+`docker-compose.yml` sets these through Forgejo's `FORGEJO__section__KEY` environment convention:
+
+```bash
+FORGEJO__datahub__ENABLED=true
+FORGEJO__datahub__CORE_URL=http://core:8000
+FORGEJO__datahub__SERVICE_TOKEN=${SERVICE_TOKEN}
+```
+
+Equivalent `app.ini`:
+
+```ini
+[datahub]
+ENABLED = true
+CORE_URL = http://core:8000
+SERVICE_TOKEN = <same-as-core>
+```
+
+## Build Notes
+
+Use the root `Dockerfile` for deployment. It preserves Forgejo's official Docker entrypoint, bindata generation, SQLite build tags, and environment-to-`app.ini` wiring.
+
+Do not use `Dockerfile.datahub`; it is intentionally deprecated and fails fast to prevent incomplete images.
+
+For local non-Docker builds with SQLite:
+
+```bash
+NODE_ENV=development npx webpack
+TAGS='bindata sqlite sqlite_unlock_notify' make backend
+```
+
+## Deployment Acceptance
+
+Before moving a server into use:
+
+- `docker compose ps` shows `db`, `core`, and `gateway` healthy.
+- `curl http://localhost:8000/health` returns core `status: healthy`.
+- `curl http://localhost:3000/api/healthz` returns HTTP 200.
+- Creating a gateway data repo also creates the backing core repo.
+- Pushing a small ML 2.0 / OpenAI messages JSONL dataset through `dit` succeeds.
+- The data repo page shows latest commit, row count, file size, metadata coverage, and quality checks.
+- JSONL rows and diffs render as structured SFT conversations, not one raw JSON string.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Data repo creation fails | core URL or service token mismatch | Check `FORGEJO__datahub__CORE_URL`, `FORGEJO__datahub__SERVICE_TOKEN`, and core `DIT_SERVER_SERVICE_TOKEN` |
+| Gateway ignores `[datahub]` env vars | wrong Dockerfile or entrypoint | Build with root `Dockerfile` |
+| SQLite driver missing | build tags omitted | Use `TAGS='bindata sqlite sqlite_unlock_notify'` |
+| UI shows stale assets | frontend bundle not rebuilt | Run `NODE_ENV=development npx webpack` before backend build, or use Docker |
+| Core starts but API fails with missing tables | migration did not run | Check core logs; core Docker image auto-runs Alembic unless `DIT_SERVER_AUTO_MIGRATE=0` |
+
+See also:
+
+- Core deployment guide: `../datahub/docs/deployment.md`
+- Local development guide: `DEVELOPMENT.md`

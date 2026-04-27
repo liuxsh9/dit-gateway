@@ -2,7 +2,7 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: Dockerfile.datahub
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -10,10 +10,10 @@ services:
       FORGEJO__database__HOST: db:5432
       FORGEJO__database__NAME: forgejo
       FORGEJO__database__USER: forgejo
-      FORGEJO__database__PASSWD: forgejo
+      FORGEJO__database__PASSWD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
       FORGEJO__datahub__ENABLED: "true"
       FORGEJO__datahub__CORE_URL: "http://core:8000"
-      FORGEJO__datahub__SERVICE_TOKEN: "${SERVICE_TOKEN}"
+      FORGEJO__datahub__SERVICE_TOKEN: "${SERVICE_TOKEN:?set SERVICE_TOKEN in .env}"
     depends_on:
       db:
         condition: service_healthy
@@ -36,9 +36,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DIT_SERVER_DATABASE_URL: "postgresql+asyncpg://dit:dit@db:5432/dit"
+      DIT_SERVER_DATABASE_URL: "postgresql+asyncpg://dit:${DIT_DB_PASSWORD:?set DIT_DB_PASSWORD in .env}@db:5432/dit"
       DIT_SERVER_DATA_DIR: "/data/dit"
-      DIT_SERVER_SERVICE_TOKEN: "${SERVICE_TOKEN}"
+      DIT_SERVER_SERVICE_TOKEN: "${SERVICE_TOKEN:?set SERVICE_TOKEN in .env}"
     depends_on:
       db:
         condition: service_healthy
@@ -56,8 +56,9 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: forgejo
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-forgejo}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
       POSTGRES_DB: forgejo
+      DIT_DB_PASSWORD: "${DIT_DB_PASSWORD:?set DIT_DB_PASSWORD in .env}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U forgejo"]
       interval: 5s
@@ -65,7 +66,7 @@ services:
       retries: 3
     volumes:
       - pg-data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     restart: unless-stopped
 
 volumes:
