@@ -31,6 +31,39 @@
       </div>
     </div>
 
+    <!-- Dataset overview -->
+    <div class="ui segment datahub-overview" v-if="commitHash && !loading && !error">
+      <div class="datahub-overview-grid">
+        <div class="datahub-overview-card">
+          <div class="datahub-overview-label">Latest commit</div>
+          <template v-if="latestCommit">
+            <div class="datahub-overview-value">
+              <span class="datahub-hash">{{ latestCommit.commit_hash.slice(0, 7) }}</span>
+              {{ latestCommit.message || 'No commit message' }}
+            </div>
+            <div class="datahub-overview-detail">
+              {{ latestCommit.author || 'unknown author' }} · {{ formatBlameDate(latestCommit.timestamp) }}
+            </div>
+          </template>
+          <div v-else class="datahub-overview-detail">Commit history is not available for this ref.</div>
+        </div>
+        <div class="datahub-overview-card">
+          <div class="datahub-overview-label">Metadata coverage</div>
+          <div class="datahub-overview-value">{{ metadataCoverageText }}</div>
+          <div class="datahub-overview-detail">
+            <span v-if="missingMetadataCount">{{ missingMetadataCount }} missing metadata file{{ missingMetadataCount !== 1 ? 's' : '' }}</span>
+            <span v-else>All manifest files have sidecar metadata.</span>
+          </div>
+        </div>
+        <div class="datahub-overview-card">
+          <div class="datahub-overview-label">Quality checks</div>
+          <div class="datahub-overview-value">{{ checksStatusText || 'No checks reported' }}</div>
+          <div class="datahub-overview-detail">{{ checksData?.checks?.length || 0 }} check{{ (checksData?.checks?.length || 0) !== 1 ? 's' : '' }} on this commit</div>
+        </div>
+      </div>
+      <div v-if="metaComputeError" class="ui small negative message datahub-inline-message">{{ metaComputeError }}</div>
+    </div>
+
     <!-- Loading -->
     <div class="ui segment" v-if="loading">
       <div class="ui active centered inline loader"></div>
@@ -381,6 +414,8 @@ export default {
       blameFile: null,
       rowHistoryData: null,
       rowHistoryLoading: false,
+      latestCommit: null,
+      metaComputeError: null,
     };
   },
   computed: {
@@ -418,6 +453,21 @@ export default {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5);
     },
+    manifestEntries() {
+      return (this.tree?.entries || []).filter((entry) => entry.type === 'manifest');
+    },
+    filesWithMetadata() {
+      if (this.repoStats?.totals?.files_with_sidecar !== undefined) {
+        return this.repoStats.totals.files_with_sidecar;
+      }
+      return this.manifestEntries.filter((entry) => this.sidecars[entry.name]).length;
+    },
+    missingMetadataCount() {
+      return Math.max(0, this.manifestEntries.length - this.filesWithMetadata);
+    },
+    metadataCoverageText() {
+      return `${this.filesWithMetadata}/${this.manifestEntries.length} files`;
+    },
   },
   async mounted() {
     try {
@@ -453,6 +503,8 @@ export default {
       this.searchResults = null;
       this.searchQuery = '';
       this.searchField = '';
+      this.latestCommit = null;
+      this.metaComputeError = null;
       const [tree, repoStats] = await Promise.all([
         datahubFetch(this.owner, this.repo, `/tree/${commitHash}`),
         this.fetchStats(commitHash),
@@ -514,7 +566,10 @@ export default {
           .reduce((sum, entry) => sum + (entry.row_count || 0), 0);
       }
       this.stats = {fileCount, rowCount: totalRows, charCount, tokenEstimate};
-      await this.loadChecks();
+      await Promise.all([
+        this.loadChecks(),
+        this.loadLatestCommit(),
+      ]);
     },
     async fetchStats(commitHash) {
       try {
@@ -554,14 +609,15 @@ export default {
     },
     async computeMeta(entry) {
       this.computingMeta = {...this.computingMeta, [entry.name]: true};
+      this.metaComputeError = null;
       try {
         await datahubFetch(this.owner, this.repo, '/meta/compute', {
           method: 'POST',
           body: JSON.stringify({file: entry.name}),
         });
         await this.loadTree();
-      } catch {
-        // Silently ignore; UI shows — still
+      } catch (e) {
+        this.metaComputeError = e.message;
       } finally {
         const next = {...this.computingMeta};
         delete next[entry.name];
@@ -600,6 +656,18 @@ export default {
         this.checksData = null;
       } finally {
         this.checksLoading = false;
+      }
+    },
+    async loadLatestCommit() {
+      if (!this.currentBranch) return;
+      try {
+        const result = await datahubFetch(
+          this.owner, this.repo,
+          `/log?ref=${this.currentBranch}&limit=1`,
+        );
+        this.latestCommit = result.commits?.[0] || null;
+      } catch {
+        this.latestCommit = null;
       }
     },
     async submitSearch() {
@@ -718,6 +786,47 @@ export default {
   gap: 6px;
 }
 
+.datahub-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.datahub-overview-card {
+  padding: 12px;
+  border: 1px solid var(--color-secondary);
+  border-radius: 8px;
+  background: var(--color-box-body);
+}
+
+.datahub-overview-label {
+  color: var(--color-text-light-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.datahub-overview-value {
+  margin-top: 4px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.datahub-overview-detail {
+  margin-top: 3px;
+  color: var(--color-text-light-2);
+  font-size: 12px;
+}
+
+.datahub-hash {
+  font-family: var(--fonts-monospace);
+}
+
+.datahub-inline-message {
+  margin-top: 12px;
+}
+
 .datahub-file-table td,
 .datahub-file-table th {
   vertical-align: middle;
@@ -725,5 +834,11 @@ export default {
 
 .datahub-empty-state {
   margin: 0;
+}
+
+@media (max-width: 767px) {
+  .datahub-overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

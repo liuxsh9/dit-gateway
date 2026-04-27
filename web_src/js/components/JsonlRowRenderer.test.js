@@ -57,3 +57,36 @@ test('renders ML2 content parts and collapsible structured fields', () => {
   expect(wrapper.text()).toContain('"vendor_score": 0.98');
   expect(wrapper.text()).toContain('row fields: difficulty');
 });
+
+test('surfaces ML2 schema warnings and collapses long message content', () => {
+  const longContent = ['line 1', 'line 2', 'line 3', 'line 4', 'line 5', 'line 6'].join('\n');
+  const wrapper = mount(JsonlRowRenderer, {
+    props: {
+      rowNumber: 3,
+      row: {
+        version: '2.0.0',
+        meta_info: {
+          teacher: 'glm-5-thinking',
+          language: 'zh',
+        },
+        messages: [
+          {role: 'user', content: longContent},
+          {
+            role: 'assistant',
+            tool_calls: [
+              {id: 'call_weather', type: 'function', function: {name: 'get_weather', arguments: '{}'}},
+            ],
+          },
+          {role: 'tool', tool_call_id: 'call_missing', content: '{"ok":true}'},
+        ],
+      },
+    },
+  });
+
+  expect(wrapper.text()).toContain('8 warnings');
+  expect(wrapper.text()).toContain('meta_info.query_source is missing');
+  expect(wrapper.text()).toContain('assistant message 2 is missing content');
+  expect(wrapper.text()).toContain('tool message 3 references unknown tool_call_id call_missing');
+  expect(wrapper.find('.datahub-sft-content-collapsed').exists()).toBe(true);
+  expect(wrapper.text()).toContain('Show full content');
+});

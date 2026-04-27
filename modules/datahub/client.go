@@ -130,8 +130,13 @@ func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash string)
 	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/diff/"+oldHash+"/"+newHash, nil)
 }
 
-func (c *Client) GetLog(ctx context.Context, repoName, ref string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/log/"+ref, nil)
+func (c *Client) GetLog(ctx context.Context, repoName, ref, limit string) ([]byte, int, error) {
+	query := url.Values{}
+	query.Set("ref", ref)
+	if limit != "" {
+		query.Set("limit", limit)
+	}
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/log?"+query.Encode(), nil)
 }
 
 func (c *Client) ListPulls(ctx context.Context, repoName string) ([]byte, int, error) {

@@ -97,7 +97,11 @@ func DatahubGetDiff(ctx *context.APIContext) {
 
 func DatahubGetLog(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetLog(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref"))
+		ref := ctx.FormString("ref")
+		if ref == "" {
+			ref = ctx.Params(":ref")
+		}
+		return datahub.DefaultClient().GetLog(ctx, ctx.Repo.Repository.Name, ref, ctx.FormString("limit"))
 	})
 }
 

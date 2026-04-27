@@ -130,6 +130,21 @@ func TestGetDiff(t *testing.T) {
 	assert.Contains(t, string(data), "files")
 }
 
+func TestGetLogUsesCoreQueryRef(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/log", r.URL.Path)
+		assert.Equal(t, "heads/main", r.URL.Query().Get("ref"))
+		assert.Equal(t, "1", r.URL.Query().Get("limit"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"commits":[{"commit_hash":"abc123"}]}`))
+	}))
+	data, status, err := client.GetLog(context.Background(), "myrepo", "heads/main", "1")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "abc123")
+}
+
 func TestListPulls(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/repos/myrepo/pulls", r.URL.Path)

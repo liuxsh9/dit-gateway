@@ -1429,6 +1429,7 @@ func Routes() *web.Route {
 					m.Post("/objects/batch", repo.DatahubPushObjects)
 					m.Get("/tree/{hash}", repo.DatahubGetTree)
 					m.Get("/diff/{old}/{new}", repo.DatahubGetDiff)
+					m.Get("/log", repo.DatahubGetLog)
 					m.Get("/log/{ref}", repo.DatahubGetLog)
 					m.Get("/pulls", repo.DatahubListPulls)
 					m.Post("/pulls", repo.DatahubCreatePull)

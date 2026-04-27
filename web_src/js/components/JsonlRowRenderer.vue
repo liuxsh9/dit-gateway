@@ -10,10 +10,18 @@
         </div>
       </div>
       <div class="datahub-sft-row-counts">
+        <span v-if="schemaWarnings.length" class="ui tiny yellow label">{{ schemaWarnings.length }} warnings</span>
         <span class="ui tiny label">{{ messages.length }} messages</span>
         <span v-if="tools.length" class="ui tiny label">{{ tools.length }} tools</span>
       </div>
     </header>
+
+    <div v-if="schemaWarnings.length" class="ui tiny warning message datahub-sft-warning">
+      <div class="header">ML2 shape warnings</div>
+      <ul>
+        <li v-for="warning in schemaWarnings" :key="warning">{{ warning }}</li>
+      </ul>
+    </div>
 
     <div class="datahub-sft-timeline">
       <section
@@ -32,9 +40,21 @@
             <span v-if="message.tool_call_id">tool_call_id: {{ message.tool_call_id }}</span>
           </div>
 
-          <div v-if="renderContent(message.content)" class="datahub-sft-content">
+          <div
+            v-if="renderContent(message.content)"
+            class="datahub-sft-content"
+            :class="{'datahub-sft-content-collapsed': isLongContent(message.content) && !isContentExpanded(index)}"
+          >
             {{ renderContent(message.content) }}
           </div>
+          <button
+            v-if="isLongContent(message.content)"
+            type="button"
+            class="ui mini basic button datahub-sft-toggle"
+            @click="toggleContent(index)"
+          >
+            {{ isContentExpanded(index) ? 'Collapse content' : 'Show full content' }}
+          </button>
           <div v-else class="datahub-sft-empty-content">empty content</div>
 
           <details v-if="renderContent(message.reasoning_content)" class="datahub-sft-details">
@@ -107,6 +127,11 @@ export default {
       required: true,
     },
   },
+  data() {
+    return {
+      expandedContent: new Set(),
+    };
+  },
   computed: {
     messages() {
       return Array.isArray(this.row.messages) ? this.row.messages : [];
@@ -130,6 +155,54 @@ export default {
     },
     rowExtraKeys() {
       return Object.keys(this.row).filter((key) => !ROW_KEYS.has(key) && !key.startsWith('__'));
+    },
+    schemaWarnings() {
+      const warnings = [];
+      if (!Array.isArray(this.row.messages)) warnings.push('messages must be an array');
+      if (!this.row.version) warnings.push('version is missing');
+
+      const meta = this.row.meta_info;
+      const requiredMetaKeys = [
+        'teacher',
+        'query_source',
+        'response_generate_time',
+        'response_update_time',
+        'owner',
+        'language',
+        'category',
+        'rounds',
+      ];
+      if (!meta || typeof meta !== 'object') {
+        warnings.push('meta_info is missing');
+      } else {
+        for (const key of requiredMetaKeys) {
+          if (meta[key] === undefined || meta[key] === null || meta[key] === '') {
+            warnings.push(`meta_info.${key} is missing`);
+          }
+        }
+      }
+
+      const toolCallIds = new Set();
+      this.messages.forEach((message, index) => {
+        const position = index + 1;
+        if (!message?.role) warnings.push(`message ${position} is missing role`);
+        if (message?.role === 'assistant' && !Object.prototype.hasOwnProperty.call(message, 'content')) {
+          warnings.push(`assistant message ${position} is missing content`);
+        } else if (['developer', 'system', 'user', 'tool'].includes(message?.role) && !Object.prototype.hasOwnProperty.call(message, 'content')) {
+          warnings.push(`${message.role} message ${position} is missing content`);
+        }
+        if (Array.isArray(message?.tool_calls)) {
+          for (const call of message.tool_calls) {
+            if (call?.id) toolCallIds.add(call.id);
+          }
+        }
+      });
+      this.messages.forEach((message, index) => {
+        if (message?.role === 'tool' && message.tool_call_id && !toolCallIds.has(message.tool_call_id)) {
+          warnings.push(`tool message ${index + 1} references unknown tool_call_id ${message.tool_call_id}`);
+        }
+      });
+      return warnings.slice(0, 8);
     },
   },
   methods: {
@@ -172,6 +245,22 @@ export default {
         }
       }
       return JSON.stringify(value, null, 2);
+    },
+    isLongContent(value) {
+      const content = this.renderContent(value);
+      return content.split('\n').length > 5 || content.length > 900;
+    },
+    isContentExpanded(index) {
+      return this.expandedContent.has(index);
+    },
+    toggleContent(index) {
+      const next = new Set(this.expandedContent);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      this.expandedContent = next;
     },
   },
 };
@@ -217,6 +306,15 @@ export default {
 
 .datahub-sft-timeline {
   padding: 12px 16px 6px;
+}
+
+.datahub-sft-warning {
+  margin: 12px 16px 0;
+}
+
+.datahub-sft-warning ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
 
 .datahub-sft-message {
@@ -286,6 +384,17 @@ export default {
 .datahub-sft-empty-content {
   color: var(--color-text-light-3);
   font-style: italic;
+}
+
+.datahub-sft-content-collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+}
+
+.datahub-sft-toggle {
+  margin-top: 6px;
 }
 
 .datahub-sft-details,

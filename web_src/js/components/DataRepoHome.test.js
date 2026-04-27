@@ -157,6 +157,95 @@ test('hydrates row counts from manifest totals when sidecar metrics are missing'
   expect(wrapper.text()).toContain('1 rows');
 });
 
+test('shows latest commit and metadata coverage in the dataset overview', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
+          {name: 'ml2.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: null},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'train.jsonl', row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}, has_sidecar: true},
+          {path: 'ml2.jsonl', row_count: null, char_count: null, token_estimate: null, lang_distribution: null, has_sidecar: false},
+        ],
+        totals: {
+          file_count: 2,
+          files_with_sidecar: 1,
+          row_count: 2,
+          char_count: 128,
+          token_estimate: 42,
+          lang_distribution: {en: 2},
+        },
+      };
+    }
+    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}};
+    if (path === '/meta/commit123/ml2.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/manifest/commit123/ml2.jsonl?offset=0&limit=1') return {total: 1, entries: [{row_hash: 'row1'}]};
+    if (path === '/checks/commit123') return {checks: [{check_name: 'format', status: 'pass'}]};
+    if (path === '/log?ref=heads/main&limit=1') {
+      return {
+        commits: [
+          {
+            commit_hash: 'abcdef1234567890',
+            author: 'alice',
+            message: 'add ML2 smoke data',
+            timestamp: 1713600000,
+          },
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('add ML2 smoke data'));
+
+  expect(wrapper.text()).toContain('abcdef1');
+  expect(wrapper.text()).toContain('alice');
+  expect(wrapper.text()).toContain('Metadata coverage');
+  expect(wrapper.text()).toContain('1/2 files');
+  expect(wrapper.text()).toContain('missing metadata');
+});
+
+test('surfaces metadata compute failures for a file', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path, options) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {entries: [{name: 'ml2.jsonl', obj_type: 'manifest', obj_hash: 'manifest123', sidecar_hash: null}]};
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [{path: 'ml2.jsonl', row_count: null, char_count: null, token_estimate: null, lang_distribution: null, has_sidecar: false}],
+        totals: {file_count: 1, files_with_sidecar: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
+      };
+    }
+    if (path === '/meta/commit123/ml2.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/manifest/commit123/ml2.jsonl?offset=0&limit=1') return {total: 1, entries: [{row_hash: 'row1'}]};
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=1') return {commits: []};
+    if (path === '/meta/compute' && options?.method === 'POST') throw new Error('compute failed');
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('ml2.jsonl'));
+
+  await wrapper.findAll('button').find((button) => button.text() === 'Compute').trigger('click');
+  await vi.waitFor(() => expect(wrapper.text()).toContain('compute failed'));
+});
+
 test('shows an empty state when a new data repo has no refs yet', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [];
