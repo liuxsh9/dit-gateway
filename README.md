@@ -101,6 +101,32 @@ Before moving a server into use:
 - Pushing a small ML 2.0 / OpenAI messages JSONL dataset through `dit` succeeds.
 - The data repo page shows latest commit, row count, file size, metadata coverage, and quality checks.
 - JSONL rows and diffs render as structured SFT conversations, not one raw JSON string.
+- A backup and restore drill has been completed with `scripts/compose-backup.sh` and `scripts/compose-restore.sh`.
+
+## Backup And Restore
+
+Before upgrades or risky changes, take a consistent full-stack backup:
+
+```bash
+DIT_GATEWAY_BACKUP_DIR=/secure/backups/dit-gateway \
+./scripts/compose-backup.sh
+```
+
+The backup contains Forgejo DB, Dit DB, Forgejo `/data`, and core object data. Restore is destructive and requires explicit confirmation:
+
+```bash
+DIT_GATEWAY_RESTORE_CONFIRM=I_UNDERSTAND_THIS_DESTROYS_COMPOSE_VOLUMES \
+./scripts/compose-restore.sh /secure/backups/dit-gateway/dit-gateway-YYYYMMDDTHHMMSSZ
+```
+
+After restore, run:
+
+```bash
+cd ../datahub
+CORE_URL=http://localhost:8000 \
+GATEWAY_URL=http://localhost:3000 \
+./scripts/deployment-smoke.sh
+```
 
 ## Troubleshooting
 
