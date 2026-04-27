@@ -1,20 +1,26 @@
 <template>
-  <div class="ui segments">
+  <div class="ui segments datahub-home">
     <!-- Branch selector -->
-    <div class="ui segment">
-      <div class="ui inline fields">
-        <div class="field">
+    <div class="ui segment datahub-toolbar">
+      <div class="datahub-toolbar-main">
+        <div>
+          <div class="datahub-eyebrow">Dit dataset</div>
+          <div class="datahub-title">SFT data repository</div>
+        </div>
+        <div class="field datahub-branch-picker">
           <select class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
             <option v-for="ref in refs" :key="ref.name" :value="ref.name">
               {{ ref.name.replace('heads/', '') }}
             </option>
           </select>
         </div>
-        <div class="field" v-if="stats">
-          <span class="ui label">{{ stats.fileCount }} files</span>
-          <span class="ui label">{{ stats.rowCount }} rows</span>
+        <div v-if="stats" class="datahub-metrics">
+          <span class="ui label">{{ formatCount(stats.fileCount) }} files</span>
+          <span class="ui label">{{ formatCount(stats.rowCount) }} rows</span>
+          <span class="ui label">{{ formatCount(stats.charCount) }} chars</span>
+          <span class="ui label">{{ formatTokens(stats.tokenEstimate) }} tokens</span>
         </div>
-        <div class="field">
+        <div>
           <span v-if="checksStatus" class="ui tiny label" :class="checksStatusClass" style="margin-left: 6px;">
             <i :class="checksStatusIcon"></i> {{ checksStatusText }}
           </span>
@@ -30,6 +36,14 @@
       <div class="ui active centered inline loader"></div>
     </div>
 
+    <!-- No refs yet -->
+    <div class="ui segment" v-else-if="!currentBranch">
+      <div class="ui message datahub-empty-state">
+        <div class="header">No branches have been published yet</div>
+        <p>Push JSONL data with dit to create the first dataset branch, then this page will show files, rows, tokens, and validation status.</p>
+      </div>
+    </div>
+
     <!-- Error -->
     <div class="ui segment" v-else-if="error">
       <div class="ui negative message">
@@ -39,12 +53,15 @@
 
     <!-- File tree -->
     <div class="ui segment" v-else-if="tree">
-      <table class="ui very basic table">
+      <div v-if="(tree.entries || []).length === 0" class="ui message">
+        This data repository has no JSONL manifests on the selected branch yet.
+      </div>
+      <table v-else class="ui very basic table datahub-file-table">
         <thead>
           <tr>
             <th>Name</th>
             <th class="right aligned">Rows</th>
-            <th class="right aligned">Size</th>
+            <th class="right aligned">Chars</th>
             <th class="right aligned">Tokens</th>
             <th class="right aligned">Lang</th>
           </tr>
@@ -62,12 +79,12 @@
                 @click="loadBlame(entry.name)"
               >Blame</button>
             </td>
-            <td class="right aligned">{{ entry.row_count || '—' }}</td>
-            <td class="right aligned">{{ formatSize(entry.size) }}</td>
+            <td class="right aligned">{{ formatCount(entry.row_count) }}</td>
+            <td class="right aligned">{{ formatCount(entry.char_count) }}</td>
             <td class="right aligned">
               <template v-if="entry.type === 'manifest'">
-                <span v-if="sidecars[entry.name]">
-                  {{ formatTokens(sidecars[entry.name].token_estimate) }}
+                <span v-if="entry.token_estimate != null">
+                  {{ formatTokens(entry.token_estimate) }}
                 </span>
                 <span v-else-if="sidecars[entry.name] === null">
                   <span>—</span>
@@ -82,8 +99,8 @@
               <span v-else>—</span>
             </td>
             <td class="right aligned">
-              <template v-if="entry.type === 'manifest' && sidecars[entry.name]">
-                {{ formatLang(sidecars[entry.name].lang_distribution) }}
+              <template v-if="entry.type === 'manifest' && entry.lang_distribution">
+                {{ formatLang(entry.lang_distribution) }}
               </template>
               <span v-else>—</span>
             </td>
@@ -436,36 +453,59 @@ export default {
       this.searchResults = null;
       this.searchQuery = '';
       this.searchField = '';
-      const tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
+      const [tree, repoStats] = await Promise.all([
+        datahubFetch(this.owner, this.repo, `/tree/${commitHash}`),
+        this.fetchStats(commitHash),
+      ]);
+      this.repoStats = repoStats;
+      const statsByPath = new Map((repoStats?.files || []).map((file) => [file.path, file]));
       this.tree = {
         ...tree,
         entries: (tree.entries || []).map((entry) => ({
           ...entry,
+          ...(statsByPath.get(entry.name) || {}),
           type: entry.type || entry.obj_type,
           hash: entry.hash || entry.obj_hash,
         })),
       };
-      let totalRows = 0;
-      let fileCount = 0;
+      let totalRows = repoStats?.totals?.row_count || 0;
+      let fileCount = repoStats?.totals?.file_count || 0;
+      let charCount = repoStats?.totals?.char_count || 0;
+      let tokenEstimate = repoStats?.totals?.token_estimate || 0;
       const sidecars = {};
       for (const entry of this.tree.entries || []) {
         if (entry.type === 'manifest') {
-          fileCount++;
-          totalRows += entry.row_count || 0;
+          if (!repoStats?.totals) {
+            fileCount++;
+            totalRows += entry.row_count || 0;
+            charCount += entry.char_count || 0;
+            tokenEstimate += entry.token_estimate || 0;
+          }
           try {
             const summary = await datahubFetch(
               this.owner, this.repo,
               `/meta/${commitHash}/${encodeURIComponent(entry.name)}/summary`,
             );
             sidecars[entry.name] = summary;
+            entry.row_count ??= summary.row_count;
+            entry.char_count ??= summary.char_count;
+            entry.token_estimate ??= summary.token_estimate;
+            entry.lang_distribution ??= summary.lang_distribution;
           } catch {
             sidecars[entry.name] = null;
           }
         }
       }
       this.sidecars = sidecars;
-      this.stats = {fileCount, rowCount: totalRows};
+      this.stats = {fileCount, rowCount: totalRows, charCount, tokenEstimate};
       await this.loadChecks();
+    },
+    async fetchStats(commitHash) {
+      try {
+        return await datahubFetch(this.owner, this.repo, `/stats/${commitHash}`);
+      } catch {
+        return null;
+      }
     },
     selectFile(entry) {
       this.selectedFile = entry;
@@ -479,6 +519,10 @@ export default {
       if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
       return `${(bytes / 1048576).toFixed(1)} MB`;
     },
+    formatCount(n) {
+      if (n === null || n === undefined) return '—';
+      return Number(n).toLocaleString();
+    },
     formatTokens(n) {
       if (!n && n !== 0) return '—';
       if (n >= 1000000) return `~${(n / 1000000).toFixed(2)}M`;
@@ -488,7 +532,9 @@ export default {
     formatLang(dist) {
       if (!dist || Object.keys(dist).length === 0) return '—';
       const top = Object.entries(dist).sort((a, b) => b[1] - a[1])[0];
-      return `${top[0]} ${Math.round(top[1] * 100)}%`;
+      const total = Object.values(dist).reduce((sum, value) => sum + value, 0);
+      const pct = total > 1 ? (top[1] / total) * 100 : top[1] * 100;
+      return `${top[0]} ${Math.round(pct)}%`;
     },
     async computeMeta(entry) {
       this.computingMeta = {...this.computingMeta, [entry.name]: true};
@@ -616,3 +662,52 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.datahub-home {
+  border: 0;
+}
+
+.datahub-toolbar {
+  background: linear-gradient(135deg, var(--color-box-header), var(--color-body));
+}
+
+.datahub-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.datahub-eyebrow {
+  color: var(--color-text-light-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.datahub-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.datahub-branch-picker {
+  min-width: 160px;
+}
+
+.datahub-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.datahub-file-table td,
+.datahub-file-table th {
+  vertical-align: middle;
+}
+
+.datahub-empty-state {
+  margin: 0;
+}
+</style>

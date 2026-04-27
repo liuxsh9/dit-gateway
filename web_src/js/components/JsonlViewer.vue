@@ -1,13 +1,26 @@
 <template>
-  <div class="ui segment">
+  <div class="ui segment datahub-viewer">
     <!-- Header -->
-    <div class="ui top attached header">
-      <span>{{ filePath }}</span>
-      <span class="ui label" v-if="totalRows">{{ totalRows }} rows</span>
+    <div class="ui top attached header datahub-viewer-header">
+      <div>
+        <div class="datahub-viewer-title">{{ filePath }}</div>
+        <div class="datahub-viewer-subtitle">JSONL row preview</div>
+      </div>
+      <span class="ui label" v-if="totalRows">{{ totalRows.toLocaleString() }} rows</span>
+    </div>
+
+    <div v-if="loading" class="ui attached segment">
+      <div class="ui active centered inline loader"></div>
+    </div>
+    <div v-else-if="error" class="ui attached segment">
+      <div class="ui negative message">{{ error }}</div>
+    </div>
+    <div v-else-if="rows.length === 0" class="ui attached segment">
+      <div class="ui message">This JSONL manifest has no rows.</div>
     </div>
 
     <!-- Table -->
-    <div class="datahub-jsonl-table" ref="scrollContainer" @scroll="onScroll">
+    <div v-else class="datahub-jsonl-table" ref="scrollContainer" @scroll="onScroll">
       <table class="ui very basic compact table">
         <thead>
           <tr>
@@ -18,7 +31,12 @@
         <tbody>
           <tr v-for="(row, idx) in visibleRows" :key="startIndex + idx">
             <td class="collapsing">{{ startIndex + idx + 1 }}</td>
-            <td v-for="col in columns" :key="col" @click="toggleExpand(startIndex + idx, col)">
+            <td
+              v-for="col in columns"
+              :key="col"
+              :class="{'datahub-complex-cell': isComplex(row[col])}"
+              @click="toggleExpand(startIndex + idx, col)"
+            >
               <div :class="{'datahub-cell-truncated': !isExpanded(startIndex + idx, col)}">
                 {{ formatCell(row[col]) }}
               </div>
@@ -56,6 +74,8 @@ export default {
     return {
       rows: [],
       columns: [],
+      loading: true,
+      error: null,
       totalRows: 0,
       currentPage: 1,
       totalPages: 1,
@@ -76,7 +96,13 @@ export default {
     },
   },
   async mounted() {
-    await this.loadManifest();
+    try {
+      await this.loadManifest();
+    } catch (e) {
+      this.error = e.message;
+    } finally {
+      this.loading = false;
+    }
   },
   watch: {
     rows(newRows) {
@@ -101,7 +127,7 @@ export default {
       this.rows = await this.loadRows(manifest.entries || []);
       this.loadedChunks[0] = true;
       if (this.rows.length > 0 && this.columns.length === 0) {
-        this.columns = Object.keys(this.rows[0]);
+        this.columns = this.deriveColumns(this.rows);
       }
     },
     async loadRows(entries) {
@@ -122,13 +148,41 @@ export default {
       this.rows = await this.loadRows(manifest.entries || []);
       this.startIndex = offset;
       if (this.rows.length > 0 && this.columns.length === 0) {
-        this.columns = Object.keys(this.rows[0]);
+        this.columns = this.deriveColumns(this.rows);
       }
+    },
+    deriveColumns(rows) {
+      const seen = new Set();
+      for (const row of rows) {
+        for (const key of Object.keys(row)) seen.add(key);
+      }
+      const preferred = [
+        'instruction',
+        'input',
+        'output',
+        'response',
+        'chosen',
+        'rejected',
+        'messages',
+        'prompt',
+        'completion',
+        'reasoning_content',
+        'tools',
+        'metadata',
+      ];
+      const columns = [];
+      for (const key of preferred) {
+        if (seen.delete(key)) columns.push(key);
+      }
+      return columns.concat([...seen].sort());
     },
     formatCell(value) {
       if (value === null || value === undefined) return '—';
-      if (typeof value === 'object') return JSON.stringify(value).slice(0, 200);
-      return String(value).slice(0, 200);
+      const text = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+      return text.length > 360 ? `${text.slice(0, 360)}…` : text;
+    },
+    isComplex(value) {
+      return value !== null && typeof value === 'object';
     },
     toggleExpand(rowIdx, col) {
       const key = `${rowIdx}:${col}`;
@@ -160,12 +214,36 @@ export default {
 .datahub-jsonl-table {
   max-height: 600px;
   overflow: auto;
+  border: 1px solid var(--color-secondary);
+  border-top: 0;
 }
 .datahub-cell-truncated {
-  max-width: 300px;
+  max-width: 360px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+}
+
+.datahub-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.datahub-viewer-title {
+  font-weight: 600;
+}
+
+.datahub-viewer-subtitle {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.datahub-complex-cell {
+  font-family: var(--fonts-monospace);
+  white-space: pre-wrap;
 }
 </style>

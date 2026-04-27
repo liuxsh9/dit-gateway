@@ -25,6 +25,12 @@ test('loads core tree entries using obj_type and obj_hash fields', async () => {
         ],
       };
     }
+    if (path === '/stats/commit123') {
+      return {
+        files: [{path: 'train.jsonl', row_count: 2, char_count: 128, token_estimate: 0, lang_distribution: {}}],
+        totals: {file_count: 1, row_count: 2, char_count: 128, token_estimate: 0, lang_distribution: {}},
+      };
+    }
     if (path === '/meta/commit123/train.jsonl/summary') throw new Error('missing sidecar');
     if (path === '/checks/commit123') return {checks: []};
     throw new Error(`unexpected path ${path}`);
@@ -43,6 +49,74 @@ test('loads core tree entries using obj_type and obj_hash fields', async () => {
   expect(wrapper.text()).toContain('2 rows');
 });
 
+test('hydrates file list metrics from stats when tree omits row and size fields', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {
+            name: 'train.jsonl',
+            obj_type: 'manifest',
+            obj_hash: 'manifest123',
+            sidecar_hash: 'sidecar123',
+          },
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {
+            path: 'train.jsonl',
+            row_count: 2,
+            char_count: 128,
+            token_estimate: 42,
+            lang_distribution: {en: 2},
+            has_sidecar: true,
+          },
+        ],
+        totals: {
+          file_count: 1,
+          row_count: 2,
+          char_count: 128,
+          token_estimate: 42,
+          lang_distribution: {en: 2},
+        },
+      };
+    }
+    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 2, token_estimate: 42, lang_distribution: {en: 2}};
+    if (path === '/checks/commit123') return {checks: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
+
+  expect(wrapper.text()).toContain('1 files');
+  expect(wrapper.text()).toContain('2 rows');
+  expect(wrapper.text()).toContain('128 chars');
+  expect(wrapper.text()).toContain('42');
+  expect(wrapper.text()).toContain('en 100%');
+});
+
+test('shows an empty state when a new data repo has no refs yet', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'empty-dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('No branches have been published yet'));
+
+  expect(wrapper.text()).toContain('Push JSONL data with dit to create the first dataset branch');
+});
+
 test('renders blame response using entries and summary fields', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
@@ -56,6 +130,12 @@ test('renders blame response using entries and summary fields', async () => {
             obj_hash: 'manifest123',
           },
         ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [],
+        totals: {file_count: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
       };
     }
     if (path === '/meta/commit123/train.jsonl/summary') throw new Error('missing sidecar');

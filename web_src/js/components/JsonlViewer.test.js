@@ -42,3 +42,37 @@ test('loads paged manifest entries and row objects from core API', async () => {
   expect(wrapper.text()).toContain('2 rows');
   expect(wrapper.text()).toContain('Explain LFU');
 });
+
+test('orders common SFT columns before incidental JSON fields', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {
+        total: 1,
+        entries: [
+          {row_hash: 'row1'},
+        ],
+      };
+    }
+    if (path === '/objects/rows/row1') {
+      return {
+        metadata: {source: 'manual'},
+        response: 'A cache eviction policy.',
+        instruction: 'Explain LRU',
+        messages: [{role: 'user', content: 'Explain LRU'}],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Explain LRU'));
+
+  expect(wrapper.vm.columns).toEqual(['instruction', 'response', 'messages', 'metadata']);
+});
