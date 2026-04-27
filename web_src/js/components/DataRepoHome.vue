@@ -64,6 +64,29 @@
       <div v-if="metaComputeError" class="ui small negative message datahub-inline-message">{{ metaComputeError }}</div>
     </div>
 
+    <!-- Getting started -->
+    <div class="ui segment datahub-workflow" v-if="commitHash && !loading && !error">
+      <div class="datahub-section-header">
+        <div>
+          <div class="datahub-overview-label">Use this dataset</div>
+          <h3 class="ui header datahub-section-title">Clone, update, review</h3>
+        </div>
+      </div>
+      <div class="datahub-command-grid">
+        <div class="datahub-command-card">
+          <div class="datahub-panel-title"><i class="download icon"></i> Start locally</div>
+          <code>{{ cloneCommand }}</code>
+        </div>
+        <div class="datahub-command-card">
+          <div class="datahub-panel-title"><i class="code branch icon"></i> Make a reviewed change</div>
+          <code>dit checkout -b update/sft-batch</code>
+          <code>dit add &lt;jsonl-file&gt; &amp;&amp; dit commit -m "update SFT data"</code>
+          <code>dit push --remote origin --branch update/sft-batch</code>
+          <code>{{ createReviewCommand }}</code>
+        </div>
+      </div>
+    </div>
+
     <!-- Loading -->
     <div class="ui segment" v-if="loading">
       <div class="ui active centered inline loader"></div>
@@ -89,7 +112,15 @@
       <div v-if="(tree.entries || []).length === 0" class="ui message">
         This data repository has no JSONL manifests on the selected branch yet.
       </div>
-      <table v-else class="ui very basic table datahub-file-table">
+      <div v-else class="datahub-file-table-wrap">
+      <table class="ui very basic table datahub-file-table">
+        <colgroup>
+          <col class="datahub-file-col-name">
+          <col class="datahub-file-col-count">
+          <col class="datahub-file-col-count">
+          <col class="datahub-file-col-count">
+          <col class="datahub-file-col-lang">
+        </colgroup>
         <thead>
           <tr>
             <th>Name</th>
@@ -102,15 +133,30 @@
         <tbody>
           <tr v-for="entry in tree.entries" :key="entry.name">
             <td>
-              <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
-              <a v-if="entry.type === 'manifest'" href="#" @click.prevent="selectFile(entry)">{{ entry.name }}</a>
-              <span v-else>{{ entry.name }}</span>
-              <button
-                v-if="entry.type === 'manifest'"
-                class="ui mini basic button"
-                style="margin-left:8px;"
-                @click="loadBlame(entry.name)"
-              >Blame</button>
+              <div class="datahub-file-name-cell">
+                <span class="datahub-file-name">
+                  <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
+                  <a v-if="entry.type === 'manifest'" href="#" @click.prevent="selectFile(entry)">{{ entry.name }}</a>
+                  <span v-else>{{ entry.name }}</span>
+                </span>
+                <div v-if="entry.type === 'manifest'" class="datahub-file-actions">
+                  <button
+                    class="ui mini basic primary button"
+                    @click="selectFile(entry)"
+                  >Preview</button>
+                  <button
+                    class="ui mini basic button"
+                    @click="loadBlame(entry.name)"
+                  >Blame</button>
+                  <button
+                    v-if="sidecars[entry.name] === null"
+                    class="ui mini basic button"
+                    :class="{loading: computingMeta[entry.name]}"
+                    :disabled="computingMeta[entry.name]"
+                    @click="computeMeta(entry)"
+                  >Compute</button>
+                </div>
+              </div>
             </td>
             <td class="right aligned">{{ formatCount(entry.row_count) }}</td>
             <td class="right aligned">{{ formatCount(entry.char_count) }}</td>
@@ -120,13 +166,7 @@
                   {{ formatTokens(entry.token_estimate) }}
                 </span>
                 <span v-else-if="sidecars[entry.name] === null">
-                  <span>—</span>
-                  <button
-                    class="ui mini basic button"
-                    :class="{loading: computingMeta[entry.name]}"
-                    :disabled="computingMeta[entry.name]"
-                    @click="computeMeta(entry)"
-                  >Compute</button>
+                  —
                 </span>
               </template>
               <span v-else>—</span>
@@ -140,6 +180,113 @@
           </tr>
         </tbody>
       </table>
+      </div>
+    </div>
+
+    <!-- Repository activity -->
+    <div class="ui segment datahub-activity" v-if="commitHash && !loading && !error">
+      <div class="datahub-section-header">
+        <div>
+          <div class="datahub-overview-label">Repository activity</div>
+          <h3 class="ui header datahub-section-title">Changes and reviews</h3>
+        </div>
+        <span v-if="activityLoading" class="ui tiny label">
+          <i class="spinner loading icon"></i> Loading activity
+        </span>
+      </div>
+      <div v-if="activityError" class="ui small negative message datahub-inline-message">
+        {{ activityError }}
+      </div>
+      <div class="datahub-activity-grid">
+        <div class="datahub-activity-panel">
+          <div class="datahub-panel-title">
+            <i class="history icon"></i>
+            Recent commits
+          </div>
+          <div v-if="recentCommits.length === 0" class="datahub-empty-inline">
+            No commits are available for this branch yet.
+          </div>
+          <div v-else class="datahub-commit-list">
+            <div v-for="commit in recentCommits" :key="commit.commit_hash" class="datahub-commit-row">
+              <div class="datahub-commit-main">
+                <span class="datahub-hash">{{ shortHash(commit.commit_hash) }}</span>
+                <span class="datahub-commit-message">{{ commit.message || 'No commit message' }}</span>
+              </div>
+              <div class="datahub-overview-detail">
+                {{ commit.author || 'unknown author' }} · {{ formatTimestamp(commit.timestamp) }}
+              </div>
+              <button
+                v-if="commitBase(commit)"
+                class="ui mini basic primary button datahub-commit-preview-button"
+                @click="previewCommit(commit)"
+              >
+                Preview
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="datahub-activity-panel">
+          <div class="datahub-panel-title">
+            <i class="code branch icon"></i>
+            Open data reviews
+          </div>
+          <div v-if="openPulls.length === 0" class="datahub-empty-inline">
+            No open data reviews. Push a branch and open a review with the command above to preview row-level SFT changes before merge.
+          </div>
+          <div v-else class="datahub-pr-list">
+            <div v-for="pull in openPulls" :key="pull.pull_request_id || pull.id" class="datahub-pr-card">
+              <div class="datahub-pr-card-header">
+                <div>
+                  <div class="datahub-pr-title">#{{ pull.pull_request_id }} {{ pull.title || 'Untitled data review' }}</div>
+                  <div class="datahub-overview-detail">
+                    {{ pull.author || 'unknown author' }} · {{ branchName(pull.source_ref) }} → {{ branchName(pull.target_ref) }}
+                  </div>
+                </div>
+                <span class="ui tiny label" :class="pull.is_mergeable ? 'green' : 'red'">
+                  {{ pull.is_mergeable ? 'Mergeable' : 'Needs resolution' }}
+                </span>
+              </div>
+              <div class="datahub-pr-stats">
+                <span class="ui green label">+{{ formatCount(pull.stats_added || 0) }}</span>
+                <span class="ui red label">-{{ formatCount(pull.stats_removed || 0) }}</span>
+                <span class="ui yellow label">~{{ formatCount(pull.stats_refreshed || 0) }}</span>
+              </div>
+              <div class="datahub-overview-detail" v-if="pull.updated_at">
+                Updated {{ formatTimestamp(pull.updated_at) }}
+              </div>
+              <button
+                class="ui mini primary button datahub-review-button"
+                :disabled="!pull.target_commit || !pull.source_commit"
+                @click="previewPull(pull)"
+              >
+                Preview diff
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inline review diff -->
+    <div class="ui segment datahub-review-preview" v-if="activeReview">
+      <div class="ui secondary menu">
+        <div class="item">
+          <strong>Review data changes</strong>
+          <span class="datahub-review-title">{{ activeReview.title }}</span>
+        </div>
+        <div class="right menu">
+          <a class="item" @click="closeReview"><i class="times icon"></i> Close</a>
+        </div>
+      </div>
+      <div v-if="reviewConflictText" class="ui small warning message">
+        {{ reviewConflictText }}
+      </div>
+      <DataDiffView
+        :owner="owner"
+        :repo="repo"
+        :old-commit="activeReview.oldCommit"
+        :new-commit="activeReview.newCommit"
+      />
     </div>
 
     <!-- Blame panel -->
@@ -375,10 +522,11 @@
 
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
+import DataDiffView from './DataDiffView.vue';
 import JsonlViewer from './JsonlViewer.vue';
 
 export default {
-  components: {JsonlViewer},
+  components: {DataDiffView, JsonlViewer},
   props: {
     owner: String,
     repo: String,
@@ -415,6 +563,11 @@ export default {
       rowHistoryData: null,
       rowHistoryLoading: false,
       latestCommit: null,
+      recentCommits: [],
+      openPulls: [],
+      activityLoading: false,
+      activityError: null,
+      activeReview: null,
       metaComputeError: null,
     };
   },
@@ -468,6 +621,26 @@ export default {
     metadataCoverageText() {
       return `${this.filesWithMetadata}/${this.manifestEntries.length} files`;
     },
+    repoUrl() {
+      const origin = window.location?.origin || 'http://localhost';
+      return `${origin}/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
+    },
+    cloneCommand() {
+      return `dit clone ${this.repoUrl}`;
+    },
+    datahubApiUrl() {
+      const origin = window.location?.origin || 'http://localhost';
+      return `${origin}/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub`;
+    },
+    createReviewCommand() {
+      return `curl -X POST ${this.datahubApiUrl}/pulls -H "Authorization: token <token>" -H "Content-Type: application/json" -d '{"source_branch":"update/sft-batch","target_branch":"main","title":"Review SFT batch","author":"<your-name>"}'`;
+    },
+    reviewConflictText() {
+      if (!this.activeReview?.conflicts?.length) return '';
+      return `Conflicts: ${this.activeReview.conflicts.map((conflict) => (
+        conflict.file_path || conflict.path || conflict
+      )).join(', ')}`;
+    },
   },
   async mounted() {
     try {
@@ -504,6 +677,10 @@ export default {
       this.searchQuery = '';
       this.searchField = '';
       this.latestCommit = null;
+      this.recentCommits = [];
+      this.openPulls = [];
+      this.activeReview = null;
+      this.activityError = null;
       this.metaComputeError = null;
       const [tree, repoStats] = await Promise.all([
         datahubFetch(this.owner, this.repo, `/tree/${commitHash}`),
@@ -568,7 +745,7 @@ export default {
       this.stats = {fileCount, rowCount: totalRows, charCount, tokenEstimate};
       await Promise.all([
         this.loadChecks(),
-        this.loadLatestCommit(),
+        this.loadActivity(),
       ]);
     },
     async fetchStats(commitHash) {
@@ -658,17 +835,57 @@ export default {
         this.checksLoading = false;
       }
     },
-    async loadLatestCommit() {
+    async loadActivity() {
       if (!this.currentBranch) return;
+      this.activityLoading = true;
+      this.activityError = null;
       try {
-        const result = await datahubFetch(
-          this.owner, this.repo,
-          `/log?ref=${this.currentBranch}&limit=1`,
-        );
-        this.latestCommit = result.commits?.[0] || null;
-      } catch {
+        const [logResult, pullsResult] = await Promise.all([
+          datahubFetch(this.owner, this.repo, `/log?ref=${this.currentBranch}&limit=5`),
+          datahubFetch(this.owner, this.repo, '/pulls?status=open'),
+        ]);
+        this.recentCommits = logResult.commits || [];
+        this.latestCommit = this.recentCommits[0] || null;
+        this.openPulls = Array.isArray(pullsResult) ? pullsResult : (pullsResult.pull_requests || pullsResult.pulls || []);
+      } catch (e) {
+        this.recentCommits = [];
+        this.openPulls = [];
         this.latestCommit = null;
+        this.activityError = e.message;
+      } finally {
+        this.activityLoading = false;
       }
+    },
+    previewPull(pull) {
+      this.activeReview = {
+        id: pull.pull_request_id || pull.id,
+        title: `#${pull.pull_request_id || pull.id} ${pull.title || 'Untitled data review'}`,
+        oldCommit: pull.target_commit,
+        newCommit: pull.source_commit,
+        conflicts: pull.conflict_files || [],
+      };
+    },
+    previewCommit(commit) {
+      this.activeReview = {
+        id: commit.commit_hash,
+        title: `${this.shortHash(commit.commit_hash)} ${commit.message || 'No commit message'}`,
+        oldCommit: this.commitBase(commit),
+        newCommit: commit.commit_hash,
+        conflicts: [],
+      };
+    },
+    closeReview() {
+      this.activeReview = null;
+    },
+    commitBase(commit) {
+      if (Array.isArray(commit.parent_hashes) && commit.parent_hashes.length) return commit.parent_hashes[0];
+      return commit.parent_hash || null;
+    },
+    branchName(refName) {
+      return (refName || '').replace(/^heads\//, '') || 'unknown';
+    },
+    shortHash(hash) {
+      return hash ? hash.slice(0, 7) : '—';
     },
     async submitSearch() {
       if (!this.searchQuery.trim()) return;
@@ -742,6 +959,13 @@ export default {
       const pad = (n) => String(n).padStart(2, '0');
       return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
              `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+    },
+    formatTimestamp(value) {
+      if (!value) return '—';
+      if (typeof value === 'number') return this.formatBlameDate(value);
+      const parsed = Date.parse(value);
+      if (Number.isNaN(parsed)) return String(value);
+      return this.formatBlameDate(Math.floor(parsed / 1000));
     },
   },
 };
@@ -827,17 +1051,188 @@ export default {
   margin-top: 12px;
 }
 
+.datahub-section-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.datahub-section-title {
+  margin-top: 2px !important;
+}
+
+.datahub-activity-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  gap: 14px;
+}
+
+.datahub-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.datahub-activity-panel {
+  border: 1px solid var(--color-secondary);
+  border-radius: 8px;
+  background: var(--color-box-body);
+  padding: 12px;
+}
+
+.datahub-command-card {
+  border: 1px solid var(--color-secondary);
+  border-radius: 8px;
+  background: var(--color-box-body);
+  padding: 12px;
+}
+
+.datahub-command-card code {
+  background: var(--color-code-bg);
+  border-radius: 6px;
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 6px;
+  overflow-x: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.datahub-panel-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.datahub-empty-inline {
+  color: var(--color-text-light-2);
+  font-size: 13px;
+  padding: 10px 0;
+}
+
+.datahub-commit-list,
+.datahub-pr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.datahub-commit-row,
+.datahub-pr-card {
+  border-top: 1px solid var(--color-secondary);
+  padding-top: 10px;
+}
+
+.datahub-commit-row:first-child,
+.datahub-pr-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.datahub-commit-main {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.datahub-commit-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datahub-pr-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.datahub-pr-title {
+  font-weight: 600;
+}
+
+.datahub-pr-stats {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.datahub-review-button {
+  margin-top: 8px !important;
+}
+
+.datahub-commit-preview-button {
+  margin-top: 6px !important;
+}
+
+.datahub-review-title {
+  color: var(--color-text-light-2);
+  margin-left: 8px;
+}
+
 .datahub-file-table td,
 .datahub-file-table th {
   vertical-align: middle;
+}
+
+.datahub-file-table-wrap {
+  overflow-x: auto;
+}
+
+.datahub-file-table {
+  min-width: 0;
+  table-layout: fixed;
+  width: 100% !important;
+}
+
+.datahub-file-col-name {
+  width: auto;
+}
+
+.datahub-file-col-count {
+  width: 62px;
+}
+
+.datahub-file-col-lang {
+  width: 82px;
+}
+
+.datahub-file-name-cell,
+.datahub-file-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.datahub-file-name {
+  margin-right: 6px;
+}
+
+.datahub-file-actions .button {
+  margin: 0 !important;
+  padding-left: 9px !important;
+  padding-right: 9px !important;
 }
 
 .datahub-empty-state {
   margin: 0;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 991px) {
   .datahub-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .datahub-activity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .datahub-command-grid {
     grid-template-columns: 1fr;
   }
 }
