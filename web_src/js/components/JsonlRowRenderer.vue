@@ -47,15 +47,15 @@
           >
             {{ renderContent(message.content) }}
           </div>
+          <div v-else class="datahub-sft-empty-content">empty content</div>
           <button
-            v-if="isLongContent(message.content)"
+            v-if="renderContent(message.content) && isLongContent(message.content)"
             type="button"
             class="ui mini basic button datahub-sft-toggle"
             @click="toggleContent(index)"
           >
             {{ isContentExpanded(index) ? 'Collapse content' : 'Show full content' }}
           </button>
-          <div v-else class="datahub-sft-empty-content">empty content</div>
 
           <details v-if="renderContent(message.reasoning_content)" class="datahub-sft-details">
             <summary>reasoning_content</summary>

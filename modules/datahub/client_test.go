@@ -120,7 +120,13 @@ func TestGetTree(t *testing.T) {
 
 func TestGetDiff(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/repos/myrepo/diff/old123/new456", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/diff", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		body, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(body), `"old_commit":"old123"`)
+		assert.Contains(t, string(body), `"new_commit":"new456"`)
+		assert.Contains(t, string(body), `"include_rows":true`)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"files":[]}`))
 	}))

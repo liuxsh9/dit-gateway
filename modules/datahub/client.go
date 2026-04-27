@@ -127,7 +127,12 @@ func (c *Client) GetTree(ctx context.Context, repoName, hash string) ([]byte, in
 }
 
 func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/diff/"+oldHash+"/"+newHash, nil)
+	body := []byte(fmt.Sprintf(
+		`{"old_commit":%q,"new_commit":%q,"include_rows":true,"limit":100}`,
+		oldHash,
+		newHash,
+	))
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/diff", body)
 }
 
 func (c *Client) GetLog(ctx context.Context, repoName, ref, limit string) ([]byte, int, error) {

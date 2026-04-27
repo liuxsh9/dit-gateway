@@ -50,6 +50,7 @@ test('renders ML2 content parts and collapsible structured fields', () => {
   expect(wrapper.text()).toContain('teacher: glm-5-thinking');
   expect(wrapper.text()).toContain('第一段\n第二段');
   expect(wrapper.text()).toContain('name: reviewer');
+  expect(wrapper.text()).not.toContain('empty content');
   expect(wrapper.text()).toContain('reasoning_content');
   expect(wrapper.text()).toContain('lookup');
   expect(wrapper.text()).toContain('"query": "天气"');
