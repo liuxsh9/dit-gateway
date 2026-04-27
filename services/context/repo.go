@@ -669,6 +669,16 @@ func RepoAssignment(ctx *Context) context.CancelFunc {
 
 	isHomeOrSettings := ctx.Link == ctx.Repo.RepoLink || ctx.Link == ctx.Repo.RepoLink+"/settings" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/settings/")
 
+	if ctx.Repo.Repository.IsDataRepo {
+		ctx.Repo.BranchName = ctx.Repo.Repository.DefaultBranch
+		ctx.Repo.RefName = ctx.Repo.Repository.DefaultBranch
+		ctx.Data["BranchName"] = ctx.Repo.Repository.DefaultBranch
+		if !isHomeOrSettings {
+			ctx.Redirect(ctx.Repo.RepoLink)
+		}
+		return nil
+	}
+
 	// Disable everything when the repo is being created
 	if ctx.Repo.Repository.IsBeingCreated() || ctx.Repo.Repository.IsBroken() {
 		ctx.Data["BranchName"] = ctx.Repo.Repository.DefaultBranch

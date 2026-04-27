@@ -299,6 +299,7 @@ func CreatePost(ctx *context.Context) {
 			DefaultBranch:    form.DefaultBranch,
 			AutoInit:         form.AutoInit,
 			IsTemplate:       form.Template,
+			IsDataRepo:       form.IsDataRepo,
 			TrustModel:       repo_model.DefaultTrustModel,
 			ObjectFormatName: form.ObjectFormatName,
 		})

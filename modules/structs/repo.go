@@ -59,6 +59,7 @@ type Repository struct {
 	Template      bool        `json:"template"`
 	Parent        *Repository `json:"parent"`
 	Mirror        bool        `json:"mirror"`
+	IsDataRepo    bool        `json:"is_data_repo"`
 	Size          int         `json:"size"`
 	Language      string      `json:"language"`
 	LanguagesURL  string      `json:"languages_url"`
@@ -151,6 +152,8 @@ type CreateRepoOption struct {
 	AutoInit bool `json:"auto_init"`
 	// Whether the repository is template
 	Template bool `json:"template"`
+	// Whether the repository stores data in dit-core instead of a Git repository
+	IsDataRepo bool `json:"is_data_repo"`
 	// Gitignores to use
 	Gitignores string `json:"gitignores"`
 	// License to use

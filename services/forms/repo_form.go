@@ -38,6 +38,7 @@ type CreateRepoForm struct {
 	License       string
 	Readme        string
 	Template      bool
+	IsDataRepo    bool
 
 	RepoTemplate    int64
 	GitContent      bool

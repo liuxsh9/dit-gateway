@@ -29,6 +29,12 @@
 						</fieldset>
 
 						<div id="non_template">
+							<label>
+								<input name="is_data_repo" type="checkbox" {{if .is_data_repo}}checked{{end}}>
+								{{ctx.Locale.Tr "repo.data_repo_helper"}}
+								<span class="help">{{ctx.Locale.Tr "repo.data_repo_description"}}</span>
+							</label>
+
 							<fieldset>
 								<legend>{{ctx.Locale.Tr "repo.auto_init"}}</legend>
 								{{template "repo/create_init" .}}
