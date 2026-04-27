@@ -1,0 +1,98 @@
+import {mount} from '@vue/test-utils';
+import {expect, test, vi} from 'vitest';
+
+vi.mock('../utils/datahub-api.js', () => ({
+  datahubFetch: vi.fn(),
+}));
+
+import DataRepoHome from './DataRepoHome.vue';
+import {datahubFetch} from '../utils/datahub-api.js';
+
+test('loads core tree entries using obj_type and obj_hash fields', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {
+            name: 'train.jsonl',
+            obj_type: 'manifest',
+            obj_hash: 'manifest123',
+            row_count: 2,
+            size: 128,
+          },
+        ],
+      };
+    }
+    if (path === '/meta/commit123/train.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/checks/commit123') return {checks: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
+
+  expect(wrapper.vm.tree.entries[0]).toMatchObject({
+    type: 'manifest',
+    hash: 'manifest123',
+  });
+  expect(wrapper.text()).toContain('1 files');
+  expect(wrapper.text()).toContain('2 rows');
+});
+
+test('renders blame response using entries and summary fields', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {
+            name: 'train.jsonl',
+            obj_type: 'manifest',
+            obj_hash: 'manifest123',
+          },
+        ],
+      };
+    }
+    if (path === '/meta/commit123/train.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/blame/commit123/train.jsonl') {
+      return {
+        entries: [
+          {
+            row_index: 0,
+            commit_hash: 'abcdef1234567890',
+            author: 'alice',
+            timestamp: 1713600000,
+            content_preview: '{"instruction":"Explain LRU cache"}',
+          },
+        ],
+        summary: {
+          total_rows: 1,
+          unique_commits: 1,
+          unique_authors: 1,
+        },
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
+
+  await wrapper.findAll('button').find((button) => button.text() === 'Blame').trigger('click');
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Blame: train.jsonl'));
+
+  expect(wrapper.text()).toContain('1 rows');
+  expect(wrapper.text()).toContain('1 commits');
+  expect(wrapper.text()).toContain('1 authors');
+  expect(wrapper.text()).toContain('abcdef1');
+  expect(wrapper.text()).toContain('alice');
+  expect(wrapper.text()).toContain('Explain LRU cache');
+});

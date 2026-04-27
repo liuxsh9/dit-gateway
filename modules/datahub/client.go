@@ -52,7 +52,7 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte) ([]by
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.serviceToken)
+	req.Header.Set("X-Service-Token", c.serviceToken)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -66,6 +66,14 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte) ([]by
 		return nil, resp.StatusCode, fmt.Errorf("read response: %w", err)
 	}
 	return data, resp.StatusCode, nil
+}
+
+func escapePath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 func (c *Client) CreateRepo(ctx context.Context, repoName string) error {
@@ -106,8 +114,8 @@ func (c *Client) UpdateRef(ctx context.Context, repoName, refType, name string, 
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/refs/"+refType+"/"+name, body)
 }
 
-func (c *Client) GetObject(ctx context.Context, repoName, hash string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/objects/"+hash, nil)
+func (c *Client) GetObject(ctx context.Context, repoName, objType, hash string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/objects/"+url.PathEscape(objType)+"/"+url.PathEscape(hash), nil)
 }
 
 func (c *Client) PushObjects(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
@@ -115,7 +123,7 @@ func (c *Client) PushObjects(ctx context.Context, repoName string, body []byte) 
 }
 
 func (c *Client) GetTree(ctx context.Context, repoName, hash string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/tree/"+hash, nil)
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/tree/"+url.PathEscape(hash)+"/", nil)
 }
 
 func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash string) ([]byte, int, error) {
@@ -142,8 +150,19 @@ func (c *Client) MergePull(ctx context.Context, repoName, id string, body []byte
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls/"+id+"/merge", body)
 }
 
-func (c *Client) GetManifest(ctx context.Context, repoName, hash string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/manifest/"+hash, nil)
+func (c *Client) GetManifest(ctx context.Context, repoName, commit, filePath, offset, limit string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/manifest/" + url.PathEscape(commit) + "/" + escapePath(filePath)
+	query := url.Values{}
+	if offset != "" {
+		query.Set("offset", offset)
+	}
+	if limit != "" {
+		query.Set("limit", limit)
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
 }
 
 func (c *Client) MetaCompute(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {

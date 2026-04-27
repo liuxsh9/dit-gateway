@@ -36,8 +36,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: "postgresql+asyncpg://datahub:datahub@db:5432/datahub"
-      DATA_DIR: "/data/objects"
+      DIT_SERVER_DATABASE_URL: "postgresql+asyncpg://dit:dit@db:5432/dit"
+      DIT_SERVER_DATA_DIR: "/data/dit"
+      DIT_SERVER_SERVICE_TOKEN: "${SERVICE_TOKEN}"
     depends_on:
       db:
         condition: service_healthy

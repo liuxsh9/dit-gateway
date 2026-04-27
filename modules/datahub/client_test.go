@@ -28,7 +28,7 @@ func TestListRefs(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/api/v1/repos/myrepo/refs", r.URL.Path)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`[]`))
@@ -96,11 +96,11 @@ func TestUpdateRef(t *testing.T) {
 
 func TestGetObject(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/repos/myrepo/objects/sha256hash", r.URL.Path)
+		assert.Equal(t, "/api/v1/repos/myrepo/objects/rows/sha256hash", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":"chunk"}`))
 	}))
-	data, status, err := client.GetObject(context.Background(), "myrepo", "sha256hash")
+	data, status, err := client.GetObject(context.Background(), "myrepo", "rows", "sha256hash")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Contains(t, string(data), "chunk")
@@ -108,7 +108,7 @@ func TestGetObject(t *testing.T) {
 
 func TestGetTree(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/repos/myrepo/tree/abc123", r.URL.Path)
+		assert.Equal(t, "/api/v1/repos/myrepo/tree/abc123/", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"entries":[]}`))
 	}))
@@ -144,14 +144,15 @@ func TestListPulls(t *testing.T) {
 
 func TestGetManifest(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/repos/myrepo/manifest/hash123", r.URL.Path)
+		assert.Equal(t, "/api/v1/repos/myrepo/manifest/commit123/train/data.jsonl", r.URL.Path)
+		assert.Equal(t, "50", r.URL.Query().Get("limit"))
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"chunks":["a","b"]}`))
+		_, _ = w.Write([]byte(`{"entries":[{"row_hash":"a"}]}`))
 	}))
-	data, status, err := client.GetManifest(context.Background(), "myrepo", "hash123")
+	data, status, err := client.GetManifest(context.Background(), "myrepo", "commit123", "train/data.jsonl", "0", "50")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
-	assert.Contains(t, string(data), "chunks")
+	assert.Contains(t, string(data), "entries")
 }
 
 func TestMergePull(t *testing.T) {
@@ -172,7 +173,7 @@ func TestMetaCompute(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/v1/repos/myrepo/meta/compute", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		body, _ := io.ReadAll(r.Body)
 		assert.Contains(t, string(body), "train.jsonl")
 		w.WriteHeader(http.StatusOK)
@@ -188,7 +189,7 @@ func TestMetaGet(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train.jsonl", r.URL.Path)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"manifest_hash":"abc123","entries":[]}`))
 	}))
@@ -202,7 +203,7 @@ func TestMetaSummary(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train.jsonl/summary", r.URL.Path)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"row_count":1500,"token_estimate":1130250,"lang_distribution":{"zh":0.82}}`))
 	}))
@@ -217,7 +218,7 @@ func TestMetaDiff(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/api/v1/repos/myrepo/meta/diff/old123/new456", r.URL.Path)
 		assert.Equal(t, "train.jsonl", r.URL.Query().Get("file"))
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"files":[{"path":"train.jsonl","delta":{"row_count":120}}]}`))
 	}))

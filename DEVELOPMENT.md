@@ -22,10 +22,11 @@ docker compose up db
 **Terminal 2 — datahub-core**
 ```bash
 cd ~/code/datahub
-pip install -e ".[server]"
-export DATABASE_URL="postgresql+asyncpg://datahub:datahub@localhost:5432/datahub"
-export DATA_DIR="./data/objects"
-uvicorn dit.server.app:app --reload --port 8000
+uv tool install --force --editable '.[server]'
+export DIT_SERVER_DATABASE_URL="postgresql+asyncpg://dit:dit@localhost:5432/dit"
+export DIT_SERVER_DATA_DIR="./data/dit"
+export DIT_SERVER_SERVICE_TOKEN="dev-service-token"
+dit serve --host 127.0.0.1 --port 8000
 ```
 
 **Terminal 3 — datahub-gateway (Forgejo)**
@@ -47,6 +48,7 @@ cd ~/code/datahub-gateway
 # First time: copy and configure environment
 cp .env.example .env
 # Edit .env — set SERVICE_TOKEN and POSTGRES_PASSWORD
+# SERVICE_TOKEN must match DIT_SERVER_SERVICE_TOKEN from dit-core.
 
 # Build and start all services
 docker compose up --build
@@ -91,8 +93,8 @@ Services:
 # Connect to forgejo database
 docker compose exec db psql -U forgejo forgejo
 
-# Connect to datahub database
-docker compose exec db psql -U datahub datahub
+# Connect to dit-core database
+docker compose exec db psql -U dit dit
 
 # List all databases
 docker compose exec db psql -U forgejo -c "\l"
@@ -106,5 +108,5 @@ See `.env.example` for all required variables.
 
 | Variable | Description |
 |----------|-------------|
-| `SERVICE_TOKEN` | Shared secret between gateway and core for internal API calls |
+| `SERVICE_TOKEN` | Shared secret sent as `X-Service-Token` from gateway to dit-core |
 | `POSTGRES_PASSWORD` | Password for the `forgejo` PostgreSQL superuser |

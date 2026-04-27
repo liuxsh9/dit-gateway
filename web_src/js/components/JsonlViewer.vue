@@ -49,7 +49,7 @@ export default {
   props: {
     owner: String,
     repo: String,
-    manifestHash: String,
+    commitHash: String,
     filePath: String,
   },
   data() {
@@ -91,28 +91,36 @@ export default {
   },
   methods: {
     async loadManifest() {
-      const manifest = await datahubFetch(this.owner, this.repo, `/manifest/${this.manifestHash}`);
-      this.totalRows = manifest.row_count || 0;
-      this.chunks = manifest.chunks || [];
-      this.totalPages = Math.ceil(this.totalRows / PAGE_SIZE);
-      if (this.chunks.length > 0) {
-        await this.loadChunk(0);
+      const manifest = await datahubFetch(
+        this.owner,
+        this.repo,
+        `/manifest/${this.commitHash}/${encodeURIComponent(this.filePath)}?offset=0&limit=${PAGE_SIZE}`,
+      );
+      this.totalRows = manifest.total || 0;
+      this.totalPages = Math.max(1, Math.ceil(this.totalRows / PAGE_SIZE));
+      this.rows = await this.loadRows(manifest.entries || []);
+      this.loadedChunks[0] = true;
+      if (this.rows.length > 0 && this.columns.length === 0) {
+        this.columns = Object.keys(this.rows[0]);
       }
     },
-    async loadChunk(chunkIndex) {
-      if (chunkIndex >= this.chunks.length || this.loadedChunks[chunkIndex]) return;
-      const chunkHash = this.chunks[chunkIndex];
-      const data = await datahubFetch(this.owner, this.repo, `/objects/${chunkHash}`);
-      let newRows;
-      if (typeof data === 'string') {
-        newRows = data.split('\n').filter(Boolean).map((line) => JSON.parse(line));
-      } else if (Array.isArray(data)) {
-        newRows = data;
-      } else {
-        newRows = [];
+    async loadRows(entries) {
+      const rows = [];
+      for (const entry of entries) {
+        const data = await datahubFetch(this.owner, this.repo, `/objects/rows/${entry.row_hash}`);
+        rows.push(data);
       }
-      this.rows = [...this.rows, ...newRows];
-      this.loadedChunks[chunkIndex] = true;
+      return rows;
+    },
+    async loadPage(page) {
+      const offset = (page - 1) * PAGE_SIZE;
+      const manifest = await datahubFetch(
+        this.owner,
+        this.repo,
+        `/manifest/${this.commitHash}/${encodeURIComponent(this.filePath)}?offset=${offset}&limit=${PAGE_SIZE}`,
+      );
+      this.rows = await this.loadRows(manifest.entries || []);
+      this.startIndex = offset;
       if (this.rows.length > 0 && this.columns.length === 0) {
         this.columns = Object.keys(this.rows[0]);
       }
@@ -136,11 +144,7 @@ export default {
     async goPage(page) {
       if (page < 1 || page > this.totalPages) return;
       this.currentPage = page;
-      this.startIndex = (page - 1) * PAGE_SIZE;
-      const neededRows = page * PAGE_SIZE;
-      while (this.rows.length < neededRows && Object.keys(this.loadedChunks).length < this.chunks.length) {
-        await this.loadChunk(Object.keys(this.loadedChunks).length);
-      }
+      await this.loadPage(page);
     },
     onScroll(event) {
       if (this.virtualScroll) {

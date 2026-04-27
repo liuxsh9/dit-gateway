@@ -105,9 +105,9 @@
       <div v-else-if="blameError" class="ui negative message"><p>{{ blameError }}</p></div>
       <template v-else-if="blameData">
         <div style="margin-bottom:0.75em;">
-          <span class="ui small label">{{ blameData.rows.length }} rows</span>
-          <span class="ui small label">{{ blameData.commit_count }} commits</span>
-          <span class="ui small label">{{ blameData.author_count }} authors</span>
+          <span class="ui small label">{{ blameData.summary.total_rows }} rows</span>
+          <span class="ui small label">{{ blameData.summary.unique_commits }} commits</span>
+          <span class="ui small label">{{ blameData.summary.unique_authors }} authors</span>
         </div>
         <table class="ui very basic compact selectable table">
           <thead>
@@ -121,7 +121,7 @@
           </thead>
           <tbody>
             <tr
-              v-for="entry in blameData.rows"
+              v-for="entry in blameData.entries"
               :key="entry.row_index"
               style="cursor:pointer;"
               @click="loadRowHistory(entry.row_index)"
@@ -130,7 +130,7 @@
               <td style="font-family:monospace;">{{ entry.commit_hash ? entry.commit_hash.slice(0,7) : '—' }}</td>
               <td>{{ entry.author }}</td>
               <td>{{ formatBlameDate(entry.timestamp) }}</td>
-              <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.content }}</td>
+              <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.content_preview }}</td>
             </tr>
           </tbody>
         </table>
@@ -164,7 +164,7 @@
                 <td style="font-family:monospace;">{{ ev.commit_hash ? ev.commit_hash.slice(0,7) : '—' }}</td>
                 <td>{{ ev.author }}</td>
                 <td>{{ formatBlameDate(ev.timestamp) }}</td>
-                <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ev.content }}</td>
+                <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ev.content_preview }}</td>
               </tr>
             </tbody>
           </table>
@@ -316,7 +316,7 @@
       <JsonlViewer
         :owner="owner"
         :repo="repo"
-        :manifest-hash="selectedFile.hash"
+        :commit-hash="commitHash"
         :file-path="selectedFile.name"
       />
     </div>
@@ -436,7 +436,15 @@ export default {
       this.searchResults = null;
       this.searchQuery = '';
       this.searchField = '';
-      this.tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
+      const tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
+      this.tree = {
+        ...tree,
+        entries: (tree.entries || []).map((entry) => ({
+          ...entry,
+          type: entry.type || entry.obj_type,
+          hash: entry.hash || entry.obj_hash,
+        })),
+      };
       let totalRows = 0;
       let fileCount = 0;
       const sidecars = {};

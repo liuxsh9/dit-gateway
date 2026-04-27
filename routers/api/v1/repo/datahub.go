@@ -64,7 +64,12 @@ func DatahubUpdateRef(ctx *context.APIContext) {
 
 func DatahubGetObject(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetObject(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
+		return datahub.DefaultClient().GetObject(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":obj_type"),
+			ctx.Params(":hash"),
+		)
 	})
 }
 
@@ -130,7 +135,14 @@ func DatahubMergePull(ctx *context.APIContext) {
 
 func DatahubGetManifest(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetManifest(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
+		return datahub.DefaultClient().GetManifest(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.Params("*"),
+			ctx.FormString("offset"),
+			ctx.FormString("limit"),
+		)
 	})
 }
 
