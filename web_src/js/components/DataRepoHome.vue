@@ -705,7 +705,9 @@ export default {
 
 <style scoped>
 .datahub-home {
+  background: transparent !important;
   border: 0;
+  box-shadow: none !important;
 }
 
 .datahub-branch-picker {
