@@ -100,17 +100,19 @@
             <table class="ui very basic table datahub-file-table">
               <colgroup>
                 <col class="datahub-file-col-name">
+                <col class="datahub-file-col-commit">
+                <col class="datahub-file-col-updated">
                 <col class="datahub-file-col-count">
-                <col class="datahub-file-col-count">
-                <col class="datahub-file-col-count">
+                <col class="datahub-file-col-size">
                 <col class="datahub-file-col-lang">
               </colgroup>
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Last commit</th>
+                  <th>Updated</th>
                   <th class="right aligned">Rows</th>
-                  <th class="right aligned">Chars</th>
-                  <th class="right aligned">Tokens</th>
+                  <th class="right aligned" :title="sizeEstimateHelp">Size</th>
                   <th class="datahub-lang-heading" :title="languageEstimateHelp">Lang</th>
                 </tr>
               </thead>
@@ -165,14 +167,23 @@
                     </div>
                     <div class="datahub-file-mobile-metrics" aria-label="File metrics">
                       <span><strong>Rows</strong> {{ formatCount(entry.row_count) }}</span>
-                      <span><strong>Chars</strong> {{ formatCount(entry.char_count) }}</span>
-                      <span><strong>Tokens</strong> {{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</span>
+                      <span><strong>Commit</strong> {{ entryCommitSummary(entry) }}</span>
+                      <span><strong>Updated</strong> {{ entryUpdatedText(entry) }}</span>
+                      <span><strong :title="sizeEstimateHelp">Size</strong> {{ formatSize(entrySize(entry)) }}</span>
                       <span><strong :title="languageEstimateHelp">Lang</strong> {{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</span>
                     </div>
                   </td>
+                  <td class="datahub-metric-cell datahub-file-commit-cell">
+                    <a v-if="entryCommit(entry)" class="datahub-file-commit-link" :href="entryCommitHref(entry)" :title="entryCommit(entry).message || shortHash(entryCommit(entry).commit_hash)">
+                      {{ entryCommit(entry).message || shortHash(entryCommit(entry).commit_hash) }}
+                    </a>
+                    <span v-else>—</span>
+                  </td>
+                  <td class="datahub-metric-cell datahub-file-updated-cell">
+                    {{ entryUpdatedText(entry) }}
+                  </td>
                   <td class="right aligned datahub-metric-cell">{{ formatCount(entry.row_count) }}</td>
-                  <td class="right aligned datahub-metric-cell">{{ formatCount(entry.char_count) }}</td>
-                  <td class="right aligned datahub-metric-cell">{{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</td>
+                  <td class="right aligned datahub-metric-cell" :title="sizeEstimateHelp">{{ formatSize(entrySize(entry)) }}</td>
                   <td class="datahub-metric-cell datahub-lang-cell" :title="languageEstimateHelp">{{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</td>
                 </tr>
               </tbody>
@@ -318,12 +329,14 @@ export default {
       checksData: null,
       latestCommit: null,
       recentCommits: [],
+      fileProvenance: {},
       openPulls: [],
       activityLoading: false,
       activityError: null,
       activeReview: null,
       metaComputeError: null,
       languageEstimateHelp: 'Heuristic estimate from DIT sidecar metadata: longest JSON string per row, then script-based language guess.',
+      sizeEstimateHelp: 'File size in bytes from DIT repository metadata.',
     };
   },
   computed: {
@@ -383,9 +396,14 @@ export default {
             char_count: 0,
             token_estimate: 0,
             lang_distribution: {},
+            size: null,
           };
           existing.row_count += entry.row_count || 0;
           existing.char_count += entry.char_count || 0;
+          const entryBytes = this.entrySize(entry);
+          if (entryBytes !== null && entryBytes !== undefined) {
+            existing.size = (existing.size || 0) + entryBytes;
+          }
           existing.token_estimate += entry.token_estimate || 0;
           existing.lang_distribution = this.mergeLangDistribution(existing.lang_distribution, entry.lang_distribution);
           folders.set(folderPath, existing);
@@ -477,6 +495,7 @@ export default {
       this.currentPath = '';
       this.latestCommit = null;
       this.recentCommits = [];
+      this.fileProvenance = {};
       this.openPulls = [];
       this.activeReview = null;
       this.activityError = null;
@@ -587,6 +606,25 @@ export default {
       if (n >= 1000) return `~${(n / 1000).toFixed(0)}K`;
       return String(n);
     },
+    entrySize(entry) {
+      if (!entry) return null;
+      return entry.size_bytes ?? entry.byte_count ?? entry.size ?? null;
+    },
+    formatSize(bytes) {
+      if (bytes === null || bytes === undefined) return '—';
+      const value = Number(bytes);
+      if (!Number.isFinite(value)) return '—';
+      if (value < 1024) return `${value.toLocaleString()} B`;
+      const units = ['KB', 'MB', 'GB', 'TB'];
+      let scaled = value / 1024;
+      let unitIndex = 0;
+      while (scaled >= 1024 && unitIndex < units.length - 1) {
+        scaled /= 1024;
+        unitIndex++;
+      }
+      const digits = scaled >= 10 ? 0 : 1;
+      return `${scaled.toFixed(digits)} ${units[unitIndex]}`;
+    },
     formatLang(dist) {
       if (!dist || Object.keys(dist).length === 0) return '—';
       const top = Object.entries(dist).sort((a, b) => b[1] - a[1])[0];
@@ -600,6 +638,90 @@ export default {
         merged[lang] = (merged[lang] || 0) + count;
       }
       return merged;
+    },
+    entryCommit(entry) {
+      if (!entry) return null;
+      if (entry.type === 'tree') return this.folderCommit(entry.path);
+      return this.fileProvenance[this.normalizePath(entry.path)] || this.latestCommit || null;
+    },
+    entryCommitHref(entry) {
+      const commit = this.entryCommit(entry);
+      return commit?.commit_hash ? this.commitHref(commit.commit_hash) : '#';
+    },
+    entryCommitSummary(entry) {
+      const commit = this.entryCommit(entry);
+      if (!commit) return '—';
+      return commit.message || this.shortHash(commit.commit_hash);
+    },
+    entryUpdatedText(entry) {
+      const commit = this.entryCommit(entry);
+      return commit ? this.formatRelativeTime(commit.timestamp) : '—';
+    },
+    folderCommit(folderPath) {
+      const prefix = this.normalizePath(folderPath);
+      let newest = null;
+      for (const file of this.manifestEntries) {
+        const path = this.normalizePath(file.path || file.name);
+        if (!path.startsWith(prefix)) continue;
+        const commit = this.fileProvenance[path] || this.latestCommit;
+        if (!commit) continue;
+        if (!newest || this.commitTime(commit) > this.commitTime(newest)) newest = commit;
+      }
+      return newest;
+    },
+    commitTime(commit) {
+      if (!commit?.timestamp) return 0;
+      if (typeof commit.timestamp === 'number') return commit.timestamp * 1000;
+      const parsed = Date.parse(commit.timestamp);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    },
+    async buildFileProvenance(commits) {
+      if (!Array.isArray(commits) || commits.length === 0) {
+        this.fileProvenance = {};
+        return;
+      }
+      const currentEntries = this.manifestEntries;
+      if (currentEntries.length === 0) {
+        this.fileProvenance = {};
+        return;
+      }
+      const currentByPath = new Map(currentEntries.map((entry) => [
+        this.normalizePath(entry.path || entry.name),
+        entry.hash || entry.obj_hash || entry.manifest_hash,
+      ]));
+      const provenance = {};
+      const candidates = {};
+      for (const commit of commits) {
+        if (!commit?.commit_hash) continue;
+        let tree;
+        if (commit.commit_hash === this.commitHash) {
+          tree = this.tree;
+        } else {
+          try {
+            tree = await datahubFetch(this.owner, this.repo, `/tree/${commit.commit_hash}`);
+          } catch {
+            continue;
+          }
+        }
+        const treeByPath = new Map((tree?.entries || [])
+          .filter((entry) => (entry.type || entry.obj_type) === 'manifest')
+          .map((entry) => [
+            this.normalizePath(entry.path || entry.name),
+            entry.hash || entry.obj_hash || entry.manifest_hash,
+          ]));
+        for (const [path, hash] of currentByPath.entries()) {
+          if (provenance[path] || !hash) continue;
+          if (treeByPath.get(path) === hash) {
+            candidates[path] = commit;
+          } else if (candidates[path]) {
+            provenance[path] = candidates[path];
+          }
+        }
+      }
+      for (const path of currentByPath.keys()) {
+        provenance[path] ||= candidates[path] || this.latestCommit || commits[0] || null;
+      }
+      this.fileProvenance = provenance;
     },
     normalizePath(path) {
       if (!path) return '';
@@ -654,11 +776,13 @@ export default {
         ]);
         this.recentCommits = logResult.commits || [];
         this.latestCommit = this.recentCommits[0] || null;
+        await this.buildFileProvenance(this.recentCommits);
         this.openPulls = Array.isArray(pullsResult) ? pullsResult : (pullsResult.pull_requests || pullsResult.pulls || []);
       } catch (e) {
         this.recentCommits = [];
         this.openPulls = [];
         this.latestCommit = null;
+        this.fileProvenance = {};
         this.activityError = e.message;
       } finally {
         this.activityLoading = false;
@@ -699,6 +823,26 @@ export default {
       const parsed = Date.parse(value);
       if (Number.isNaN(parsed)) return String(value);
       return this.formatBlameDate(Math.floor(parsed / 1000));
+    },
+    formatRelativeTime(value) {
+      const timestamp = this.commitTime({timestamp: value});
+      if (!timestamp) return '—';
+      const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+      const units = [
+        ['year', 31536000],
+        ['month', 2592000],
+        ['week', 604800],
+        ['day', 86400],
+        ['hour', 3600],
+        ['minute', 60],
+      ];
+      for (const [label, size] of units) {
+        if (seconds >= size) {
+          const count = Math.floor(seconds / size);
+          return `${count} ${label}${count === 1 ? '' : 's'} ago`;
+        }
+      }
+      return 'just now';
     },
   },
 };
@@ -1069,18 +1213,49 @@ export default {
   width: auto;
 }
 
+.datahub-file-col-commit {
+  width: 220px;
+}
+
+.datahub-file-col-updated {
+  width: 98px;
+}
+
 .datahub-file-col-count {
-  width: 62px;
+  width: 56px;
+}
+
+.datahub-file-col-size {
+  width: 76px;
 }
 
 .datahub-file-col-lang {
-  width: 96px;
+  width: 90px;
 }
 
 .datahub-lang-heading,
 .datahub-lang-cell {
   text-align: left !important;
   white-space: nowrap;
+}
+
+.datahub-file-commit-cell,
+.datahub-file-updated-cell {
+  color: var(--color-text-light-2);
+  white-space: nowrap;
+}
+
+.datahub-file-commit-link {
+  color: var(--color-text-light-2);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datahub-file-commit-link:hover {
+  color: var(--color-primary);
+  text-decoration: none;
 }
 
 .datahub-file-name-cell,

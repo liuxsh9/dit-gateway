@@ -79,6 +79,7 @@ test('hydrates file list metrics from stats when tree omits row and size fields'
             path: 'train.jsonl',
             row_count: 2,
             char_count: 128,
+            size_bytes: 256,
             token_estimate: 42,
             lang_distribution: {en: 2},
             has_sidecar: true,
@@ -88,6 +89,7 @@ test('hydrates file list metrics from stats when tree omits row and size fields'
           file_count: 1,
           row_count: 2,
           char_count: 128,
+          size_bytes: 256,
           token_estimate: 42,
           lang_distribution: {en: 2},
         },
@@ -108,9 +110,11 @@ test('hydrates file list metrics from stats when tree omits row and size fields'
   expect(wrapper.vm.directoryEntries[0]).toMatchObject({
     row_count: 2,
     char_count: 128,
+    size_bytes: 256,
     token_estimate: 42,
   });
-  expect(wrapper.text()).toContain('42');
+  expect(wrapper.text()).toContain('256 B');
+  expect(wrapper.text()).not.toContain('42');
   expect(wrapper.text()).toContain('en 100%');
 });
 
@@ -274,8 +278,11 @@ test('renders a GitHub-like Data file browser without duplicate side rails', asy
   expect(wrapper.text()).toContain('train');
   expect(wrapper.text()).toContain('eval');
   expect(wrapper.text()).toContain('Rows');
-  expect(wrapper.text()).toContain('Chars');
-  expect(wrapper.text()).toContain('Tokens');
+  expect(wrapper.text()).toContain('Last commit');
+  expect(wrapper.text()).toContain('Updated');
+  expect(wrapper.text()).toContain('Size');
+  expect(wrapper.text()).not.toContain('Chars');
+  expect(wrapper.text()).not.toContain('Tokens');
   expect(wrapper.text()).toContain('Lang');
   expect(wrapper.text()).toContain('Pull requests');
   expect(wrapper.text()).toContain('Recent commits');
@@ -328,6 +335,8 @@ test('uses distinct tree affordances for folders and files in the Data browser',
   expect(fileRows).toHaveLength(1);
   expect(folderRows[0].find('.datahub-tree-chevron').exists()).toBe(true);
   expect(folderRows[0].find('.datahub-tree-folder-icon').exists()).toBe(true);
+  expect(folderRows[0].text()).toContain('—');
+  expect(folderRows[0].text()).not.toContain('0 B');
   expect(fileRows[0].find('.datahub-tree-file-spacer').exists()).toBe(true);
   expect(fileRows[0].find('.datahub-tree-file-icon').exists()).toBe(true);
 });
@@ -363,7 +372,7 @@ test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
       return {
         commits: [
           {
-            commit_hash: 'abcdef1234567890',
+            commit_hash: 'commit123',
             author: 'alice',
             message: 'refresh data rows',
             timestamp: 1713600000,
@@ -374,6 +383,14 @@ test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
             message: 'clean rejected samples',
             timestamp: 1713513600,
           },
+        ],
+      };
+    }
+    if (path === '/tree/fedcba9876543210') {
+      return {
+        entries: [
+          {name: 'eval/tool/weather.jsonl', obj_type: 'manifest', obj_hash: 'old-manifest1', sidecar_hash: 'old-sidecar1'},
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: 'sidecar2'},
         ],
       };
     }
@@ -400,11 +417,13 @@ test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('alice');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('refresh data rows');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('CI pass');
-  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('abcdef1');
+  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('commit1');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('2 Commits');
   expect(wrapper.find('.datahub-commit-count').classes()).not.toContain('button');
   expect(wrapper.find('.datahub-pr-workflow').classes()).toContain('datahub-card-panel');
   expect(wrapper.find('.datahub-file-row-folder').text()).not.toContain('eval/');
+  expect(wrapper.find('.datahub-file-row-folder').text()).toContain('refresh data rows');
+  expect(wrapper.find('.datahub-file-row-file').text()).toContain('clean rejected samples');
 });
 
 test('renders mobile-readable file row metrics without relying on table columns', async () => {
@@ -421,7 +440,7 @@ test('renders mobile-readable file row metrics without relying on table columns'
     if (path === '/stats/commit123') {
       return {
         files: [
-          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}, has_sidecar: true},
+          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 641, size_bytes: 702, token_estimate: 160, lang_distribution: {en: 1}, has_sidecar: true},
         ],
         totals: {file_count: 1, row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}},
       };
@@ -444,8 +463,9 @@ test('renders mobile-readable file row metrics without relying on table columns'
   const mobileMetrics = wrapper.find('.datahub-file-mobile-metrics');
   expect(mobileMetrics.exists()).toBe(true);
   expect(mobileMetrics.text()).toContain('Rows 1');
-  expect(mobileMetrics.text()).toContain('Chars 641');
-  expect(mobileMetrics.text()).toContain('Tokens 160');
+  expect(mobileMetrics.text()).toContain('Size 702 B');
+  expect(mobileMetrics.text()).not.toContain('Chars');
+  expect(mobileMetrics.text()).not.toContain('Tokens');
   expect(mobileMetrics.text()).toContain('Lang en 100%');
 });
 
@@ -465,11 +485,11 @@ test('uses stats file paths to expose nested JSONL files when the root tree only
     if (path === '/stats/commit123') {
       return {
         files: [
-          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}, has_sidecar: true},
-          {path: 'train/general.jsonl', row_count: 2, char_count: 696, token_estimate: 174, lang_distribution: {zh: 1, en: 1}, has_sidecar: true},
-          {path: 'train.jsonl', row_count: 3, char_count: 308, token_estimate: 76, lang_distribution: {en: 3}, has_sidecar: true},
+          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 641, size_bytes: 702, token_estimate: 160, lang_distribution: {en: 1}, has_sidecar: true},
+          {path: 'train/general.jsonl', row_count: 2, char_count: 696, size_bytes: 760, token_estimate: 174, lang_distribution: {zh: 1, en: 1}, has_sidecar: true},
+          {path: 'train.jsonl', row_count: 3, char_count: 308, size_bytes: 340, token_estimate: 76, lang_distribution: {en: 3}, has_sidecar: true},
         ],
-        totals: {file_count: 3, files_with_sidecar: 3, row_count: 6, char_count: 1645, token_estimate: 410, lang_distribution: {en: 5, zh: 1}},
+        totals: {file_count: 3, files_with_sidecar: 3, row_count: 6, char_count: 1645, size_bytes: 1802, token_estimate: 410, lang_distribution: {en: 5, zh: 1}},
       };
     }
     if (path === '/meta/commit123/eval/tool/weather.jsonl/summary') return {row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}};
@@ -492,7 +512,7 @@ test('uses stats file paths to expose nested JSONL files when the root tree only
 
   await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'tool').trigger('click');
   expect(wrapper.text()).toContain('weather.jsonl');
-  expect(wrapper.text()).toContain('641');
+  expect(wrapper.text()).toContain('702 B');
   expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/eval/tool/weather.jsonl"]').exists()).toBe(true);
 });
 
