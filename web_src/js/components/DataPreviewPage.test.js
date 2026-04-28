@@ -152,16 +152,19 @@ test('collapses and restores the preview files sidebar', async () => {
 
   await vi.waitFor(() => expect(wrapper.text()).toContain('Files'));
   expect(wrapper.find('.datahub-preview-tree').exists()).toBe(true);
+  expect(wrapper.find('.datahub-header-actions [data-testid="datahub-preview-sidebar-toggle"]').exists()).toBe(false);
 
-  const hideButton = wrapper.find('button[data-testid="datahub-preview-sidebar-toggle"]');
-  expect(hideButton.text()).toContain('Hide files');
+  const hideButton = wrapper.find('.datahub-preview-tree button[data-testid="datahub-preview-sidebar-toggle"]');
+  expect(hideButton.attributes('aria-label')).toBe('Hide files sidebar');
   await hideButton.trigger('click');
 
   expect(wrapper.find('.datahub-preview-workspace').classes()).toContain('is-sidebar-collapsed');
   expect(wrapper.find('.datahub-preview-tree').exists()).toBe(false);
-  expect(wrapper.find('button[data-testid="datahub-preview-sidebar-toggle"]').text()).toContain('Show files');
+  expect(wrapper.find('.datahub-preview-tree-rail').exists()).toBe(true);
+  expect(wrapper.find('.datahub-preview-tree-rail button[data-testid="datahub-preview-sidebar-toggle"]').attributes('aria-label')).toBe('Show files sidebar');
 
-  await wrapper.find('button[data-testid="datahub-preview-sidebar-toggle"]').trigger('click');
+  await wrapper.find('.datahub-preview-tree-rail button[data-testid="datahub-preview-sidebar-toggle"]').trigger('click');
   expect(wrapper.find('.datahub-preview-workspace').classes()).not.toContain('is-sidebar-collapsed');
   expect(wrapper.find('.datahub-preview-tree').exists()).toBe(true);
+  expect(wrapper.find('.datahub-preview-tree-rail').exists()).toBe(false);
 });

@@ -10,16 +10,6 @@
         </div>
       </div>
       <div class="datahub-header-actions">
-        <button
-          type="button"
-          class="ui small basic button datahub-sidebar-toggle"
-          data-testid="datahub-preview-sidebar-toggle"
-          :aria-pressed="filesSidebarCollapsed ? 'true' : 'false'"
-          @click="toggleFilesSidebar"
-        >
-          <i :class="filesSidebarCollapsed ? 'columns icon' : 'angle left icon'"></i>
-          {{ filesSidebarCollapsed ? 'Show files' : 'Hide files' }}
-        </button>
         <a class="ui small basic button" :href="rawPath" target="_blank" rel="nofollow">
           Raw
         </a>
@@ -33,7 +23,18 @@
     </div>
     <div class="ui segment datahub-preview-workspace" :class="{'is-sidebar-collapsed': filesSidebarCollapsed}">
       <aside v-if="!filesSidebarCollapsed" class="datahub-preview-tree">
-        <div class="datahub-preview-tree-title">Files</div>
+        <div class="datahub-preview-tree-heading">
+          <div class="datahub-preview-tree-title">Files</div>
+          <button
+            type="button"
+            class="datahub-sidebar-edge-toggle"
+            data-testid="datahub-preview-sidebar-toggle"
+            aria-label="Hide files sidebar"
+            @click="toggleFilesSidebar"
+          >
+            <i class="angle left icon"></i>
+          </button>
+        </div>
         <div v-if="treeLoading" class="ui active centered inline loader datahub-tree-loader"></div>
         <div v-else-if="treeError" class="ui tiny negative message">{{ treeError }}</div>
         <nav v-else class="datahub-tree-list" aria-label="Dataset files">
@@ -70,6 +71,18 @@
             </a>
           </template>
         </nav>
+      </aside>
+      <aside v-else class="datahub-preview-tree-rail" aria-label="Files sidebar collapsed">
+        <button
+          type="button"
+          class="datahub-sidebar-rail-toggle"
+          data-testid="datahub-preview-sidebar-toggle"
+          aria-label="Show files sidebar"
+          @click="toggleFilesSidebar"
+        >
+          <i class="angle right icon"></i>
+          <span>Files</span>
+        </button>
       </aside>
       <main class="datahub-preview-review">
         <JsonlViewer
@@ -275,7 +288,8 @@ export default {
 }
 
 .datahub-preview-workspace.is-sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  grid-template-columns: 36px minmax(0, 1fr);
 }
 
 .datahub-preview-tree {
@@ -283,6 +297,15 @@ export default {
   border-right: 1px solid var(--color-secondary);
   min-height: 680px;
   padding: 12px;
+  position: relative;
+}
+
+.datahub-preview-tree-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .datahub-preview-tree-title {
@@ -290,8 +313,60 @@ export default {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  margin-bottom: 8px;
   text-transform: uppercase;
+}
+
+.datahub-sidebar-edge-toggle,
+.datahub-sidebar-rail-toggle {
+  align-items: center;
+  background: var(--color-body);
+  border: 1px solid var(--color-secondary);
+  color: var(--color-text-light);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.datahub-sidebar-edge-toggle {
+  border-radius: 999px;
+  height: 26px;
+  margin-right: -25px;
+  width: 26px;
+  z-index: 1;
+}
+
+.datahub-sidebar-edge-toggle:hover,
+.datahub-sidebar-rail-toggle:hover {
+  background: var(--color-active);
+  color: var(--color-text);
+}
+
+.datahub-preview-tree-rail {
+  align-items: flex-start;
+  background: var(--color-box-header);
+  border-right: 1px solid var(--color-secondary);
+  display: flex;
+  justify-content: center;
+  min-height: 680px;
+  padding: 12px 0;
+}
+
+.datahub-sidebar-rail-toggle {
+  border-radius: 6px;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 90px;
+  padding: 10px 4px;
+  width: 28px;
+}
+
+.datahub-sidebar-rail-toggle span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-orientation: mixed;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
 }
 
 .datahub-tree-loader {
@@ -382,12 +457,7 @@ export default {
 }
 
 .datahub-preview-workspace.is-sidebar-collapsed .datahub-preview-review {
-  padding: 12px;
-}
-
-.datahub-sidebar-toggle[aria-pressed='true'] {
-  background: var(--color-active) !important;
-  color: var(--color-text) !important;
+  padding: 12px 12px 12px 0;
 }
 
 @media (max-width: 767px) {
@@ -403,10 +473,38 @@ export default {
     grid-template-columns: 1fr;
   }
 
+  .datahub-preview-workspace.is-sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .datahub-preview-tree {
     border-right: 0;
     border-bottom: 1px solid var(--color-secondary);
     min-height: 0;
+  }
+
+  .datahub-sidebar-edge-toggle {
+    margin-right: 0;
+  }
+
+  .datahub-preview-tree-rail {
+    align-items: center;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-secondary);
+    justify-content: flex-start;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .datahub-sidebar-rail-toggle {
+    flex-direction: row;
+    min-height: 30px;
+    padding: 4px 10px;
+    width: auto;
+  }
+
+  .datahub-sidebar-rail-toggle span {
+    writing-mode: horizontal-tb;
   }
 
   .datahub-preview-review {
