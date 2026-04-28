@@ -15,6 +15,9 @@ const (
 	tplDataHubCommits base.TplName = "repo/datahub/commits"
 	tplDataHubCommit  base.TplName = "repo/datahub/commit"
 	tplDataHubPreview base.TplName = "repo/datahub/preview"
+	tplDataHubPulls   base.TplName = "repo/datahub/pulls"
+	tplDataHubPull    base.TplName = "repo/datahub/pull"
+	tplDataHubSimple  base.TplName = "repo/datahub/simple"
 )
 
 func requireDataHubRepo(ctx *context.Context) bool {
@@ -23,6 +26,7 @@ func requireDataHubRepo(ctx *context.Context) bool {
 		return false
 	}
 	ctx.Data["PageIsViewCode"] = true
+	ctx.Data["PageIsDataHub"] = true
 	return true
 }
 
@@ -54,4 +58,51 @@ func DataHubPreview(ctx *context.Context) {
 	ctx.Data["DataHubCommit"] = ctx.Params("commit")
 	ctx.Data["DataHubPath"] = ctx.Params("*")
 	ctx.HTML(http.StatusOK, tplDataHubPreview)
+}
+
+func DataHubPulls(ctx *context.Context) {
+	if !requireDataHubRepo(ctx) {
+		return
+	}
+
+	ctx.Data["PageIsViewCode"] = false
+	ctx.Data["PageIsPullList"] = true
+	ctx.HTML(http.StatusOK, tplDataHubPulls)
+}
+
+func DataHubPull(ctx *context.Context) {
+	if !requireDataHubRepo(ctx) {
+		return
+	}
+
+	ctx.Data["PageIsViewCode"] = false
+	ctx.Data["PageIsPullList"] = true
+	ctx.Data["DataHubPullID"] = ctx.Params("id")
+	ctx.HTML(http.StatusOK, tplDataHubPull)
+}
+
+func DataHubSecurity(ctx *context.Context) {
+	if !requireDataHubRepo(ctx) {
+		return
+	}
+
+	ctx.Data["PageIsViewCode"] = false
+	ctx.Data["PageIsDataHubSecurity"] = true
+	ctx.Data["DataHubSimpleTitle"] = "Security and quality"
+	ctx.Data["DataHubSimpleEyebrow"] = "DIT dataset"
+	ctx.Data["DataHubSimpleBody"] = "Security, privacy, and data-quality reports will appear here as DIT checks are configured."
+	ctx.HTML(http.StatusOK, tplDataHubSimple)
+}
+
+func DataHubInsights(ctx *context.Context) {
+	if !requireDataHubRepo(ctx) {
+		return
+	}
+
+	ctx.Data["PageIsViewCode"] = false
+	ctx.Data["PageIsDataHubInsights"] = true
+	ctx.Data["DataHubSimpleTitle"] = "Insights"
+	ctx.Data["DataHubSimpleEyebrow"] = "DIT dataset"
+	ctx.Data["DataHubSimpleBody"] = "Dataset statistics and trend dashboards will live here. The current summary metrics remain available on the Data page during phase one."
+	ctx.HTML(http.StatusOK, tplDataHubSimple)
 }

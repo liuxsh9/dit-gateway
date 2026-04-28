@@ -107,7 +107,7 @@ func DatahubGetLog(ctx *context.APIContext) {
 
 func DatahubListPulls(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().ListPulls(ctx, ctx.Repo.Repository.Name)
+		return datahub.DefaultClient().ListPulls(ctx, ctx.Repo.Repository.Name, ctx.FormString("status"))
 	})
 }
 

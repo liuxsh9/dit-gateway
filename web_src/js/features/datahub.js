@@ -49,6 +49,29 @@ export function initDatahubCommitPage() {
   });
 }
 
+export function initDatahubPullList() {
+  const el = document.getElementById('data-pull-list');
+  if (!el) return;
+  import(/* webpackChunkName: "datahub-pull-list" */'../components/DataPullList.vue').then(({default: App}) => {
+    createApp(App, {
+      owner: el.dataset.owner,
+      repo: el.dataset.repo,
+    }).mount(el);
+  });
+}
+
+export function initDatahubPullPage() {
+  const el = document.getElementById('data-pull-page');
+  if (!el) return;
+  import(/* webpackChunkName: "datahub-pull-page" */'../components/DataPullPage.vue').then(({default: App}) => {
+    createApp(App, {
+      owner: el.dataset.owner,
+      repo: el.dataset.repo,
+      pullId: el.dataset.pullId,
+    }).mount(el);
+  });
+}
+
 export function initDatahubPreviewPage() {
   const el = document.getElementById('data-preview-page');
   if (!el) return;

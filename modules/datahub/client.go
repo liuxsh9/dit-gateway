@@ -144,8 +144,16 @@ func (c *Client) GetLog(ctx context.Context, repoName, ref, limit string) ([]byt
 	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/log?"+query.Encode(), nil)
 }
 
-func (c *Client) ListPulls(ctx context.Context, repoName string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/pulls", nil)
+func (c *Client) ListPulls(ctx context.Context, repoName, status string) ([]byte, int, error) {
+	query := url.Values{}
+	if status != "" {
+		query.Set("status", status)
+	}
+	path := "/api/v1/repos/" + repoName + "/pulls"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
 }
 
 func (c *Client) CreatePull(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {

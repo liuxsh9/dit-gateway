@@ -1196,6 +1196,10 @@ func registerRoutes(m *web.Route) {
 		}, reqRepoIssuesOrPullsReader, context.RepoRef())
 		m.Get("/find/*", repo.FindFiles)
 		m.Group("/data", func() {
+			m.Get("/pulls", repo.DataHubPulls)
+			m.Get("/pulls/{id}", repo.DataHubPull)
+			m.Get("/security", repo.DataHubSecurity)
+			m.Get("/insights", repo.DataHubInsights)
 			m.Get("/commits/*", repo.DataHubCommits)
 			m.Get("/commit/{hash:([a-f0-9]{4,64})$}", repo.DataHubCommit)
 			m.Get("/preview/{commit:([a-f0-9]{4,64})$}/*", repo.DataHubPreview)

@@ -154,10 +154,11 @@ func TestGetLogUsesCoreQueryRef(t *testing.T) {
 func TestListPulls(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/repos/myrepo/pulls", r.URL.Path)
+		assert.Equal(t, "closed", r.URL.Query().Get("status"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`[]`))
 	}))
-	data, status, err := client.ListPulls(context.Background(), "myrepo")
+	data, status, err := client.ListPulls(context.Background(), "myrepo", "closed")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, []byte(`[]`), data)

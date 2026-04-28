@@ -669,6 +669,8 @@ func RepoAssignment(ctx *Context) context.CancelFunc {
 
 	isHomeOrSettings := ctx.Link == ctx.Repo.RepoLink || ctx.Link == ctx.Repo.RepoLink+"/settings" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/settings/")
 	isDataHubRoute := strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/data/")
+	isDataHubAllowedNativeRoute := ctx.Link == ctx.Repo.RepoLink+"/issues" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/issues/") ||
+		ctx.Link == ctx.Repo.RepoLink+"/actions" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/actions/")
 
 	if ctx.Repo.Repository.IsDataRepo {
 		ctx.Repo.BranchName = ctx.Repo.Repository.DefaultBranch
@@ -677,7 +679,7 @@ func RepoAssignment(ctx *Context) context.CancelFunc {
 		ctx.Data["BranchName"] = ctx.Repo.Repository.DefaultBranch
 		ctx.Data["BranchNameSubURL"] = ctx.Repo.BranchNameSubURL()
 		ctx.Data["IsViewBranch"] = true
-		if !isHomeOrSettings && !isDataHubRoute {
+		if !isHomeOrSettings && !isDataHubRoute && !isDataHubAllowedNativeRoute {
 			ctx.Redirect(ctx.Repo.RepoLink)
 		}
 		return nil

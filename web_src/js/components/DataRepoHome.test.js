@@ -223,6 +223,61 @@ test('shows latest commit and metadata coverage in the dataset overview', async 
   expect(wrapper.text()).toContain('missing metadata');
 });
 
+test('renders a Data explorer layout with go-to-file and dataset metadata panel', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
+          {name: 'eval.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: null},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'train.jsonl', row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}, has_sidecar: true},
+          {path: 'eval.jsonl', row_count: 1, char_count: 64, token_estimate: null, lang_distribution: null, has_sidecar: false},
+        ],
+        totals: {
+          file_count: 2,
+          files_with_sidecar: 1,
+          row_count: 3,
+          char_count: 192,
+          token_estimate: 42,
+          lang_distribution: {en: 2},
+        },
+      };
+    }
+    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}};
+    if (path === '/meta/commit123/eval.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Dataset metadata'));
+
+  expect(wrapper.text()).toContain('Data explorer');
+  expect(wrapper.find('input[placeholder="Go to file"]').exists()).toBe(true);
+  expect(wrapper.text()).toContain('Branch');
+  expect(wrapper.text()).toContain('Files');
+  expect(wrapper.text()).toContain('Rows');
+  expect(wrapper.text()).toContain('Chars');
+  expect(wrapper.text()).toContain('Tokens');
+  expect(wrapper.text()).toContain('Lang');
+  expect(wrapper.text()).toContain('README-style dataset notes will appear here');
+  expect(wrapper.text()).toContain('Privileged users will be able to edit dataset metadata in a later phase.');
+  expect(wrapper.text()).toContain('Pull requests');
+  expect(wrapper.text()).toContain('Recent commits');
+});
+
 test('shows dit workflow commands for dataset collaboration', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];

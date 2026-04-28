@@ -73,6 +73,8 @@ import {
   initDatahubDiffView,
   initDatahubCommitList,
   initDatahubCommitPage,
+  initDatahubPullList,
+  initDatahubPullPage,
   initDatahubPreviewPage,
   initDatahubConflictResolver,
 } from './features/datahub.js';
@@ -193,6 +195,8 @@ onDomReady(() => {
   initDatahubDiffView();
   initDatahubCommitList();
   initDatahubCommitPage();
+  initDatahubPullList();
+  initDatahubPullPage();
   initDatahubPreviewPage();
   initDatahubConflictResolver();
 

@@ -1,0 +1,14 @@
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content repository">
+	{{template "repo/header" .}}
+	<div class="ui container">
+		{{template "base/alert" .}}
+		<div id="data-pull-page"
+			data-owner="{{.Repository.OwnerName}}"
+			data-repo="{{.Repository.Name}}"
+			data-pull-id="{{.DataHubPullID}}">
+		</div>
+	</div>
+</div>
+{{template "base/footer" .}}
+
