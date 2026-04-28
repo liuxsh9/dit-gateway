@@ -337,7 +337,8 @@ export default {
   margin-right: -32px;
   position: absolute;
   right: -1px;
-  top: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 22px;
   z-index: 1;
 }
@@ -500,6 +501,7 @@ export default {
     height: 30px;
     margin-right: 0;
     position: static;
+    transform: none;
     width: 30px;
   }
 
