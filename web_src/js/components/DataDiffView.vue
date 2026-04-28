@@ -175,6 +175,7 @@
                 <JsonlRowRenderer
                   :row="rowContent(row)"
                   :row-number="row.position != null ? row.position + 1 : index + 1"
+                  collapse-whitespace
                 />
               </div>
             </div>
@@ -225,6 +226,7 @@
                 <JsonlRowRenderer
                   :row="rowContent(row)"
                   :row-number="row.position != null ? row.position + 1 : index + 1"
+                  collapse-whitespace
                 />
               </div>
             </div>
@@ -279,6 +281,7 @@
                 <JsonlRowRenderer
                   :row="rowContent({content: row.old_content, row_hash: row.old_row_hash})"
                   :row-number="index + 1"
+                  collapse-whitespace
                 />
               </div>
               <div class="datahub-diff-refresh-side positive">
@@ -323,6 +326,7 @@
                 <JsonlRowRenderer
                   :row="rowContent({content: row.new_content, row_hash: row.new_row_hash})"
                   :row-number="index + 1"
+                  collapse-whitespace
                 />
               </div>
             </div>

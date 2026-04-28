@@ -275,6 +275,56 @@
         </div>
         <details class="datahub-command-details">
           <summary>Use this dataset: clone, update, review</summary>
+          <div class="datahub-review-intake">
+            <label>
+              <span>Query source <small>Required</small></span>
+              <textarea
+                v-model="reviewInfo.query_source"
+                name="query_source"
+                rows="2"
+                placeholder="Search logs, eval query set, annotation source..."
+              ></textarea>
+            </label>
+            <label>
+              <span>Responsible owner <small>Required</small></span>
+              <input
+                v-model="reviewInfo.owner"
+                name="owner"
+                type="text"
+                placeholder="Team or person accountable for this batch"
+              >
+            </label>
+            <label>
+              <span>Processing steps <small>Required</small></span>
+              <textarea
+                v-model="reviewInfo.processing"
+                name="processing"
+                rows="3"
+                placeholder="dedup, PII scan, filtering, validation, spot check..."
+              ></textarea>
+            </label>
+            <label>
+              <span>Risk level</span>
+              <select v-model="reviewInfo.risk_level" name="risk_level">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="datahub-review-intake-wide">
+              <span>Reviewer notes</span>
+              <textarea
+                v-model="reviewInfo.notes"
+                name="notes"
+                rows="2"
+                placeholder="Known caveats, sample strategy, reviewer focus areas..."
+              ></textarea>
+            </label>
+          </div>
+          <div class="datahub-review-intake-status" :class="reviewInfoMissingRequired.length ? 'is-missing' : 'is-complete'">
+            {{ reviewInfoRequiredComplete }} of {{ reviewInfoRequiredTotal }} required fields complete
+            <span v-if="reviewInfoMissingRequired.length"> · missing {{ reviewInfoMissingRequired.map((field) => field.label.toLowerCase()).join(', ') }}</span>
+          </div>
           <div class="datahub-command-card">
             <code>{{ cloneCommand }}</code>
             <code>dit checkout -b update/sft-batch</code>
@@ -371,6 +421,13 @@ export default {
       activityLoading: false,
       activityError: null,
       activeReview: null,
+      reviewInfo: {
+        query_source: '',
+        owner: '',
+        processing: '',
+        risk_level: 'medium',
+        notes: '',
+      },
       metaComputeError: null,
       languageEstimateHelp: 'Heuristic estimate from DIT sidecar metadata: longest JSON string per row, then script-based language guess.',
       sizeEstimateHelp: 'File size in bytes from DIT repository metadata.',
@@ -494,7 +551,41 @@ export default {
       return `${origin}/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub`;
     },
     createReviewCommand() {
-      return `curl -X POST ${this.datahubApiUrl}/pulls -H "Authorization: token <token>" -H "Content-Type: application/json" -d '{"source_branch":"update/sft-batch","target_branch":"main","title":"Review SFT batch","author":"<your-name>"}'`;
+      const body = {
+        source_branch: 'update/sft-batch',
+        target_branch: 'main',
+        title: 'Review SFT batch',
+        author: '<your-name>',
+        data_pr_info: this.normalizedReviewInfo,
+      };
+      return `curl -X POST ${this.datahubApiUrl}/pulls -H "Authorization: token <token>" -H "Content-Type: application/json" -d '${JSON.stringify(body)}'`;
+    },
+    reviewInfoFields() {
+      return [
+        {key: 'query_source', label: 'Query source', required: true, placeholder: '<query source>'},
+        {key: 'owner', label: 'Responsible owner', required: true, placeholder: '<responsible owner>'},
+        {key: 'processing', label: 'Processing steps', required: true, placeholder: '<processing steps>'},
+        {key: 'risk_level', label: 'Risk level', placeholder: 'medium'},
+        {key: 'notes', label: 'Reviewer notes', placeholder: '<review notes>'},
+      ];
+    },
+    normalizedReviewInfo() {
+      return Object.fromEntries(this.reviewInfoFields.map((field) => {
+        const value = String(this.reviewInfo[field.key] || '').trim();
+        return [field.key, value || field.placeholder];
+      }));
+    },
+    reviewInfoRequiredFields() {
+      return this.reviewInfoFields.filter((field) => field.required);
+    },
+    reviewInfoRequiredTotal() {
+      return this.reviewInfoRequiredFields.length;
+    },
+    reviewInfoMissingRequired() {
+      return this.reviewInfoRequiredFields.filter((field) => !String(this.reviewInfo[field.key] || '').trim());
+    },
+    reviewInfoRequiredComplete() {
+      return this.reviewInfoRequiredTotal - this.reviewInfoMissingRequired.length;
     },
     reviewConflictText() {
       if (!this.activeReview?.conflicts?.length) return '';
@@ -1099,6 +1190,65 @@ export default {
   font-weight: 600;
 }
 
+.datahub-review-intake {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 12px 0 10px;
+}
+
+.datahub-review-intake label {
+  display: grid;
+  gap: 5px;
+}
+
+.datahub-review-intake label span {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.datahub-review-intake small {
+  color: var(--color-red);
+  font-weight: 500;
+}
+
+.datahub-review-intake input,
+.datahub-review-intake select,
+.datahub-review-intake textarea {
+  background: var(--color-input-background);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-input-text);
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.datahub-review-intake textarea {
+  resize: vertical;
+}
+
+.datahub-review-intake-wide {
+  grid-column: 1 / -1;
+}
+
+.datahub-review-intake-status {
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 10px;
+  padding: 7px 9px;
+}
+
+.datahub-review-intake-status.is-missing {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.datahub-review-intake-status.is-complete {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
 .datahub-overview-label {
   color: var(--color-text-light-2);
   font-size: 11px;
@@ -1473,6 +1623,10 @@ export default {
   .datahub-repo-controls {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .datahub-review-intake {
+    grid-template-columns: 1fr;
   }
 
   .datahub-branch-meta {

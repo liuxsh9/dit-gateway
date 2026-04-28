@@ -557,6 +557,22 @@ test('shows dit workflow commands for dataset collaboration', async () => {
   expect(wrapper.text()).toContain('curl -X POST http://localhost:3000/api/v1/repos/alice/sft-data/datahub/pulls');
   expect(wrapper.text()).toContain('Authorization: token <token>');
   expect(wrapper.text()).toContain('"source_branch":"update/sft-batch"');
+  expect(wrapper.text()).toContain('"data_pr_info"');
+  expect(wrapper.text()).toContain('"query_source":"<query source>"');
+  expect(wrapper.text()).toContain('"processing":"<processing steps>"');
+  expect(wrapper.text()).toContain('0 of 3 required fields complete');
+  expect(wrapper.text()).toContain('missing query source, responsible owner, processing steps');
+
+  await wrapper.find('textarea[name="query_source"]').setValue('Search logs: pizza intent eval 2026-04-27');
+  await wrapper.find('input[name="owner"]').setValue('ML Data / Dora');
+  await wrapper.find('textarea[name="processing"]').setValue('dedup -> pii scan -> human spot check');
+  await wrapper.find('textarea[name="notes"]').setValue('Review data source coverage and schema warnings.');
+
+  expect(wrapper.text()).toContain('3 of 3 required fields complete');
+  expect(wrapper.text()).toContain('"query_source":"Search logs: pizza intent eval 2026-04-27"');
+  expect(wrapper.text()).toContain('"owner":"ML Data / Dora"');
+  expect(wrapper.text()).toContain('"processing":"dedup -> pii scan -> human spot check"');
+  expect(wrapper.text()).toContain('"notes":"Review data source coverage and schema warnings."');
   expect(wrapper.text()).toContain('Push a branch and open a review');
 });
 

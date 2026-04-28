@@ -126,6 +126,10 @@ export default {
       type: Number,
       required: true,
     },
+    collapseWhitespace: {
+      type: Boolean,
+      default: false,
+    },
   },
   data() {
     return {
@@ -211,15 +215,17 @@ export default {
     },
     renderContent(value) {
       if (value === null || value === undefined) return '';
-      if (typeof value === 'string') return value;
+      const normalize = (content) => this.collapseWhitespace ? content.replace(/\s+/g, ' ').trim() : content;
+      if (typeof value === 'string') return normalize(value);
       if (Array.isArray(value)) {
-        return value.map((part) => {
+        const content = value.map((part) => {
           if (typeof part === 'string') return part;
           if (part && typeof part === 'object' && typeof part.text === 'string') return part.text;
           return this.formatJson(part);
         }).join('\n');
+        return normalize(content);
       }
-      return this.formatJson(value);
+      return normalize(this.formatJson(value));
     },
     summarizeToolCalls(toolCalls) {
       return toolCalls.map((toolCall) => toolCall.function?.name || toolCall.name || toolCall.id || 'tool').join(', ');

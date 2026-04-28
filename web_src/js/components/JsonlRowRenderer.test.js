@@ -91,3 +91,33 @@ test('surfaces ML2 schema warnings and collapses long message content', () => {
   expect(wrapper.find('.datahub-sft-content-collapsed').exists()).toBe(true);
   expect(wrapper.text()).toContain('Show full content');
 });
+
+test('can collapse whitespace for dense row review', () => {
+  const wrapper = mount(JsonlRowRenderer, {
+    props: {
+      rowNumber: 1,
+      collapseWhitespace: true,
+      row: {
+        version: '2.0.0',
+        meta_info: {
+          teacher: 'glm-5-thinking',
+          query_source: 'demo',
+          response_generate_time: '2026-04-28',
+          response_update_time: '2026-04-28',
+          owner: 'data',
+          language: 'en',
+          category: 'chat',
+          rounds: 1,
+        },
+        messages: [
+          {role: 'user', content: 'line 1\n\n   line 2'},
+          {role: 'assistant', content: [{type: 'text', text: 'answer\n  with   spaces'}]},
+        ],
+      },
+    },
+  });
+
+  expect(wrapper.text()).toContain('line 1 line 2');
+  expect(wrapper.text()).toContain('answer with spaces');
+  expect(wrapper.text()).not.toContain('line 1\n\n   line 2');
+});
