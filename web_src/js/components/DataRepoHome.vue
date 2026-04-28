@@ -111,7 +111,7 @@
                   <th class="right aligned">Rows</th>
                   <th class="right aligned">Chars</th>
                   <th class="right aligned">Tokens</th>
-                  <th class="right aligned">Lang</th>
+                  <th class="datahub-lang-heading" :title="languageEstimateHelp">Lang</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,13 +167,13 @@
                       <span><strong>Rows</strong> {{ formatCount(entry.row_count) }}</span>
                       <span><strong>Chars</strong> {{ formatCount(entry.char_count) }}</span>
                       <span><strong>Tokens</strong> {{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</span>
-                      <span><strong>Lang</strong> {{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</span>
+                      <span><strong :title="languageEstimateHelp">Lang</strong> {{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</span>
                     </div>
                   </td>
                   <td class="right aligned datahub-metric-cell">{{ formatCount(entry.row_count) }}</td>
                   <td class="right aligned datahub-metric-cell">{{ formatCount(entry.char_count) }}</td>
                   <td class="right aligned datahub-metric-cell">{{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</td>
-                  <td class="right aligned datahub-metric-cell">{{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</td>
+                  <td class="datahub-metric-cell datahub-lang-cell" :title="languageEstimateHelp">{{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -323,6 +323,7 @@ export default {
       activityError: null,
       activeReview: null,
       metaComputeError: null,
+      languageEstimateHelp: 'Heuristic estimate from DIT sidecar metadata: longest JSON string per row, then script-based language guess.',
     };
   },
   computed: {
@@ -1073,7 +1074,13 @@ export default {
 }
 
 .datahub-file-col-lang {
-  width: 82px;
+  width: 96px;
+}
+
+.datahub-lang-heading,
+.datahub-lang-cell {
+  text-align: left !important;
+  white-space: nowrap;
 }
 
 .datahub-file-name-cell,
