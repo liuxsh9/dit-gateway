@@ -51,8 +51,9 @@ test('loads core tree entries using obj_type and obj_hash fields', async () => {
     type: 'manifest',
     hash: 'manifest123',
   });
-  expect(wrapper.text()).toContain('1 files');
-  expect(wrapper.text()).toContain('2 rows');
+  expect(wrapper.text()).not.toContain('1 files');
+  expect(wrapper.text()).toContain('train.jsonl');
+  expect(wrapper.vm.directoryEntries[0].row_count).toBe(2);
 });
 
 test('hydrates file list metrics from stats when tree omits row and size fields', async () => {
@@ -102,9 +103,13 @@ test('hydrates file list metrics from stats when tree omits row and size fields'
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
 
-  expect(wrapper.text()).toContain('1 files');
-  expect(wrapper.text()).toContain('2 rows');
-  expect(wrapper.text()).toContain('128 chars');
+  expect(wrapper.text()).not.toContain('1 files');
+  expect(wrapper.text()).toContain('train.jsonl');
+  expect(wrapper.vm.directoryEntries[0]).toMatchObject({
+    row_count: 2,
+    char_count: 128,
+    token_estimate: 42,
+  });
   expect(wrapper.text()).toContain('42');
   expect(wrapper.text()).toContain('en 100%');
 });
@@ -160,10 +165,11 @@ test('hydrates row counts from manifest totals when sidecar metrics are missing'
   await vi.waitFor(() => expect(wrapper.text()).toContain('ml2.jsonl'));
 
   expect(wrapper.vm.tree.entries[0].row_count).toBe(1);
-  expect(wrapper.text()).toContain('1 rows');
+  expect(wrapper.text()).toContain('ml2.jsonl');
+  expect(wrapper.vm.directoryEntries[0].row_count).toBe(1);
 });
 
-test('shows latest commit and metadata coverage in the dataset overview', async () => {
+test('shows latest commit and missing metadata inline with affected files', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
@@ -218,28 +224,27 @@ test('shows latest commit and metadata coverage in the dataset overview', async 
 
   expect(wrapper.text()).toContain('abcdef1');
   expect(wrapper.text()).toContain('alice');
-  expect(wrapper.text()).toContain('Metadata coverage');
-  expect(wrapper.text()).toContain('1/2 files');
-  expect(wrapper.text()).toContain('missing metadata');
+  expect(wrapper.text()).toContain('metadata missing');
+  expect(wrapper.text()).not.toContain('Metadata coverage');
 });
 
-test('renders a Data explorer layout with go-to-file and dataset metadata panel', async () => {
+test('renders a GitHub-like Data file browser without duplicate side rails', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
     if (path === '/tree/commit123') {
       return {
         entries: [
-          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
-          {name: 'eval.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: null},
+          {name: 'train/general.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
+          {name: 'eval/hard.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: null},
         ],
       };
     }
     if (path === '/stats/commit123') {
       return {
         files: [
-          {path: 'train.jsonl', row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}, has_sidecar: true},
-          {path: 'eval.jsonl', row_count: 1, char_count: 64, token_estimate: null, lang_distribution: null, has_sidecar: false},
+          {path: 'train/general.jsonl', row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}, has_sidecar: true},
+          {path: 'eval/hard.jsonl', row_count: 1, char_count: 64, token_estimate: null, lang_distribution: null, has_sidecar: false},
         ],
         totals: {
           file_count: 2,
@@ -251,8 +256,8 @@ test('renders a Data explorer layout with go-to-file and dataset metadata panel'
         },
       };
     }
-    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}};
-    if (path === '/meta/commit123/eval.jsonl/summary') throw new Error('missing sidecar');
+    if (path === '/meta/commit123/train/general.jsonl/summary') return {row_count: 2, char_count: 128, token_estimate: 42, lang_distribution: {en: 2}};
+    if (path === '/meta/commit123/eval/hard.jsonl/summary') throw new Error('missing sidecar');
     if (path === '/checks/commit123') return {checks: []};
     if (path === '/log?ref=heads/main&limit=5') return {commits: []};
     if (path === '/pulls?status=open') return [];
@@ -262,20 +267,73 @@ test('renders a Data explorer layout with go-to-file and dataset metadata panel'
   const wrapper = mount(DataRepoHome, {
     props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
   });
-  await vi.waitFor(() => expect(wrapper.text()).toContain('Dataset metadata'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Data'));
 
-  expect(wrapper.text()).toContain('Data explorer');
-  expect(wrapper.find('input[placeholder="Go to file"]').exists()).toBe(true);
-  expect(wrapper.text()).toContain('Branch');
   expect(wrapper.text()).toContain('Files');
+  expect(wrapper.find('input[placeholder="Filter files"]').exists()).toBe(true);
+  expect(wrapper.findAll('select[aria-label="Branch"]')).toHaveLength(1);
+  expect(wrapper.text()).toContain('train');
+  expect(wrapper.text()).toContain('eval');
   expect(wrapper.text()).toContain('Rows');
   expect(wrapper.text()).toContain('Chars');
   expect(wrapper.text()).toContain('Tokens');
   expect(wrapper.text()).toContain('Lang');
-  expect(wrapper.text()).toContain('README-style dataset notes will appear here');
-  expect(wrapper.text()).toContain('Privileged users will be able to edit dataset metadata in a later phase.');
   expect(wrapper.text()).toContain('Pull requests');
   expect(wrapper.text()).toContain('Recent commits');
+  expect(wrapper.text()).not.toContain('Selected file links');
+  expect(wrapper.text()).not.toContain('Dataset Stats');
+  expect(wrapper.text()).not.toContain('Preview');
+  expect(wrapper.text()).not.toContain('Blame');
+
+  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'train').trigger('click');
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train/general.jsonl"]').exists()).toBe(true);
+});
+
+test('uses stats file paths to expose nested JSONL files when the root tree only has folders', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'eval', obj_type: 'tree', obj_hash: 'tree1'},
+          {name: 'train', obj_type: 'tree', obj_hash: 'tree2'},
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest-root'},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}, has_sidecar: true},
+          {path: 'train/general.jsonl', row_count: 2, char_count: 696, token_estimate: 174, lang_distribution: {zh: 1, en: 1}, has_sidecar: true},
+          {path: 'train.jsonl', row_count: 3, char_count: 308, token_estimate: 76, lang_distribution: {en: 3}, has_sidecar: true},
+        ],
+        totals: {file_count: 3, files_with_sidecar: 3, row_count: 6, char_count: 1645, token_estimate: 410, lang_distribution: {en: 5, zh: 1}},
+      };
+    }
+    if (path === '/meta/commit123/eval/tool/weather.jsonl/summary') return {row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}};
+    if (path === '/meta/commit123/train/general.jsonl/summary') return {row_count: 2, char_count: 696, token_estimate: 174, lang_distribution: {zh: 1, en: 1}};
+    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 3, char_count: 308, token_estimate: 76, lang_distribution: {en: 3}};
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
+
+  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'eval').trigger('click');
+  expect(wrapper.text()).toContain('tool');
+  expect(wrapper.text()).not.toContain('weather.jsonl');
+
+  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'tool').trigger('click');
+  expect(wrapper.text()).toContain('weather.jsonl');
+  expect(wrapper.text()).toContain('641');
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/eval/tool/weather.jsonl"]').exists()).toBe(true);
 });
 
 test('shows dit workflow commands for dataset collaboration', async () => {
@@ -369,7 +427,7 @@ test('shows recent commits and open pull requests on the repo home', async () =>
 
   expect(wrapper.text()).toContain('Recent commits');
   expect(wrapper.text()).toContain('clean rejected samples');
-  expect(wrapper.text()).toContain('Open data reviews');
+  expect(wrapper.text()).toContain('Review SFT dataset changes before merge');
   expect(wrapper.text()).toContain('Refresh safety SFT split');
   expect(wrapper.text()).toContain('+12');
   expect(wrapper.text()).toContain('-3');
@@ -417,7 +475,7 @@ test('opens an inline data diff preview from the pull request queue', async () =
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('Refresh safety SFT split'));
 
-  await wrapper.findAll('button').find((button) => button.text() === 'Preview diff').trigger('click');
+  await wrapper.findAll('button').find((button) => button.text() === 'Open review').trigger('click');
 
   expect(wrapper.text()).toContain('Review data changes');
   expect(wrapper.text()).toContain('Refresh safety SFT split');
@@ -510,67 +568,7 @@ test('shows an empty state when a new data repo has no refs yet', async () => {
   expect(wrapper.text()).toContain('Push JSONL data with dit to create the first dataset branch');
 });
 
-test('renders blame response using entries and summary fields', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
-    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
-    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
-    if (path === '/tree/commit123') {
-      return {
-        entries: [
-          {
-            name: 'train.jsonl',
-            obj_type: 'manifest',
-            obj_hash: 'manifest123',
-          },
-        ],
-      };
-    }
-    if (path === '/stats/commit123') {
-      return {
-        files: [],
-        totals: {file_count: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
-      };
-    }
-    if (path === '/meta/commit123/train.jsonl/summary') throw new Error('missing sidecar');
-    if (path === '/checks/commit123') return {checks: []};
-    if (path === '/blame/commit123/train.jsonl') {
-      return {
-        entries: [
-          {
-            row_index: 0,
-            commit_hash: 'abcdef1234567890',
-            author: 'alice',
-            timestamp: 1713600000,
-            content_preview: '{"instruction":"Explain LRU cache"}',
-          },
-        ],
-        summary: {
-          total_rows: 1,
-          unique_commits: 1,
-          unique_authors: 1,
-        },
-      };
-    }
-    throw new Error(`unexpected path ${path}`);
-  });
-
-  const wrapper = mount(DataRepoHome, {
-    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
-  });
-  await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
-
-  await wrapper.findAll('button').find((button) => button.text() === 'Blame').trigger('click');
-  await vi.waitFor(() => expect(wrapper.text()).toContain('Blame: train.jsonl'));
-
-  expect(wrapper.text()).toContain('1 rows');
-  expect(wrapper.text()).toContain('1 commits');
-  expect(wrapper.text()).toContain('1 authors');
-  expect(wrapper.text()).toContain('abcdef1');
-  expect(wrapper.text()).toContain('alice');
-  expect(wrapper.text()).toContain('Explain LRU cache');
-});
-
-test('uses explicit preview links for manifest files', async () => {
+test('uses file names as direct preview links for manifest files', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
@@ -605,10 +603,11 @@ test('uses explicit preview links for manifest files', async () => {
   await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
 
   expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train.jsonl"]').exists()).toBe(true);
-  expect(wrapper.text()).not.toContain('Back to file list');
+  expect(wrapper.text()).not.toContain('Preview');
+  expect(wrapper.text()).not.toContain('Blame');
 });
 
-test('keeps missing metadata compute actions with the file name', async () => {
+test('keeps missing metadata compute actions next to the file name', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
@@ -645,7 +644,7 @@ test('keeps missing metadata compute actions with the file name', async () => {
 
   expect(wrapper.findAll('th').map((header) => header.text())).not.toContain('Actions');
   const actionCell = wrapper.find('.datahub-file-table tbody tr td:first-child');
-  expect(actionCell.text()).toContain('Preview');
-  expect(actionCell.text()).toContain('Blame');
   expect(actionCell.text()).toContain('Compute');
+  expect(actionCell.text()).not.toContain('Preview');
+  expect(actionCell.text()).not.toContain('Blame');
 });

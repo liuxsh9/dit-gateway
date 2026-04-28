@@ -146,3 +146,53 @@ test('renders ML2 message rows as conversation cards instead of JSON strings', a
   expect(wrapper.text()).toContain('teacher: glm-5-thinking');
   expect(wrapper.text()).not.toContain('"messages":');
 });
+
+test('supports single-row review with quick row switching', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {
+        total: 2,
+        entries: [
+          {row_hash: 'row1'},
+          {row_hash: 'row2'},
+        ],
+      };
+    }
+    if (path === '/objects/rows/row1') {
+      return {
+        version: '2.0.0',
+        meta_info: {teacher: 'model-a', language: 'zh', category: 'chat', rounds: 1},
+        messages: [{role: 'user', content: '第一行问题'}, {role: 'assistant', content: '第一行回答'}],
+      };
+    }
+    if (path === '/objects/rows/row2') {
+      return {
+        version: '2.0.0',
+        meta_info: {teacher: 'model-b', language: 'en', category: 'tool', rounds: 1},
+        messages: [{role: 'user', content: 'second question'}, {role: 'assistant', content: 'second answer'}],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('第一行问题'));
+
+  expect(wrapper.find('.datahub-row-index').exists()).toBe(true);
+  expect(wrapper.text()).toContain('Row 1');
+  expect(wrapper.text()).toContain('Row 2');
+  expect(wrapper.text()).not.toContain('second answer');
+
+  await wrapper.findAll('.datahub-row-index-item')[1].trigger('click');
+
+  expect(wrapper.text()).toContain('second answer');
+  expect(wrapper.text()).not.toContain('第一行回答');
+});

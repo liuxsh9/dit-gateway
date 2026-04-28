@@ -1,15 +1,33 @@
 import {mount} from '@vue/test-utils';
-import {expect, test} from 'vitest';
+import {expect, test, vi} from 'vitest';
+
+vi.mock('../utils/datahub-api.js', () => ({
+  datahubFetch: vi.fn(),
+}));
 
 import DataPreviewPage from './DataPreviewPage.vue';
+import {datahubFetch} from '../utils/datahub-api.js';
 
 const viewerStub = {
   name: 'JsonlViewer',
-  props: ['owner', 'repo', 'commitHash', 'filePath'],
-  template: '<div class="jsonl-viewer-stub">Viewer {{ commitHash }} / {{ filePath }}</div>',
+  props: ['owner', 'repo', 'commitHash', 'filePath', 'singleRowMode'],
+  template: '<div class="jsonl-viewer-stub">Viewer {{ commitHash }} / {{ filePath }} / single={{ singleRowMode }}</div>',
 };
 
-test('mounts a dedicated JSONL preview page with breadcrumbs back to summary and commit', () => {
+test('mounts a dedicated JSONL preview page with tree navigation and single-row review', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'train/sft.jsonl', obj_type: 'manifest'},
+          {name: 'eval/hard.jsonl', obj_type: 'manifest'},
+          {name: 'eval/safety/redteam.jsonl', obj_type: 'manifest'},
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
   const wrapper = mount(DataPreviewPage, {
     props: {
       owner: 'alice',
@@ -19,11 +37,57 @@ test('mounts a dedicated JSONL preview page with breadcrumbs back to summary and
     },
     global: {stubs: {JsonlViewer: viewerStub}},
   });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
   expect(wrapper.text()).toContain('JSONL preview');
   expect(wrapper.text()).toContain('train/sft.jsonl');
+  expect(wrapper.text()).toContain('Files');
+  expect(wrapper.text()).toContain('eval');
+  expect(wrapper.findComponent(viewerStub).props('singleRowMode')).toBe(true);
   expect(wrapper.text()).toContain('Viewer abcdef1234567890 / train/sft.jsonl');
   expect(wrapper.find('a[href="/alice/dataset"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/data/commit/abcdef1234567890"]').exists()).toBe(true);
+
+  await wrapper.findAll('.datahub-tree-folder').find((button) => button.text() === 'eval').trigger('click');
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/abcdef1234567890/eval/hard.jsonl"]').exists()).toBe(true);
 });
 
+test('builds the preview tree from stats when the root tree only exposes folders', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'eval', obj_type: 'tree'},
+          {name: 'train', obj_type: 'tree'},
+        ],
+      };
+    }
+    if (path === '/stats/abcdef1234567890') {
+      return {
+        files: [
+          {path: 'eval/tool/weather.jsonl', row_count: 1},
+          {path: 'eval/safety.jsonl', row_count: 1},
+          {path: 'train/general.jsonl', row_count: 2},
+        ],
+        totals: {file_count: 3, row_count: 4},
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'abcdef1234567890',
+      filePath: 'eval/tool/weather.jsonl',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('safety.jsonl'));
+
+  expect(wrapper.text()).toContain('weather.jsonl');
+  expect(wrapper.text()).toContain('safety.jsonl');
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/abcdef1234567890/eval/tool/weather.jsonl"]').exists()).toBe(true);
+  expect(wrapper.findComponent(viewerStub).props('filePath')).toBe('eval/tool/weather.jsonl');
+});

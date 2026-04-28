@@ -85,7 +85,7 @@ func DatahubPushObjects(ctx *context.APIContext) {
 
 func DatahubGetTree(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetTree(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"))
+		return datahub.DefaultClient().GetTree(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"), ctx.Params("*"))
 	})
 }
 
@@ -161,23 +161,25 @@ func DatahubMetaCompute(ctx *context.APIContext) {
 }
 
 func DatahubMetaGet(ctx *context.APIContext) {
+	filePath := ctx.Params("*")
+	if len(filePath) > len("/summary") && filePath[len(filePath)-len("/summary"):] == "/summary" {
+		filePath = filePath[:len(filePath)-len("/summary")]
+		proxyToDatahub(ctx, func() ([]byte, int, error) {
+			return datahub.DefaultClient().MetaSummary(
+				ctx,
+				ctx.Repo.Repository.Name,
+				ctx.Params(":commit"),
+				filePath,
+			)
+		})
+		return
+	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().MetaGet(
 			ctx,
 			ctx.Repo.Repository.Name,
 			ctx.Params(":commit"),
-			ctx.Params(":path"),
-		)
-	})
-}
-
-func DatahubMetaSummary(ctx *context.APIContext) {
-	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().MetaSummary(
-			ctx,
-			ctx.Repo.Repository.Name,
-			ctx.Params(":commit"),
-			ctx.Params(":path"),
+			filePath,
 		)
 	})
 }

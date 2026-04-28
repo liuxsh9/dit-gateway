@@ -272,6 +272,7 @@ export default {
   border-radius: 8px;
   background: var(--color-box-body);
   box-shadow: 0 1px 2px var(--color-shadow);
+  min-width: 0;
 }
 
 .datahub-sft-row-header {
@@ -282,6 +283,7 @@ export default {
   padding: 14px 16px;
   border-bottom: 1px solid var(--color-secondary);
   background: var(--color-box-header);
+  min-width: 0;
 }
 
 .datahub-sft-row-title {
@@ -295,6 +297,7 @@ export default {
   gap: 8px;
   color: var(--color-text-light-2);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .datahub-sft-row-counts {
@@ -417,6 +420,7 @@ export default {
   background: var(--color-code-bg);
   overflow: auto;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .datahub-sft-tool-call {

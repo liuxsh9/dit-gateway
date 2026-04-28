@@ -112,7 +112,19 @@ func TestGetTree(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"entries":[]}`))
 	}))
-	data, status, err := client.GetTree(context.Background(), "myrepo", "abc123")
+	data, status, err := client.GetTree(context.Background(), "myrepo", "abc123", "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "entries")
+}
+
+func TestGetNestedTree(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/repos/myrepo/tree/abc123/eval/tool", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"entries":[]}`))
+	}))
+	data, status, err := client.GetTree(context.Background(), "myrepo", "abc123", "eval/tool")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Contains(t, string(data), "entries")
@@ -210,12 +222,12 @@ func TestMetaCompute(t *testing.T) {
 func TestMetaGet(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train.jsonl", r.URL.Path)
+		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train/sft.jsonl", r.URL.Path)
 		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"manifest_hash":"abc123","entries":[]}`))
 	}))
-	data, status, err := client.MetaGet(context.Background(), "myrepo", "abc123", "train.jsonl")
+	data, status, err := client.MetaGet(context.Background(), "myrepo", "abc123", "train/sft.jsonl")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Contains(t, string(data), "manifest_hash")
@@ -224,12 +236,12 @@ func TestMetaGet(t *testing.T) {
 func TestMetaSummary(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train.jsonl/summary", r.URL.Path)
+		assert.Equal(t, "/api/v1/repos/myrepo/meta/abc123/train/sft.jsonl/summary", r.URL.Path)
 		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"row_count":1500,"token_estimate":1130250,"lang_distribution":{"zh":0.82}}`))
 	}))
-	data, status, err := client.MetaSummary(context.Background(), "myrepo", "abc123", "train.jsonl")
+	data, status, err := client.MetaSummary(context.Background(), "myrepo", "abc123", "train/sft.jsonl")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Contains(t, string(data), "row_count")

@@ -1,6 +1,5 @@
 <template>
   <div class="ui segments datahub-home">
-    <!-- Branch selector -->
     <div class="ui segment datahub-toolbar">
       <div class="datahub-toolbar-main">
         <div>
@@ -8,35 +7,25 @@
           <div class="datahub-title">SFT data repository</div>
         </div>
         <div class="field datahub-branch-picker">
-          <select class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
+          <select aria-label="Branch" class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
             <option v-for="ref in refs" :key="ref.name" :value="ref.name">
               {{ ref.name.replace('heads/', '') }}
             </option>
           </select>
         </div>
-        <div v-if="stats" class="datahub-metrics">
-          <span class="ui label">{{ formatCount(stats.fileCount) }} files</span>
-          <span class="ui label">{{ formatCount(stats.rowCount) }} rows</span>
-          <span class="ui label">{{ formatCount(stats.charCount) }} chars</span>
-          <span class="ui label">{{ formatTokens(stats.tokenEstimate) }} tokens</span>
-        </div>
-        <div>
-          <span v-if="checksStatus" class="ui tiny label" :class="checksStatusClass" style="margin-left: 6px;">
-            <i :class="checksStatusIcon"></i> {{ checksStatusText }}
-          </span>
-          <span v-else-if="checksLoading" class="ui tiny label" style="margin-left: 6px;">
-            <i class="spinner loading icon"></i>
-          </span>
-        </div>
+        <span v-if="checksStatus" class="ui tiny label" :class="checksStatusClass">
+          <i :class="checksStatusIcon"></i> {{ checksStatusText }}
+        </span>
+        <span v-else-if="checksLoading" class="ui tiny label">
+          <i class="spinner loading icon"></i>
+        </span>
       </div>
     </div>
 
-    <!-- Loading -->
     <div class="ui segment" v-if="loading">
       <div class="ui active centered inline loader"></div>
     </div>
 
-    <!-- No refs yet -->
     <div class="ui segment" v-else-if="!currentBranch">
       <div class="ui message datahub-empty-state">
         <div class="header">No branches have been published yet</div>
@@ -44,57 +33,52 @@
       </div>
     </div>
 
-    <!-- Error -->
     <div class="ui segment" v-else-if="error">
       <div class="ui negative message">
         <p>{{ error }}</p>
       </div>
     </div>
 
-    <!-- Data explorer -->
-    <div class="ui segment datahub-explorer" v-else-if="tree">
-      <div class="datahub-explorer-header">
-        <div>
-          <div class="datahub-eyebrow">Data explorer</div>
-          <h2 class="ui header datahub-explorer-title">Files</h2>
+    <template v-else-if="tree">
+      <div class="ui segment datahub-explorer">
+        <div class="datahub-explorer-header">
+          <div>
+            <div class="datahub-eyebrow">Data</div>
+            <h2 class="ui header datahub-explorer-title">Files</h2>
+            <div class="datahub-overview-detail">Click a JSONL file to open the dedicated ML 2.0 row review page.</div>
+          </div>
+          <label class="datahub-tool-field datahub-go-to-file">
+            <span>Go to file</span>
+            <input
+              class="datahub-go-to-file-input"
+              type="text"
+              placeholder="Filter files"
+              v-model="fileFilter"
+            />
+          </label>
         </div>
-        <div class="datahub-explorer-summary">
-          <span class="ui small label">{{ formatCount(stats?.fileCount) }} files</span>
-          <span class="ui small label">{{ formatCount(stats?.rowCount) }} rows</span>
-          <span class="ui small label">{{ formatCount(stats?.charCount) }} chars</span>
-          <span class="ui small label">{{ formatTokens(stats?.tokenEstimate) }} tokens</span>
-        </div>
-      </div>
 
-      <div v-if="metaComputeError" class="ui small negative message datahub-inline-message">{{ metaComputeError }}</div>
-      <div v-if="activityError" class="ui small negative message datahub-inline-message">{{ activityError }}</div>
+        <div v-if="metaComputeError" class="ui small negative message datahub-inline-message">{{ metaComputeError }}</div>
+        <div v-if="activityError" class="ui small negative message datahub-inline-message">{{ activityError }}</div>
 
-      <div class="datahub-explorer-grid">
         <div class="datahub-file-browser">
           <div class="datahub-file-browser-tools">
-            <label class="datahub-tool-field">
-              <span>Branch</span>
-              <select class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
-                <option v-for="ref in refs" :key="ref.name" :value="ref.name">
-                  {{ ref.name.replace('heads/', '') }}
-                </option>
-              </select>
-            </label>
-            <label class="datahub-tool-field datahub-go-to-file">
-              <span>Go to file</span>
-              <input
-                class="datahub-go-to-file-input"
-                type="text"
-                placeholder="Go to file"
-                v-model="fileFilter"
-              />
-            </label>
+            <nav class="datahub-path-breadcrumbs" aria-label="Dataset path">
+              <a href="#" @click.prevent="openFolder('')">{{ branchName(currentBranch) }}</a>
+              <template v-for="crumb in pathCrumbs" :key="crumb.path">
+                <span>/</span>
+                <a href="#" @click.prevent="openFolder(crumb.path)">{{ crumb.name }}</a>
+              </template>
+            </nav>
+            <a class="ui mini basic button" :href="commitsHref">
+              {{ recentCommits.length ? `${recentCommits.length} commits` : 'Commits' }}
+            </a>
           </div>
 
-          <div v-if="(tree.entries || []).length === 0" class="ui message">
+          <div v-if="manifestEntries.length === 0" class="ui message datahub-table-message">
             This data repository has no JSONL manifests on the selected branch yet.
           </div>
-          <div v-else-if="filteredTreeEntries.length === 0" class="ui message">
+          <div v-else-if="filteredDirectoryEntries.length === 0" class="ui message datahub-table-message">
             No files match "{{ fileFilter }}".
           </div>
           <div v-else class="datahub-file-table-wrap">
@@ -116,212 +100,127 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="entry in filteredTreeEntries" :key="entry.name">
+                <tr v-for="entry in filteredDirectoryEntries" :key="entry.path">
                   <td>
                     <div class="datahub-file-name-cell">
-                      <span class="datahub-file-name">
-                        <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
-                        <a v-if="entry.type === 'manifest'" :href="previewHref(entry.name)">{{ entry.name }}</a>
-                        <span v-else>{{ entry.name }}</span>
-                      </span>
-                      <div v-if="entry.type === 'manifest'" class="datahub-file-actions">
-                        <a
-                          class="ui mini basic primary button"
-                          :href="previewHref(entry.name)"
-                        >Preview</a>
-                        <button
-                          class="ui mini basic button"
-                          @click="loadBlame(entry.name)"
-                        >Blame</button>
-                        <button
-                          v-if="sidecars[entry.name] === null"
-                          class="ui mini basic button"
-                          :class="{loading: computingMeta[entry.name]}"
-                          :disabled="computingMeta[entry.name]"
-                          @click="computeMeta(entry)"
-                        >Compute</button>
-                      </div>
+                      <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
+                      <a
+                        v-if="entry.type === 'tree'"
+                        class="datahub-file-link"
+                        href="#"
+                        @click.prevent="openFolder(entry.path)"
+                      >{{ entry.displayName }}</a>
+                      <a
+                        v-else
+                        class="datahub-file-link"
+                        :href="previewHref(entry.path)"
+                      >{{ entry.displayName }}</a>
+                      <span v-if="entry.type === 'manifest' && sidecars[entry.path] === null" class="ui tiny basic label">metadata missing</span>
+                      <button
+                        v-if="entry.type === 'manifest' && sidecars[entry.path] === null"
+                        class="ui mini basic button"
+                        :class="{loading: computingMeta[entry.path]}"
+                        :disabled="computingMeta[entry.path]"
+                        @click="computeMeta(entry)"
+                      >Compute</button>
                     </div>
+                    <div v-if="entry.path !== entry.displayName" class="datahub-file-path">{{ entry.path }}</div>
                   </td>
                   <td class="right aligned">{{ formatCount(entry.row_count) }}</td>
                   <td class="right aligned">{{ formatCount(entry.char_count) }}</td>
-                  <td class="right aligned">
-                    <template v-if="entry.type === 'manifest'">
-                      <span v-if="entry.token_estimate != null">
-                        {{ formatTokens(entry.token_estimate) }}
-                      </span>
-                      <span v-else-if="sidecars[entry.name] === null">
-                        —
-                      </span>
-                    </template>
-                    <span v-else>—</span>
-                  </td>
-                  <td class="right aligned">
-                    <template v-if="entry.type === 'manifest' && entry.lang_distribution">
-                      {{ formatLang(entry.lang_distribution) }}
-                    </template>
-                    <span v-else>—</span>
-                  </td>
+                  <td class="right aligned">{{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</td>
+                  <td class="right aligned">{{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+      </div>
 
-        <aside class="datahub-preview-rail">
-          <section class="datahub-preview-panel datahub-metadata-panel">
-            <div class="datahub-panel-title">
-              <i class="book icon"></i>
-              Dataset metadata
-            </div>
-            <p class="datahub-metadata-placeholder">
-              README-style dataset notes will appear here: purpose, source, split policy, license, and quality caveats.
-            </p>
-            <p class="datahub-overview-detail">
-              Privileged users will be able to edit dataset metadata in a later phase.
-            </p>
-            <div class="datahub-metadata-grid">
+      <div class="ui segment datahub-pr-workflow">
+        <div class="datahub-section-header datahub-compact-header">
+          <div>
+            <div class="datahub-overview-label">Change workflow</div>
+            <h3 class="ui header datahub-section-title">Pull requests</h3>
+            <div class="datahub-overview-detail">Review SFT dataset changes before merge.</div>
+          </div>
+          <span v-if="activityLoading" class="ui tiny label">
+            <i class="spinner loading icon"></i> Loading
+          </span>
+        </div>
+        <div v-if="openPulls.length === 0" class="datahub-empty-inline">
+          No open data reviews. Push a branch and open a review with the command below to preview row-level SFT changes before merge.
+        </div>
+        <div v-else class="datahub-pr-list">
+          <div v-for="pull in openPulls" :key="pull.pull_request_id || pull.id" class="datahub-pr-card">
+            <div class="datahub-pr-card-header">
               <div>
-                <div class="datahub-overview-label">Metadata coverage</div>
-                <div class="datahub-overview-value">{{ metadataCoverageText }}</div>
+                <div class="datahub-pr-title">#{{ pull.pull_request_id }} {{ pull.title || 'Untitled data review' }}</div>
                 <div class="datahub-overview-detail">
-                  <span v-if="missingMetadataCount">{{ missingMetadataCount }} missing metadata file{{ missingMetadataCount !== 1 ? 's' : '' }}</span>
-                  <span v-else>All manifest files have sidecar metadata.</span>
+                  {{ pull.author || 'unknown author' }} · {{ branchName(pull.source_ref) }} → {{ branchName(pull.target_ref) }}
                 </div>
               </div>
-              <div>
-                <div class="datahub-overview-label">Quality checks</div>
-                <div class="datahub-overview-value">{{ checksStatusText || 'No checks reported' }}</div>
-                <div class="datahub-overview-detail">{{ checksData?.checks?.length || 0 }} check{{ (checksData?.checks?.length || 0) !== 1 ? 's' : '' }} on this commit</div>
-              </div>
-            </div>
-          </section>
-
-          <section class="datahub-preview-panel datahub-selected-files">
-            <div class="datahub-panel-title">
-              <i class="file alternate outline icon"></i>
-              Selected file links
-            </div>
-            <div v-if="manifestEntries.length === 0" class="datahub-empty-inline">
-              No manifest files are available to preview.
-            </div>
-            <div v-else class="datahub-selected-file-list">
-              <a
-                v-for="entry in manifestEntries.slice(0, 5)"
-                :key="entry.name"
-                :href="previewHref(entry.name)"
-              >
-                {{ entry.name }}
-              </a>
-            </div>
-          </section>
-
-          <section class="datahub-preview-panel datahub-pr-workflow">
-            <div class="datahub-section-header datahub-compact-header">
-              <div>
-                <div class="datahub-overview-label">Change workflow</div>
-                <h3 class="ui header datahub-section-title">Pull requests</h3>
-                <div class="datahub-overview-detail">Open data reviews</div>
-              </div>
-              <span v-if="activityLoading" class="ui tiny label">
-                <i class="spinner loading icon"></i> Loading
+              <span class="ui tiny label" :class="pull.is_mergeable ? 'green' : 'red'">
+                {{ pull.is_mergeable ? 'Mergeable' : 'Needs resolution' }}
               </span>
             </div>
-            <div v-if="openPulls.length === 0" class="datahub-empty-inline">
-              No open data reviews. Push a branch and open a review with the command below to preview row-level SFT changes before merge.
+            <div class="datahub-pr-stats">
+              <span class="ui green label">+{{ formatCount(pull.stats_added || 0) }}</span>
+              <span class="ui red label">-{{ formatCount(pull.stats_removed || 0) }}</span>
+              <span class="ui yellow label">~{{ formatCount(pull.stats_refreshed || 0) }}</span>
             </div>
-            <div v-else class="datahub-pr-list">
-              <div v-for="pull in openPulls" :key="pull.pull_request_id || pull.id" class="datahub-pr-card">
-                <div class="datahub-pr-card-header">
-                  <div>
-                    <div class="datahub-pr-title">#{{ pull.pull_request_id }} {{ pull.title || 'Untitled data review' }}</div>
-                    <div class="datahub-overview-detail">
-                      {{ pull.author || 'unknown author' }} · {{ branchName(pull.source_ref) }} → {{ branchName(pull.target_ref) }}
-                    </div>
-                  </div>
-                  <span class="ui tiny label" :class="pull.is_mergeable ? 'green' : 'red'">
-                    {{ pull.is_mergeable ? 'Mergeable' : 'Needs resolution' }}
-                  </span>
-                </div>
-                <div class="datahub-pr-stats">
-                  <span class="ui green label">+{{ formatCount(pull.stats_added || 0) }}</span>
-                  <span class="ui red label">-{{ formatCount(pull.stats_removed || 0) }}</span>
-                  <span class="ui yellow label">~{{ formatCount(pull.stats_refreshed || 0) }}</span>
-                </div>
-                <div class="datahub-overview-detail" v-if="pull.updated_at">
-                  Updated {{ formatTimestamp(pull.updated_at) }}
-                </div>
-                <button
-                  class="ui mini primary button datahub-review-button"
-                  :disabled="!pull.target_commit || !pull.source_commit"
-                  @click="previewPull(pull)"
-                >
-                  Preview diff
-                </button>
-              </div>
+            <div class="datahub-overview-detail" v-if="pull.updated_at">
+              Updated {{ formatTimestamp(pull.updated_at) }}
             </div>
-            <details class="datahub-command-details">
-              <summary>Use this dataset: clone, update, review</summary>
-              <div class="datahub-command-card">
-                <code>{{ cloneCommand }}</code>
-                <code>dit checkout -b update/sft-batch</code>
-                <code>dit add &lt;jsonl-file&gt; &amp;&amp; dit commit -m "update SFT data"</code>
-                <code>dit push --remote origin --branch update/sft-batch</code>
-                <code>{{ createReviewCommand }}</code>
-              </div>
-            </details>
-          </section>
-
-          <section class="datahub-preview-panel datahub-commit-panel">
-            <div class="datahub-overview-label">Repository activity</div>
-            <div class="datahub-panel-title">
-              <i class="history icon"></i>
-              Recent commits
-            </div>
-            <template v-if="latestCommit">
-              <div class="datahub-commit-main">
-                <span class="datahub-hash">{{ latestCommit.commit_hash.slice(0, 7) }}</span>
-                <span class="datahub-commit-message">{{ latestCommit.message || 'No commit message' }}</span>
-              </div>
-              <div class="datahub-overview-detail">
-                {{ latestCommit.author || 'unknown author' }} · {{ formatBlameDate(latestCommit.timestamp) }}
-              </div>
-              <a
-                class="ui mini basic primary button datahub-commit-preview-button"
-                :href="commitHref(latestCommit.commit_hash)"
-              >
-                View commit
-              </a>
-            </template>
-            <div v-if="recentCommits.length === 0" class="datahub-empty-inline">
-              No commits are available for this branch yet.
-            </div>
-            <div v-else class="datahub-commit-list">
-              <div v-for="commit in recentCommits.slice(1)" :key="commit.commit_hash" class="datahub-commit-row">
-                <div class="datahub-commit-main">
-                  <span class="datahub-hash">{{ shortHash(commit.commit_hash) }}</span>
-                  <span class="datahub-commit-message">{{ commit.message || 'No commit message' }}</span>
-                </div>
-                <div class="datahub-overview-detail">
-                  {{ commit.author || 'unknown author' }} · {{ formatTimestamp(commit.timestamp) }}
-                </div>
-                <a
-                  class="ui mini basic primary button datahub-commit-preview-button"
-                  :href="commitHref(commit.commit_hash)"
-                >
-                  View commit
-                </a>
-              </div>
-            </div>
-            <a class="ui mini basic button datahub-view-all-link" :href="commitsHref">
-              View all commits
-            </a>
-          </section>
-        </aside>
+            <button
+              class="ui mini primary button datahub-review-button"
+              :disabled="!pull.target_commit || !pull.source_commit"
+              @click="previewPull(pull)"
+            >
+              Open review
+            </button>
+          </div>
+        </div>
+        <details class="datahub-command-details">
+          <summary>Use this dataset: clone, update, review</summary>
+          <div class="datahub-command-card">
+            <code>{{ cloneCommand }}</code>
+            <code>dit checkout -b update/sft-batch</code>
+            <code>dit add &lt;jsonl-file&gt; &amp;&amp; dit commit -m "update SFT data"</code>
+            <code>dit push --remote origin --branch update/sft-batch</code>
+            <code>{{ createReviewCommand }}</code>
+          </div>
+        </details>
       </div>
-    </div>
 
-    <!-- Inline review diff -->
+      <div class="ui segment datahub-commit-panel">
+        <div class="datahub-section-header datahub-compact-header">
+          <div>
+            <div class="datahub-overview-label">Repository activity</div>
+            <h3 class="ui header datahub-section-title">Recent commits</h3>
+          </div>
+          <a class="ui mini basic button datahub-view-all-link" :href="commitsHref">View all commits</a>
+        </div>
+        <div v-if="recentCommits.length === 0" class="datahub-empty-inline">
+          No commits are available for this branch yet.
+        </div>
+        <div v-else class="datahub-commit-list">
+          <div v-for="commit in recentCommits" :key="commit.commit_hash" class="datahub-commit-row">
+            <div class="datahub-commit-main">
+              <span class="datahub-hash">{{ shortHash(commit.commit_hash) }}</span>
+              <span class="datahub-commit-message">{{ commit.message || 'No commit message' }}</span>
+            </div>
+            <div class="datahub-overview-detail">
+              {{ commit.author || 'unknown author' }} · {{ formatTimestamp(commit.timestamp) }}
+            </div>
+            <a class="ui mini basic primary button datahub-commit-preview-button" :href="commitHref(commit.commit_hash)">
+              View commit
+            </a>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <div class="ui segment datahub-review-preview" v-if="activeReview">
       <div class="ui secondary menu">
         <div class="item">
@@ -342,222 +241,6 @@
         :new-commit="activeReview.newCommit"
       />
     </div>
-
-    <!-- Blame panel -->
-    <div class="ui segment" v-if="blameFile">
-      <div class="ui secondary menu" style="margin-bottom:0.5em;">
-        <div class="item"><strong>Blame: {{ blameFile }}</strong></div>
-        <div class="right menu">
-          <a class="item" @click="closeBlame"><i class="times icon"></i> Close</a>
-        </div>
-      </div>
-
-      <div v-if="blameLoading" class="ui active centered inline loader" style="margin:1em 0;"></div>
-      <div v-else-if="blameError" class="ui negative message"><p>{{ blameError }}</p></div>
-      <template v-else-if="blameData">
-        <div style="margin-bottom:0.75em;">
-          <span class="ui small label">{{ blameData.summary.total_rows }} rows</span>
-          <span class="ui small label">{{ blameData.summary.unique_commits }} commits</span>
-          <span class="ui small label">{{ blameData.summary.unique_authors }} authors</span>
-        </div>
-        <table class="ui very basic compact selectable table">
-          <thead>
-            <tr>
-              <th class="right aligned" style="width:3em;">Row</th>
-              <th style="width:6em;">Commit</th>
-              <th>Author</th>
-              <th>Date</th>
-              <th>Content</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="entry in blameData.entries"
-              :key="entry.row_index"
-              style="cursor:pointer;"
-              @click="loadRowHistory(entry.row_index)"
-            >
-              <td class="right aligned">{{ entry.row_index }}</td>
-              <td style="font-family:monospace;">{{ entry.commit_hash ? entry.commit_hash.slice(0,7) : '—' }}</td>
-              <td>{{ entry.author }}</td>
-              <td>{{ formatBlameDate(entry.timestamp) }}</td>
-              <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.content_preview }}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- Row history sub-panel -->
-        <div v-if="rowHistoryData || rowHistoryLoading" style="margin-top:1em;">
-          <strong>Row history</strong>
-          <div v-if="rowHistoryLoading" class="ui active centered inline loader" style="margin:0.5em 0;"></div>
-          <table v-else-if="rowHistoryData" class="ui very basic compact table" style="margin-top:0.5em;">
-            <thead>
-              <tr>
-                <th style="width:6em;">Event</th>
-                <th style="width:6em;">Commit</th>
-                <th>Author</th>
-                <th>Date</th>
-                <th>Content</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(ev, idx) in rowHistoryData.events" :key="idx">
-                <td>
-                  <span
-                    class="ui tiny label"
-                    :class="{
-                      'green':  ev.event === 'added',
-                      'blue':   ev.event === 'refresh',
-                      'red':    ev.event === 'removed',
-                    }"
-                  >{{ ev.event }}</span>
-                </td>
-                <td style="font-family:monospace;">{{ ev.commit_hash ? ev.commit_hash.slice(0,7) : '—' }}</td>
-                <td>{{ ev.author }}</td>
-                <td>{{ formatBlameDate(ev.timestamp) }}</td>
-                <td style="font-family:monospace;font-size:0.85em;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ev.content_preview }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-    </div>
-
-    <!-- Stats panel (collapsed by default) -->
-    <div class="ui segment" v-if="commitHash">
-      <div class="ui accordion">
-        <div class="title" @click="toggleStats" style="cursor:pointer;">
-          <i class="dropdown icon"></i>
-          <strong>Dataset Stats</strong>
-          <span v-if="repoStats" class="ui small label" style="margin-left:8px;">
-            {{ formatTokens(repoStats.totals.token_estimate) }} tokens
-          </span>
-        </div>
-        <div class="content" v-show="statsOpen">
-          <div v-if="statsLoading" class="ui active centered inline loader" style="margin:1em 0;"></div>
-          <div v-else-if="statsError" class="ui small negative message">{{ statsError }}</div>
-          <div v-else-if="repoStats">
-
-            <!-- Totals row -->
-            <div class="ui tiny statistics" style="margin-bottom:1em;">
-              <div class="statistic">
-                <div class="value">{{ repoStats.totals.row_count != null ? repoStats.totals.row_count.toLocaleString() : '—' }}</div>
-                <div class="label">Total Rows</div>
-              </div>
-              <div class="statistic">
-                <div class="value">{{ formatTokens(repoStats.totals.token_estimate) }}</div>
-                <div class="label">Est. Tokens</div>
-              </div>
-              <div class="statistic">
-                <div class="value">{{ formatSize(repoStats.totals.char_count) }}</div>
-                <div class="label">Chars</div>
-              </div>
-              <div class="statistic">
-                <div class="value">{{ repoStats.totals.files_with_sidecar }}/{{ repoStats.totals.file_count }}</div>
-                <div class="label">Files w/ Meta</div>
-              </div>
-            </div>
-
-            <!-- Language distribution bars -->
-            <div v-if="topLangs.length > 0" style="margin-bottom:1em;">
-              <strong>Language distribution</strong>
-              <div v-for="([lang, pct]) in topLangs" :key="lang" style="margin-top:4px;">
-                <span style="display:inline-block;width:4em;">{{ lang }}</span>
-                <span
-                  style="display:inline-block;background:#2185d0;height:10px;vertical-align:middle;"
-                  :style="{width: (pct * 2) + 'px'}"
-                ></span>
-                <span style="margin-left:6px;font-size:0.9em;">{{ Math.round(pct) }}%</span>
-              </div>
-            </div>
-
-            <!-- Per-file breakdown table -->
-            <table class="ui very basic compact table">
-              <thead>
-                <tr>
-                  <th>File</th>
-                  <th class="right aligned">Rows</th>
-                  <th class="right aligned">Tokens</th>
-                  <th class="right aligned">Avg fields</th>
-                  <th class="right aligned">Top lang</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="f in repoStats.files" :key="f.path">
-                  <td>{{ f.path }}</td>
-                  <td class="right aligned">{{ f.row_count != null ? f.row_count.toLocaleString() : '—' }}</td>
-                  <td class="right aligned">{{ f.has_sidecar ? formatTokens(f.token_estimate) : '—' }}</td>
-                  <td class="right aligned">{{ f.avg_fields != null ? f.avg_fields.toFixed(1) : '—' }}</td>
-                  <td class="right aligned">{{ f.has_sidecar ? formatLang(f.lang_distribution) : '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Search bar -->
-    <div class="ui segment" v-if="commitHash">
-      <div class="ui action input" style="width:100%;">
-        <input
-          type="text"
-          placeholder='Search rows (e.g. "LRU缓存")'
-          v-model="searchQuery"
-          @keyup.enter="submitSearch"
-        />
-        <select class="ui compact selection dropdown" v-model="searchField" style="min-width:160px;">
-          <option value="">Full row</option>
-          <option value="instruction">instruction</option>
-          <option value="response">response</option>
-          <option value="messages[0].content">messages[0].content</option>
-        </select>
-        <button class="ui button" :class="{loading: searchLoading}" @click="submitSearch">
-          <i class="search icon"></i> Search
-        </button>
-      </div>
-    </div>
-
-    <!-- Search results (collapsible) -->
-    <div class="ui segment" v-if="searchResults">
-      <div class="ui accordion">
-        <div class="title" @click="searchResultsOpen = !searchResultsOpen" style="cursor:pointer;">
-          <i class="dropdown icon"></i>
-          <strong>Search Results</strong>
-          <span class="ui small label" style="margin-left:8px;">
-            {{ searchResults.matches.length }} match{{ searchResults.matches.length !== 1 ? 'es' : '' }}
-            (scanned {{ searchResults.total_scanned.toLocaleString() }} rows)
-          </span>
-          <span v-if="searchResults.limit_reached" class="ui small yellow label" style="margin-left:4px;">
-            limit reached
-          </span>
-        </div>
-        <div class="content" v-show="searchResultsOpen">
-          <div v-if="searchError" class="ui small negative message">{{ searchError }}</div>
-          <div v-else-if="searchResults.matches.length === 0" class="ui small message">
-            No matches found for "{{ searchResults.query }}".
-          </div>
-          <table v-else class="ui very basic compact table">
-            <thead>
-              <tr>
-                <th>File</th>
-                <th>Row</th>
-                <th>Excerpt</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="m in searchResults.matches" :key="m.file + ':' + m.row_index">
-                <td>{{ m.file }}</td>
-                <td class="right aligned">{{ m.row_index }}</td>
-                <td style="font-family:monospace;font-size:0.9em;white-space:pre-wrap;">{{ m.highlight }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
   </div>
 </template>
 
@@ -583,25 +266,11 @@ export default {
       sidecars: {},
       computingMeta: {},
       commitHash: null,
-      statsOpen: false,
-      statsLoading: false,
-      statsError: null,
       repoStats: null,
       fileFilter: '',
-      searchQuery: '',
-      searchField: '',
-      searchLoading: false,
-      searchError: null,
-      searchResults: null,
-      searchResultsOpen: true,
+      currentPath: '',
       checksLoading: false,
       checksData: null,
-      blameData: null,
-      blameLoading: false,
-      blameError: null,
-      blameFile: null,
-      rowHistoryData: null,
-      rowHistoryLoading: false,
       latestCommit: null,
       recentCommits: [],
       openPulls: [],
@@ -636,35 +305,62 @@ export default {
     checksStatusText() {
       return {'pass': 'CI pass', 'fail': 'CI fail', 'pending': 'CI pending'}[this.checksStatus] || '';
     },
-    topLangs() {
-      if (!this.repoStats?.totals?.lang_distribution) return [];
-      const dist = this.repoStats.totals.lang_distribution;
-      const total = Object.values(dist).reduce((a, b) => a + b, 0);
-      if (total === 0) return [];
-      return Object.entries(dist)
-        .map(([lang, count]) => [lang, (count / total) * 100])
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-    },
     manifestEntries() {
       return (this.tree?.entries || []).filter((entry) => entry.type === 'manifest');
     },
-    filteredTreeEntries() {
-      const query = this.fileFilter.trim().toLowerCase();
-      if (!query) return this.tree?.entries || [];
-      return (this.tree?.entries || []).filter((entry) => entry.name.toLowerCase().includes(query));
-    },
-    filesWithMetadata() {
-      if (this.repoStats?.totals?.files_with_sidecar !== undefined) {
-        return this.repoStats.totals.files_with_sidecar;
+    directoryEntries() {
+      const current = this.normalizePath(this.currentPath);
+      const folders = new Map();
+      const files = [];
+      for (const entry of this.manifestEntries) {
+        const path = this.normalizePath(entry.name || entry.path);
+        if (!path.startsWith(current)) continue;
+        const rest = path.slice(current.length);
+        if (!rest) continue;
+        const parts = rest.split('/');
+        if (parts.length > 1) {
+          const folderName = parts[0];
+          const folderPath = `${current}${folderName}/`;
+          const existing = folders.get(folderPath) || {
+            type: 'tree',
+            path: folderPath,
+            displayName: folderName,
+            row_count: 0,
+            char_count: 0,
+            token_estimate: 0,
+            lang_distribution: {},
+          };
+          existing.row_count += entry.row_count || 0;
+          existing.char_count += entry.char_count || 0;
+          existing.token_estimate += entry.token_estimate || 0;
+          existing.lang_distribution = this.mergeLangDistribution(existing.lang_distribution, entry.lang_distribution);
+          folders.set(folderPath, existing);
+        } else {
+          files.push({
+            ...entry,
+            path,
+            displayName: rest,
+          });
+        }
       }
-      return this.manifestEntries.filter((entry) => this.sidecars[entry.name]).length;
+      return [...folders.values(), ...files].sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'tree' ? -1 : 1;
+        return a.displayName.localeCompare(b.displayName);
+      });
     },
-    missingMetadataCount() {
-      return Math.max(0, this.manifestEntries.length - this.filesWithMetadata);
+    filteredDirectoryEntries() {
+      const query = this.fileFilter.trim().toLowerCase();
+      if (!query) return this.directoryEntries;
+      return this.directoryEntries.filter((entry) => (
+        entry.displayName.toLowerCase().includes(query) || entry.path.toLowerCase().includes(query)
+      ));
     },
-    metadataCoverageText() {
-      return `${this.filesWithMetadata}/${this.manifestEntries.length} files`;
+    pathCrumbs() {
+      const parts = this.normalizePath(this.currentPath).replace(/\/$/, '').split('/').filter(Boolean);
+      return parts.map((name, index) => ({
+        name,
+        path: `${parts.slice(0, index + 1).join('/')}/`,
+      }));
     },
     repoUrl() {
       const origin = window.location?.origin || 'http://localhost';
@@ -723,11 +419,8 @@ export default {
       this.commitHash = commitHash;
       this.checksData = null;
       this.repoStats = null;
-      this.statsOpen = false;
       this.fileFilter = '';
-      this.searchResults = null;
-      this.searchQuery = '';
-      this.searchField = '';
+      this.currentPath = '';
       this.latestCommit = null;
       this.recentCommits = [];
       this.openPulls = [];
@@ -740,6 +433,7 @@ export default {
       ]);
       this.repoStats = repoStats;
       const statsByPath = new Map((repoStats?.files || []).map((file) => [file.path, file]));
+      const seenPaths = new Set();
       this.tree = {
         ...tree,
         entries: (tree.entries || []).map((entry) => ({
@@ -747,7 +441,23 @@ export default {
           ...(statsByPath.get(entry.name) || {}),
           type: entry.type || entry.obj_type,
           hash: entry.hash || entry.obj_hash,
-        })),
+          path: entry.name,
+        })).filter((entry) => {
+          if (entry.type === 'manifest') {
+            seenPaths.add(entry.path);
+            return true;
+          }
+          return false;
+        }).concat((repoStats?.files || [])
+          .filter((file) => file.path && !seenPaths.has(file.path))
+          .map((file) => ({
+            ...file,
+            name: file.path,
+            path: file.path,
+            type: 'manifest',
+            hash: file.manifest_hash || file.hash || null,
+            sidecar_hash: file.sidecar_hash || null,
+          }))),
       };
       let totalRows = repoStats?.totals?.row_count || 0;
       let fileCount = repoStats?.totals?.file_count || 0;
@@ -765,7 +475,7 @@ export default {
           try {
             const summary = await datahubFetch(
               this.owner, this.repo,
-              `/meta/${commitHash}/${encodeURIComponent(entry.name)}/summary`,
+              `/meta/${commitHash}/${this.encodePath(entry.name)}/summary`,
             );
             sidecars[entry.name] = summary;
             entry.row_count ??= summary.row_count;
@@ -778,7 +488,7 @@ export default {
               try {
                 const manifest = await datahubFetch(
                   this.owner, this.repo,
-                  `/manifest/${commitHash}/${encodeURIComponent(entry.name)}?offset=0&limit=1`,
+                  `/manifest/${commitHash}/${this.encodePath(entry.name)}?offset=0&limit=1`,
                 );
                 entry.row_count = manifest.total;
               } catch {
@@ -813,12 +523,6 @@ export default {
     commitHref(hash) {
       return `${this.repoPath}/data/commit/${encodeURIComponent(hash)}`;
     },
-    formatSize(bytes) {
-      if (!bytes) return '—';
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-      return `${(bytes / 1048576).toFixed(1)} MB`;
-    },
     formatCount(n) {
       if (n === null || n === undefined) return '—';
       return Number(n).toLocaleString();
@@ -836,41 +540,39 @@ export default {
       const pct = total > 1 ? (top[1] / total) * 100 : top[1] * 100;
       return `${top[0]} ${Math.round(pct)}%`;
     },
+    mergeLangDistribution(left = {}, right = {}) {
+      const merged = {...left};
+      for (const [lang, count] of Object.entries(right || {})) {
+        merged[lang] = (merged[lang] || 0) + count;
+      }
+      return merged;
+    },
+    normalizePath(path) {
+      if (!path) return '';
+      return String(path).replace(/^\/+/, '');
+    },
+    encodePath(path) {
+      return this.normalizePath(path).split('/').map(encodeURIComponent).join('/');
+    },
+    openFolder(path) {
+      this.currentPath = this.normalizePath(path);
+      this.fileFilter = '';
+    },
     async computeMeta(entry) {
-      this.computingMeta = {...this.computingMeta, [entry.name]: true};
+      this.computingMeta = {...this.computingMeta, [entry.path]: true};
       this.metaComputeError = null;
       try {
         await datahubFetch(this.owner, this.repo, '/meta/compute', {
           method: 'POST',
-          body: JSON.stringify({file: entry.name}),
+          body: JSON.stringify({file: entry.path}),
         });
         await this.loadTree();
       } catch (e) {
         this.metaComputeError = e.message;
       } finally {
         const next = {...this.computingMeta};
-        delete next[entry.name];
+        delete next[entry.path];
         this.computingMeta = next;
-      }
-    },
-    async toggleStats() {
-      this.statsOpen = !this.statsOpen;
-      if (this.statsOpen && !this.repoStats && !this.statsLoading) {
-        await this.loadStats();
-      }
-    },
-    async loadStats() {
-      this.statsLoading = true;
-      this.statsError = null;
-      try {
-        this.repoStats = await datahubFetch(
-          this.owner, this.repo,
-          `/stats/${this.commitHash}`,
-        );
-      } catch (e) {
-        this.statsError = e.message;
-      } finally {
-        this.statsLoading = false;
       }
     },
     async loadChecks() {
@@ -930,72 +632,6 @@ export default {
     shortHash(hash) {
       return hash ? hash.slice(0, 7) : '—';
     },
-    async submitSearch() {
-      if (!this.searchQuery.trim()) return;
-      this.searchLoading = true;
-      this.searchError = null;
-      this.searchResults = null;
-      try {
-        this.searchResults = await datahubFetch(
-          this.owner, this.repo,
-          '/search',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              ref: this.commitHash,
-              query: this.searchQuery.trim(),
-              field: this.searchField || null,
-              limit: 50,
-            }),
-          },
-        );
-        this.searchResultsOpen = true;
-      } catch (e) {
-        this.searchError = e.message;
-      } finally {
-        this.searchLoading = false;
-      }
-    },
-    async loadBlame(filePath) {
-      this.blameFile = filePath;
-      this.blameData = null;
-      this.blameError = null;
-      this.blameLoading = true;
-      this.rowHistoryData = null;
-      this.rowHistoryLoading = false;
-      try {
-        this.blameData = await datahubFetch(
-          this.owner, this.repo,
-          `/blame/${this.commitHash}/${encodeURIComponent(filePath)}`,
-        );
-      } catch (e) {
-        this.blameError = e.message;
-      } finally {
-        this.blameLoading = false;
-      }
-    },
-    closeBlame() {
-      this.blameFile = null;
-      this.blameData = null;
-      this.blameError = null;
-      this.blameLoading = false;
-      this.rowHistoryData = null;
-      this.rowHistoryLoading = false;
-    },
-    async loadRowHistory(rowIndex) {
-      this.rowHistoryData = null;
-      this.rowHistoryLoading = true;
-      try {
-        this.rowHistoryData = await datahubFetch(
-          this.owner, this.repo,
-          `/blame/${this.commitHash}/${encodeURIComponent(this.blameFile)}?row=${rowIndex}`,
-        );
-      } catch {
-        // Silently ignore; history panel stays hidden
-      } finally {
-        this.rowHistoryLoading = false;
-      }
-    },
     formatBlameDate(timestamp) {
       if (!timestamp) return '—';
       const d = new Date(timestamp * 1000);
@@ -1047,12 +683,6 @@ export default {
   min-width: 160px;
 }
 
-.datahub-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .datahub-explorer {
   background: var(--color-body);
 }
@@ -1069,22 +699,7 @@ export default {
   margin: 2px 0 0 !important;
 }
 
-.datahub-explorer-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
-.datahub-explorer-grid {
-  align-items: start;
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.9fr);
-  gap: 16px;
-}
-
-.datahub-file-browser,
-.datahub-preview-panel {
+.datahub-file-browser {
   border: 1px solid var(--color-secondary);
   border-radius: 8px;
   background: var(--color-box-body);
@@ -1095,11 +710,11 @@ export default {
 }
 
 .datahub-file-browser-tools {
-  align-items: end;
+  align-items: center;
   background: var(--color-box-header);
   border-bottom: 1px solid var(--color-secondary);
-  display: grid;
-  grid-template-columns: minmax(150px, 0.4fr) minmax(220px, 1fr);
+  display: flex;
+  justify-content: space-between;
   gap: 10px;
   padding: 12px;
 }
@@ -1125,35 +740,12 @@ export default {
   padding: 0 10px;
 }
 
-.datahub-preview-rail {
+.datahub-path-breadcrumbs {
+  align-items: center;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.datahub-preview-panel {
-  padding: 12px;
-}
-
-.datahub-metadata-placeholder {
-  color: var(--color-text);
-  line-height: 1.5;
-  margin: 0 0 8px;
-}
-
-.datahub-metadata-grid {
-  border-top: 1px solid var(--color-secondary);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-}
-
-.datahub-selected-file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-weight: 600;
 }
 
 .datahub-pr-workflow {
@@ -1161,7 +753,7 @@ export default {
 }
 
 .datahub-commit-panel {
-  opacity: 0.78;
+  background: var(--color-box-body);
 }
 
 .datahub-compact-header {
@@ -1177,19 +769,6 @@ export default {
 .datahub-command-details summary {
   cursor: pointer;
   font-weight: 600;
-}
-
-.datahub-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.datahub-overview-card {
-  padding: 12px;
-  border: 1px solid var(--color-secondary);
-  border-radius: 8px;
-  background: var(--color-box-body);
 }
 
 .datahub-overview-label {
@@ -1231,26 +810,6 @@ export default {
   margin-top: 2px !important;
 }
 
-.datahub-activity-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
-  gap: 14px;
-}
-
-.datahub-command-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: 14px;
-  margin-top: 8px;
-}
-
-.datahub-activity-panel {
-  border: 1px solid var(--color-secondary);
-  border-radius: 8px;
-  background: var(--color-box-body);
-  padding: 12px;
-}
-
 .datahub-command-card {
   border: 1px solid var(--color-secondary);
   border-radius: 8px;
@@ -1269,11 +828,6 @@ export default {
   padding: 8px;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.datahub-panel-title {
-  font-weight: 600;
-  margin-bottom: 8px;
 }
 
 .datahub-empty-inline {
@@ -1383,6 +937,21 @@ export default {
   margin-right: 6px;
 }
 
+.datahub-file-link {
+  font-weight: 600;
+}
+
+.datahub-file-path {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+  margin-left: 22px;
+  margin-top: 2px;
+}
+
+.datahub-table-message {
+  margin: 0 !important;
+}
+
 .datahub-file-actions .button {
   margin: 0 !important;
   padding-left: 9px !important;
@@ -1394,35 +963,15 @@ export default {
 }
 
 @media (max-width: 991px) {
-  .datahub-overview-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .datahub-activity-grid {
-    grid-template-columns: 1fr;
-  }
-
   .datahub-explorer-header {
     flex-direction: column;
-  }
-
-  .datahub-explorer-summary {
-    justify-content: flex-start;
-  }
-
-  .datahub-explorer-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .datahub-command-grid {
-    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 767px) {
-  .datahub-file-browser-tools,
-  .datahub-metadata-grid {
-    grid-template-columns: 1fr;
+  .datahub-file-browser-tools {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

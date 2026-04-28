@@ -122,8 +122,12 @@ func (c *Client) PushObjects(ctx context.Context, repoName string, body []byte) 
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/objects/batch", body)
 }
 
-func (c *Client) GetTree(ctx context.Context, repoName, hash string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/tree/"+url.PathEscape(hash)+"/", nil)
+func (c *Client) GetTree(ctx context.Context, repoName, hash, treePath string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/tree/" + url.PathEscape(hash) + "/"
+	if strings.Trim(treePath, "/") != "" {
+		path += escapePath(treePath)
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
 }
 
 func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash string) ([]byte, int, error) {
@@ -188,11 +192,11 @@ func (c *Client) MetaCompute(ctx context.Context, repoName string, body []byte) 
 }
 
 func (c *Client) MetaGet(ctx context.Context, repoName, commit, filePath string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/meta/"+commit+"/"+filePath, nil)
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/meta/"+url.PathEscape(commit)+"/"+escapePath(filePath), nil)
 }
 
 func (c *Client) MetaSummary(ctx context.Context, repoName, commit, filePath string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/meta/"+commit+"/"+filePath+"/summary", nil)
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/meta/"+url.PathEscape(commit)+"/"+escapePath(filePath)+"/summary", nil)
 }
 
 func (c *Client) MetaDiff(ctx context.Context, repoName, oldCommit, newCommit, filePath string) ([]byte, int, error) {

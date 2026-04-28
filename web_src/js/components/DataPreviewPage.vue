@@ -18,16 +18,51 @@
         </a>
       </div>
     </div>
-    <JsonlViewer
-      :owner="owner"
-      :repo="repo"
-      :commit-hash="commitHash"
-      :file-path="filePath"
-    />
+    <div class="ui segment datahub-preview-workspace">
+      <aside class="datahub-preview-tree">
+        <div class="datahub-preview-tree-title">Files</div>
+        <div v-if="treeLoading" class="ui active centered inline loader datahub-tree-loader"></div>
+        <div v-else-if="treeError" class="ui tiny negative message">{{ treeError }}</div>
+        <nav v-else class="datahub-tree-list" aria-label="Dataset files">
+          <template v-for="entry in treeRows" :key="entry.path">
+            <button
+              v-if="entry.type === 'tree'"
+              type="button"
+              class="datahub-tree-row datahub-tree-folder"
+              :style="{paddingLeft: `${8 + entry.depth * 14}px`}"
+              @click="toggleFolder(entry.path)"
+            >
+              <i :class="isFolderOpen(entry.path) ? 'folder open icon' : 'folder icon'"></i>
+              <span>{{ entry.name }}</span>
+            </button>
+            <a
+              v-else
+              class="datahub-tree-row"
+              :class="{active: entry.path === filePath}"
+              :href="previewHref(entry.path)"
+              :style="{paddingLeft: `${8 + entry.depth * 14}px`}"
+            >
+              <i class="file outline icon"></i>
+              <span>{{ entry.name }}</span>
+            </a>
+          </template>
+        </nav>
+      </aside>
+      <main class="datahub-preview-review">
+        <JsonlViewer
+          :owner="owner"
+          :repo="repo"
+          :commit-hash="commitHash"
+          :file-path="filePath"
+          :single-row-mode="true"
+        />
+      </main>
+    </div>
   </div>
 </template>
 
 <script>
+import {datahubFetch} from '../utils/datahub-api.js';
 import JsonlViewer from './JsonlViewer.vue';
 
 export default {
@@ -38,6 +73,15 @@ export default {
     commitHash: String,
     filePath: String,
   },
+  data() {
+    return {
+      tree: null,
+      treeLoading: true,
+      treeError: null,
+      openFolders: new Set(),
+      stats: null,
+    };
+  },
   computed: {
     repoPath() {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
@@ -45,10 +89,107 @@ export default {
     commitPath() {
       return `${this.repoPath}/data/commit/${encodeURIComponent(this.commitHash)}`;
     },
+    treeRows() {
+      const manifestPaths = this.manifestPaths
+        .sort();
+      const folderPaths = new Set();
+      for (const path of manifestPaths) {
+        const parts = path.split('/');
+        for (let index = 1; index < parts.length; index++) {
+          folderPaths.add(`${parts.slice(0, index).join('/')}/`);
+        }
+      }
+
+      const rows = [];
+      const appendLevel = (prefix, depth) => {
+        const folders = [...folderPaths]
+          .filter((folder) => folder.startsWith(prefix) && folder.slice(prefix.length).split('/').filter(Boolean).length === 1)
+          .sort();
+        for (const folder of folders) {
+          rows.push({
+            type: 'tree',
+            path: folder,
+            name: folder.slice(prefix.length).replace(/\/$/, ''),
+            depth,
+          });
+          if (this.isFolderOpen(folder)) appendLevel(folder, depth + 1);
+        }
+        const files = manifestPaths
+          .filter((path) => path.startsWith(prefix) && !path.slice(prefix.length).includes('/'))
+          .sort();
+        for (const path of files) {
+          rows.push({
+            type: 'manifest',
+            path,
+            name: path.slice(prefix.length),
+            depth,
+          });
+        }
+      };
+      appendLevel('', 0);
+      return rows;
+    },
+    manifestPaths() {
+      const paths = new Set();
+      for (const file of this.stats?.files || []) {
+        if (file.path) paths.add(this.normalizePath(file.path));
+      }
+      for (const entry of this.tree?.entries || []) {
+        if ((entry.type || entry.obj_type) === 'manifest') {
+          paths.add(this.normalizePath(entry.name || entry.path));
+        }
+      }
+      return [...paths].filter(Boolean);
+    },
+  },
+  async mounted() {
+    this.seedOpenFolders();
+    try {
+      const [tree, stats] = await Promise.all([
+        datahubFetch(this.owner, this.repo, `/tree/${this.commitHash}`),
+        this.fetchStats(),
+      ]);
+      this.tree = tree;
+      this.stats = stats;
+    } catch (e) {
+      this.treeError = e.message;
+    } finally {
+      this.treeLoading = false;
+    }
   },
   methods: {
     shortHash(hash) {
       return hash ? hash.slice(0, 7) : '-';
+    },
+    previewHref(path) {
+      return `${this.repoPath}/data/preview/${encodeURIComponent(this.commitHash)}/${path.split('/').map(encodeURIComponent).join('/')}`;
+    },
+    normalizePath(path) {
+      return String(path || '').replace(/^\/+/, '');
+    },
+    async fetchStats() {
+      try {
+        return await datahubFetch(this.owner, this.repo, `/stats/${this.commitHash}`);
+      } catch {
+        return null;
+      }
+    },
+    seedOpenFolders() {
+      const parts = this.normalizePath(this.filePath).split('/');
+      const open = new Set();
+      for (let index = 1; index < parts.length; index++) {
+        open.add(`${parts.slice(0, index).join('/')}/`);
+      }
+      this.openFolders = open;
+    },
+    isFolderOpen(path) {
+      return this.openFolders.has(path);
+    },
+    toggleFolder(path) {
+      const next = new Set(this.openFolders);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      this.openFolders = next;
     },
   },
 };
@@ -96,6 +237,72 @@ export default {
   font-family: var(--fonts-monospace);
 }
 
+.datahub-preview-workspace {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  padding: 0 !important;
+}
+
+.datahub-preview-tree {
+  background: var(--color-box-header);
+  border-right: 1px solid var(--color-secondary);
+  min-height: 680px;
+  padding: 12px;
+}
+
+.datahub-preview-tree-title {
+  color: var(--color-text-light-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.datahub-tree-loader {
+  margin: 16px 0;
+}
+
+.datahub-tree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.datahub-tree-row {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  min-height: 32px;
+  overflow: hidden;
+  text-align: left;
+  width: 100%;
+}
+
+.datahub-tree-row:hover,
+.datahub-tree-row.active {
+  background: var(--color-active);
+  border-color: var(--color-secondary);
+  text-decoration: none;
+}
+
+.datahub-tree-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datahub-preview-review {
+  min-width: 0;
+  padding: 12px 12px 12px 0;
+}
+
 @media (max-width: 767px) {
   .datahub-page-header {
     flex-direction: column;
@@ -104,6 +311,19 @@ export default {
   .datahub-header-actions {
     justify-content: flex-start;
   }
+
+  .datahub-preview-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .datahub-preview-tree {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-secondary);
+    min-height: 0;
+  }
+
+  .datahub-preview-review {
+    padding: 12px;
+  }
 }
 </style>
-
