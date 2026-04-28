@@ -1,27 +1,5 @@
 <template>
   <div class="ui segments datahub-home">
-    <div class="ui segment datahub-toolbar">
-      <div class="datahub-toolbar-main">
-        <div>
-          <div class="datahub-eyebrow">Dit dataset</div>
-          <div class="datahub-title">SFT data repository</div>
-        </div>
-        <div class="field datahub-branch-picker">
-          <select aria-label="Branch" class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
-            <option v-for="ref in refs" :key="ref.name" :value="ref.name">
-              {{ ref.name.replace('heads/', '') }}
-            </option>
-          </select>
-        </div>
-        <span v-if="checksStatus" class="ui tiny label" :class="checksStatusClass">
-          <i :class="checksStatusIcon"></i> {{ checksStatusText }}
-        </span>
-        <span v-else-if="checksLoading" class="ui tiny label">
-          <i class="spinner loading icon"></i>
-        </span>
-      </div>
-    </div>
-
     <div class="ui segment" v-if="loading">
       <div class="ui active centered inline loader"></div>
     </div>
@@ -41,18 +19,29 @@
 
     <template v-else-if="tree">
       <div class="ui segment datahub-explorer">
-        <div class="datahub-explorer-header">
-          <div>
-            <div class="datahub-eyebrow">Data</div>
-            <h2 class="ui header datahub-explorer-title">Files</h2>
-            <div class="datahub-overview-detail">Click a JSONL file to open the dedicated ML 2.0 row review page.</div>
+        <div class="datahub-repo-controls">
+          <div class="datahub-branch-meta">
+            <div class="field datahub-branch-picker">
+              <select aria-label="Branch" class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
+                <option v-for="ref in refs" :key="ref.name" :value="ref.name">
+                  {{ ref.name.replace('heads/', '') }}
+                </option>
+              </select>
+            </div>
+            <span class="datahub-meta-pill">
+              <SvgIcon name="octicon-git-branch" :size="16" />
+              {{ branchCountText }}
+            </span>
+            <span class="datahub-meta-pill">
+              <SvgIcon name="octicon-tag" :size="16" />
+              0 Tags
+            </span>
           </div>
           <label class="datahub-tool-field datahub-go-to-file">
-            <span>Go to file</span>
             <input
               class="datahub-go-to-file-input"
               type="text"
-              placeholder="Filter files"
+              placeholder="Go to file"
               v-model="fileFilter"
             />
           </label>
@@ -63,15 +52,33 @@
 
         <div class="datahub-file-browser">
           <div class="datahub-file-browser-tools">
-            <nav class="datahub-path-breadcrumbs" aria-label="Dataset path">
-              <a href="#" @click.prevent="openFolder('')">{{ branchName(currentBranch) }}</a>
-              <template v-for="crumb in pathCrumbs" :key="crumb.path">
-                <span>/</span>
-                <a href="#" @click.prevent="openFolder(crumb.path)">{{ crumb.name }}</a>
+            <div class="datahub-latest-commit">
+              <template v-if="latestCommit">
+                <span class="datahub-commit-author">{{ latestCommit.author || 'unknown author' }}</span>
+                <span class="datahub-commit-message">{{ latestCommit.message || 'No commit message' }}</span>
+                <span v-if="checksStatus" class="datahub-inline-ci" :class="`is-${checksStatus}`">
+                  <i :class="checksStatusIcon"></i> {{ checksStatusText }}
+                </span>
+                <span v-else-if="checksLoading" class="datahub-inline-ci">
+                  <i class="spinner loading icon"></i>
+                </span>
+                <a class="datahub-hash" :href="commitHref(latestCommit.commit_hash)">
+                  {{ shortHash(latestCommit.commit_hash) }}
+                </a>
+                <span class="datahub-overview-detail">{{ formatTimestamp(latestCommit.timestamp) }}</span>
               </template>
-            </nav>
-            <a class="ui mini basic button" :href="commitsHref">
-              {{ recentCommits.length ? `${recentCommits.length} commits` : 'Commits' }}
+              <template v-else>
+                <span class="datahub-commit-message">No commits are available for this branch yet.</span>
+                <span v-if="checksStatus" class="datahub-inline-ci" :class="`is-${checksStatus}`">
+                  <i :class="checksStatusIcon"></i> {{ checksStatusText }}
+                </span>
+                <span v-else-if="checksLoading" class="datahub-inline-ci">
+                  <i class="spinner loading icon"></i>
+                </span>
+              </template>
+            </div>
+            <a class="ui mini basic button datahub-commit-count" :href="commitsHref">
+              {{ commitCountText }}
             </a>
           </div>
 
@@ -148,7 +155,6 @@
                         @click="computeMeta(entry)"
                       >Compute</button>
                     </div>
-                    <div v-if="entry.path !== entry.displayName" class="datahub-file-path">{{ entry.path }}</div>
                   </td>
                   <td class="right aligned">{{ formatCount(entry.row_count) }}</td>
                   <td class="right aligned">{{ formatCount(entry.char_count) }}</td>
@@ -329,6 +335,14 @@ export default {
     },
     checksStatusText() {
       return {'pass': 'CI pass', 'fail': 'CI fail', 'pending': 'CI pending'}[this.checksStatus] || '';
+    },
+    branchCountText() {
+      const count = this.refs.length;
+      return `${this.formatCount(count)} ${count === 1 ? 'Branch' : 'Branches'}`;
+    },
+    commitCountText() {
+      const count = this.recentCommits.length;
+      return count > 0 ? `${this.formatCount(count)} ${count === 1 ? 'Commit' : 'Commits'}` : 'Commits';
     },
     manifestEntries() {
       return (this.tree?.entries || []).filter((entry) => entry.type === 'manifest');
@@ -680,48 +694,37 @@ export default {
   border: 0;
 }
 
-.datahub-toolbar {
-  background: linear-gradient(135deg, var(--color-box-header), var(--color-body));
-}
-
-.datahub-toolbar-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-
-.datahub-eyebrow {
-  color: var(--color-text-light-2);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.datahub-title {
-  font-size: 20px;
-  font-weight: 600;
-}
-
 .datahub-branch-picker {
-  min-width: 160px;
+  min-width: 118px;
 }
 
 .datahub-explorer {
   background: var(--color-body);
 }
 
-.datahub-explorer-header {
-  align-items: flex-start;
+.datahub-repo-controls {
+  align-items: center;
   display: flex;
   gap: 16px;
   justify-content: space-between;
   margin-bottom: 14px;
 }
 
-.datahub-explorer-title {
-  margin: 2px 0 0 !important;
+.datahub-branch-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.datahub-meta-pill {
+  align-items: center;
+  color: var(--color-text);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .datahub-file-browser {
@@ -755,6 +758,10 @@ export default {
   text-transform: uppercase;
 }
 
+.datahub-go-to-file {
+  min-width: min(100%, 260px);
+}
+
 .datahub-go-to-file-input {
   background: var(--color-input-background);
   border: 1px solid var(--color-input-border);
@@ -765,12 +772,41 @@ export default {
   padding: 0 10px;
 }
 
-.datahub-path-breadcrumbs {
+.datahub-latest-commit {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.datahub-commit-author {
+  flex: 0 0 auto;
   font-weight: 600;
+}
+
+.datahub-inline-ci {
+  align-items: center;
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.datahub-inline-ci.is-pass {
+  color: var(--color-success-text);
+}
+
+.datahub-inline-ci.is-fail {
+  color: var(--color-error-text);
+}
+
+.datahub-inline-ci.is-pending {
+  color: var(--color-warning-text);
+}
+
+.datahub-commit-count {
+  flex: 0 0 auto;
 }
 
 .datahub-pr-workflow {
@@ -994,13 +1030,6 @@ export default {
   color: var(--color-text);
 }
 
-.datahub-file-path {
-  color: var(--color-text-light-2);
-  font-size: 12px;
-  margin-left: 46px;
-  margin-top: 2px;
-}
-
 .datahub-tree-chevron,
 .datahub-tree-file-spacer {
   color: var(--color-text-light-2);
@@ -1045,8 +1074,13 @@ export default {
 }
 
 @media (max-width: 991px) {
-  .datahub-explorer-header {
+  .datahub-repo-controls {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .datahub-go-to-file {
+    min-width: 0;
   }
 }
 
@@ -1054,6 +1088,10 @@ export default {
   .datahub-file-browser-tools {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .datahub-latest-commit {
+    flex-wrap: wrap;
   }
 }
 </style>

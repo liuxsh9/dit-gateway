@@ -983,6 +983,7 @@ func renderHomeCode(ctx *context.Context) {
 	prepareOpenWithEditorApps(ctx)
 
 	if ctx.Repo.Repository.IsDataRepo {
+		ctx.Data["HideRepoInfo"] = true
 		ctx.HTML(http.StatusOK, tplRepoHome)
 		return
 	}

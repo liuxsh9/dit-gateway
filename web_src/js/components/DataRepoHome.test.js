@@ -267,10 +267,9 @@ test('renders a GitHub-like Data file browser without duplicate side rails', asy
   const wrapper = mount(DataRepoHome, {
     props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
   });
-  await vi.waitFor(() => expect(wrapper.text()).toContain('Data'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('1 Branch'));
 
-  expect(wrapper.text()).toContain('Files');
-  expect(wrapper.find('input[placeholder="Filter files"]').exists()).toBe(true);
+  expect(wrapper.find('.datahub-repo-controls input[placeholder="Go to file"]').exists()).toBe(true);
   expect(wrapper.findAll('select[aria-label="Branch"]')).toHaveLength(1);
   expect(wrapper.text()).toContain('train');
   expect(wrapper.text()).toContain('eval');
@@ -331,6 +330,76 @@ test('uses distinct tree affordances for folders and files in the Data browser',
   expect(folderRows[0].find('.datahub-tree-folder-icon').exists()).toBe(true);
   expect(fileRows[0].find('.datahub-tree-file-spacer').exists()).toBe(true);
   expect(fileRows[0].find('.datahub-tree-file-icon').exists()).toBe(true);
+});
+
+test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [
+      {name: 'heads/main', target_hash: 'commit123'},
+      {name: 'heads/eval-refresh', target_hash: 'commit456'},
+    ];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'eval/tool/weather.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: 'sidecar2'},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 64, token_estimate: 16, lang_distribution: {en: 1}, has_sidecar: true},
+          {path: 'train.jsonl', row_count: 2, char_count: 128, token_estimate: 32, lang_distribution: {en: 2}, has_sidecar: true},
+        ],
+        totals: {file_count: 2, row_count: 3, char_count: 192, token_estimate: 48, lang_distribution: {en: 3}},
+      };
+    }
+    if (path === '/meta/commit123/eval/tool/weather.jsonl/summary') return {row_count: 1, char_count: 64, token_estimate: 16, lang_distribution: {en: 1}};
+    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 2, char_count: 128, token_estimate: 32, lang_distribution: {en: 2}};
+    if (path === '/checks/commit123') return {checks: [{check_name: 'format', status: 'pass'}]};
+    if (path === '/log?ref=heads/main&limit=5') {
+      return {
+        commits: [
+          {
+            commit_hash: 'abcdef1234567890',
+            author: 'alice',
+            message: 'refresh data rows',
+            timestamp: 1713600000,
+          },
+          {
+            commit_hash: 'fedcba9876543210',
+            author: 'bob',
+            message: 'clean rejected samples',
+            timestamp: 1713513600,
+          },
+        ],
+      };
+    }
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('refresh data rows'));
+
+  expect(wrapper.find('.datahub-toolbar').exists()).toBe(false);
+  expect(wrapper.text()).not.toContain('Dit dataset');
+  expect(wrapper.text()).not.toContain('SFT data repository');
+  expect(wrapper.text()).not.toContain('Click a JSONL file');
+  expect(wrapper.find('.datahub-repo-controls select[aria-label="Branch"]').exists()).toBe(true);
+  expect(wrapper.find('.datahub-repo-controls').text()).toContain('2 Branches');
+  expect(wrapper.find('.datahub-repo-controls').text()).toContain('0 Tags');
+  expect(wrapper.find('.datahub-repo-controls input[placeholder="Go to file"]').exists()).toBe(true);
+  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('alice');
+  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('refresh data rows');
+  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('CI pass');
+  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('abcdef1');
+  expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('2 Commits');
+  expect(wrapper.find('.datahub-file-row-folder').text()).not.toContain('eval/');
 });
 
 test('uses stats file paths to expose nested JSONL files when the root tree only has folders', async () => {
