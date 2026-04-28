@@ -67,15 +67,63 @@
   pointer-events: none !important;
 }
 
-.repository.datahub-preview-shell > .secondary-nav > .ui.container,
-.repository.datahub-preview-shell > .secondary-nav > overflow-menu.ui.container {
+.repository .secondary-nav.datahub-repo-nav {
+  box-sizing: border-box;
+  max-width: 100vw;
+  overflow-x: clip;
+  width: 100vw;
+}
+
+.repository .secondary-nav.datahub-repo-nav > .ui.ui.ui.container,
+.repository .secondary-nav.datahub-repo-nav > overflow-menu.ui.ui.ui.container {
+  box-sizing: border-box;
+  margin-left: 0;
+  margin-right: 0;
   max-width: none;
   padding-left: var(--page-margin-x);
   padding-right: var(--page-margin-x);
+  --container-width: 100%;
   width: 100%;
 }
 
-.repository.datahub-preview-shell > .secondary-nav > .ui.tabs.divider {
+.repository .secondary-nav.datahub-repo-nav .repo-header {
+  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  padding-right: 0;
+}
+
+.repository .secondary-nav.datahub-repo-nav .repo-header > .flex-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.repository .secondary-nav.datahub-repo-nav .repo-buttons {
+  background: var(--color-secondary-nav-bg);
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  justify-self: end;
+  margin-left: auto;
+  max-width: 100%;
+  position: sticky;
+  right: var(--page-margin-x);
+  z-index: 2;
+}
+
+.repository .secondary-nav.datahub-repo-nav > .ui.tabs.divider {
   margin-left: 0;
   margin-right: 0;
+}
+
+@media (max-width: 767.98px) {
+  .repository .secondary-nav.datahub-repo-nav .repo-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .repository .secondary-nav.datahub-repo-nav .repo-buttons {
+    justify-content: flex-start;
+    justify-self: start;
+    margin-left: 0;
+  }
 }

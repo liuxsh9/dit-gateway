@@ -1,4 +1,4 @@
-<div class="secondary-nav">
+<div class="secondary-nav{{if .Repository.IsDataRepo}} datahub-repo-nav{{end}}">
 {{with .Repository}}
 	<div class="ui container">
 		<div class="repo-header">
