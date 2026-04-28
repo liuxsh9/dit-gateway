@@ -152,6 +152,28 @@ func TestWebCreateDataRepo(t *testing.T) {
 	htmlDoc.AssertElement(t, "overflow-menu .item[href='/user2/"+repoName+"']", true)
 }
 
+func TestDataRepoActionsPageDoesNotRequireGitRepo(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "data-repo-actions"
+	recorder := mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	req := NewRequestWithValues(t, "POST", "/repo/create", map[string]string{
+		"uid":          "2",
+		"repo_name":    repoName,
+		"is_data_repo": "true",
+	})
+	resp := session.MakeRequest(t, req, http.StatusSeeOther)
+	assert.Equal(t, "/user2/"+repoName, test.RedirectURL(resp))
+	recorder.assertCreated(t)
+
+	resp = session.MakeRequest(t, NewRequest(t, "GET", "/user2/"+repoName+"/actions"), http.StatusOK)
+	htmlDoc := NewHTMLParser(t, resp.Body)
+	htmlDoc.AssertElement(t, ".repository.actions", true)
+	htmlDoc.AssertElement(t, ".empty-placeholder", true)
+}
+
 func TestRepoCreateFormExposesDataRepoOption(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 

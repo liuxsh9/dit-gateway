@@ -71,10 +71,15 @@ func List(ctx *context.Context) {
 	listInner := ctx.FormBool("list_inner")
 
 	var workflows []Workflow
-	if empty, err := ctx.Repo.GitRepo.IsEmpty(); err != nil {
-		ctx.ServerError("IsEmpty", err)
-		return
-	} else if !empty {
+	if ctx.Repo.GitRepo != nil {
+		if empty, err := ctx.Repo.GitRepo.IsEmpty(); err != nil {
+			ctx.ServerError("IsEmpty", err)
+			return
+		} else if empty {
+			renderActionsList(ctx, listInner, curWorkflow, workflows)
+			return
+		}
+
 		commit, err := ctx.Repo.GitRepo.GetBranchCommit(ctx.Repo.Repository.DefaultBranch)
 		if err != nil {
 			ctx.ServerError("GetBranchCommit", err)
@@ -171,6 +176,10 @@ func List(ctx *context.Context) {
 			}
 		}
 	}
+	renderActionsList(ctx, listInner, curWorkflow, workflows)
+}
+
+func renderActionsList(ctx *context.Context, listInner bool, curWorkflow string, workflows []Workflow) {
 	ctx.Data["workflows"] = workflows
 	ctx.Data["RepoLink"] = ctx.Repo.Repository.Link()
 

@@ -23,6 +23,11 @@ func ManualRunWorkflow(ctx *app_context.Context) {
 		return
 	}
 
+	if ctx.Repo.GitRepo == nil {
+		ctx.NotFound("GitRepo", nil)
+		return
+	}
+
 	if empty, err := ctx.Repo.GitRepo.IsEmpty(); err != nil {
 		ctx.ServerError("IsEmpty", err)
 		return
