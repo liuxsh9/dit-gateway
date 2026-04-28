@@ -22,11 +22,17 @@
         <div class="datahub-repo-controls">
           <div class="datahub-branch-meta">
             <div class="field datahub-branch-picker">
+              <span class="datahub-branch-button-icon" aria-hidden="true">
+                <SvgIcon name="octicon-git-branch" :size="16" />
+              </span>
               <select aria-label="Branch" class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
                 <option v-for="ref in refs" :key="ref.name" :value="ref.name">
                   {{ ref.name.replace('heads/', '') }}
                 </option>
               </select>
+              <span class="datahub-branch-button-chevron" aria-hidden="true">
+                <SvgIcon name="octicon-chevron-down" :size="16" />
+              </span>
             </div>
             <span class="datahub-meta-pill">
               <SvgIcon name="octicon-git-branch" :size="16" />
@@ -37,14 +43,16 @@
               0 Tags
             </span>
           </div>
-          <label class="datahub-tool-field datahub-go-to-file">
-            <input
-              class="datahub-go-to-file-input"
-              type="text"
-              placeholder="Go to file"
-              v-model="fileFilter"
-            />
-          </label>
+          <div class="datahub-repo-actions">
+            <label class="datahub-go-to-file">
+              <input
+                class="datahub-go-to-file-input"
+                type="text"
+                placeholder="Go to file"
+                v-model="fileFilter"
+              />
+            </label>
+          </div>
         </div>
 
         <div v-if="metaComputeError" class="ui small negative message datahub-inline-message">{{ metaComputeError }}</div>
@@ -77,7 +85,7 @@
                 </span>
               </template>
             </div>
-            <a class="ui mini basic button datahub-commit-count" :href="commitsHref">
+            <a class="datahub-commit-count" :href="commitsHref">
               {{ commitCountText }}
             </a>
           </div>
@@ -167,7 +175,7 @@
         </div>
       </div>
 
-      <div class="ui segment datahub-pr-workflow">
+      <div class="ui segment datahub-card-panel datahub-pr-workflow">
         <div class="datahub-section-header datahub-compact-header">
           <div>
             <div class="datahub-overview-label">Change workflow</div>
@@ -223,7 +231,7 @@
         </details>
       </div>
 
-      <div class="ui segment datahub-commit-panel">
+      <div class="ui segment datahub-card-panel datahub-commit-panel">
         <div class="datahub-section-header datahub-compact-header">
           <div>
             <div class="datahub-overview-label">Repository activity</div>
@@ -695,26 +703,70 @@ export default {
 }
 
 .datahub-branch-picker {
-  min-width: 118px;
+  align-items: center;
+  display: inline-flex;
+  margin: 0 !important;
+  min-width: 0;
+  position: relative;
+}
+
+.datahub-branch-picker select.ui.dropdown {
+  appearance: none;
+  background: var(--color-input-background);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 600;
+  height: 32px;
+  line-height: 30px;
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 30px 0 30px;
+  width: auto;
+}
+
+.datahub-branch-button-icon,
+.datahub-branch-button-chevron {
+  align-items: center;
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.datahub-branch-button-icon {
+  left: 10px;
+}
+
+.datahub-branch-button-chevron {
+  right: 9px;
 }
 
 .datahub-explorer {
   background: var(--color-body);
+  padding-top: 16px !important;
 }
 
 .datahub-repo-controls {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   justify-content: space-between;
   margin-bottom: 14px;
+  min-width: 0;
 }
 
 .datahub-branch-meta {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 14px;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-width: 0;
 }
 
 .datahub-meta-pill {
@@ -725,6 +777,14 @@ export default {
   font-weight: 600;
   gap: 6px;
   white-space: nowrap;
+}
+
+.datahub-repo-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 1 260px;
+  justify-content: flex-end;
+  min-width: 220px;
 }
 
 .datahub-file-browser {
@@ -747,19 +807,9 @@ export default {
   padding: 12px;
 }
 
-.datahub-tool-field {
-  color: var(--color-text-light-2);
-  display: flex;
-  flex-direction: column;
-  font-size: 11px;
-  font-weight: 700;
-  gap: 5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .datahub-go-to-file {
-  min-width: min(100%, 260px);
+  margin: 0;
+  width: 100%;
 }
 
 .datahub-go-to-file-input {
@@ -770,6 +820,7 @@ export default {
   font-size: 13px;
   height: 36px;
   padding: 0 10px;
+  width: 100%;
 }
 
 .datahub-latest-commit {
@@ -806,15 +857,36 @@ export default {
 }
 
 .datahub-commit-count {
+  align-items: center;
+  color: var(--color-text);
+  display: inline-flex;
   flex: 0 0 auto;
+  font-weight: 600;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.datahub-commit-count:hover {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.datahub-card-panel {
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary) !important;
+  border-radius: 8px !important;
+  margin-left: 14px !important;
+  margin-right: 14px !important;
+  margin-top: 16px !important;
+  overflow: hidden;
 }
 
 .datahub-pr-workflow {
-  border-color: var(--color-primary-light-4);
+  padding: 14px 16px !important;
 }
 
 .datahub-commit-panel {
-  background: var(--color-box-body);
+  padding: 14px 16px !important;
 }
 
 .datahub-compact-header {
@@ -963,6 +1035,16 @@ export default {
   vertical-align: middle;
 }
 
+.datahub-file-table th:first-child,
+.datahub-file-table td:first-child {
+  padding-left: 16px !important;
+}
+
+.datahub-file-table th:last-child,
+.datahub-file-table td:last-child {
+  padding-right: 16px !important;
+}
+
 .datahub-file-table-wrap {
   overflow-x: auto;
 }
@@ -1075,16 +1157,33 @@ export default {
 
 @media (max-width: 991px) {
   .datahub-repo-controls {
-    flex-direction: column;
+    flex-wrap: wrap;
+  }
+
+  .datahub-go-to-file {
+    width: 100%;
+  }
+
+  .datahub-repo-actions {
+    flex: 1 1 240px;
+  }
+}
+
+@media (max-width: 767px) {
+  .datahub-repo-controls,
+  .datahub-branch-meta {
     align-items: stretch;
+    flex-direction: column;
   }
 
   .datahub-go-to-file {
     min-width: 0;
   }
-}
 
-@media (max-width: 767px) {
+  .datahub-repo-actions {
+    min-width: 0;
+  }
+
   .datahub-file-browser-tools {
     align-items: stretch;
     flex-direction: column;

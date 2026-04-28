@@ -391,14 +391,19 @@ test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
   expect(wrapper.text()).not.toContain('SFT data repository');
   expect(wrapper.text()).not.toContain('Click a JSONL file');
   expect(wrapper.find('.datahub-repo-controls select[aria-label="Branch"]').exists()).toBe(true);
+  expect(wrapper.find('.datahub-branch-button-icon').exists()).toBe(true);
+  expect(wrapper.find('.datahub-branch-button-chevron').exists()).toBe(true);
   expect(wrapper.find('.datahub-repo-controls').text()).toContain('2 Branches');
   expect(wrapper.find('.datahub-repo-controls').text()).toContain('0 Tags');
   expect(wrapper.find('.datahub-repo-controls input[placeholder="Go to file"]').exists()).toBe(true);
+  expect(wrapper.find('.datahub-repo-actions').exists()).toBe(true);
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('alice');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('refresh data rows');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('CI pass');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('abcdef1');
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('2 Commits');
+  expect(wrapper.find('.datahub-commit-count').classes()).not.toContain('button');
+  expect(wrapper.find('.datahub-pr-workflow').classes()).toContain('datahub-card-panel');
   expect(wrapper.find('.datahub-file-row-folder').text()).not.toContain('eval/');
 });
 
