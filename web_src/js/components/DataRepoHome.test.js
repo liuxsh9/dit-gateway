@@ -407,6 +407,48 @@ test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
   expect(wrapper.find('.datahub-file-row-folder').text()).not.toContain('eval/');
 });
 
+test('renders mobile-readable file row metrics without relying on table columns', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'eval/tool/weather.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}, has_sidecar: true},
+        ],
+        totals: {file_count: 1, row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}},
+      };
+    }
+    if (path === '/meta/commit123/eval/tool/weather.jsonl/summary') return {row_count: 1, char_count: 641, token_estimate: 160, lang_distribution: {en: 1}};
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
+
+  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'eval').trigger('click');
+  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'tool').trigger('click');
+
+  const mobileMetrics = wrapper.find('.datahub-file-mobile-metrics');
+  expect(mobileMetrics.exists()).toBe(true);
+  expect(mobileMetrics.text()).toContain('Rows 1');
+  expect(mobileMetrics.text()).toContain('Chars 641');
+  expect(mobileMetrics.text()).toContain('Tokens 160');
+  expect(mobileMetrics.text()).toContain('Lang en 100%');
+});
+
 test('uses stats file paths to expose nested JSONL files when the root tree only has folders', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];

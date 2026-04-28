@@ -93,12 +93,12 @@
 			<div class="overflow-menu-items">
 				{{if and .Repository.IsDataRepo (.Permission.CanRead $.UnitTypeCode)}}
 					<a class="{{if .PageIsViewCode}}active {{end}}item" href="{{.RepoLink}}">
-						{{svg "octicon-code"}} Data
+						{{svg "octicon-database"}} Data
 					</a>
 
 				{{if .Permission.CanRead $.UnitTypeIssues}}
 					<a class="{{if .PageIsIssueList}}active {{end}}item" href="{{.RepoLink}}/issues">
-						{{svg "octicon-issue-opened"}} {{ctx.Locale.Tr "repo.issues"}}
+						{{svg "octicon-issue-opened"}} Issues
 						{{if (.Repository.NumOpenIssues ctx)}}
 							<span class="ui small label">{{CountFmt (.Repository.NumOpenIssues ctx)}}</span>
 						{{end}}
@@ -106,7 +106,7 @@
 				{{end}}
 
 				<a class="{{if .PageIsPullList}}active {{end}}item" href="{{.RepoLink}}/data/pulls">
-					{{svg "octicon-git-pull-request"}} {{ctx.Locale.Tr "repo.pulls"}}
+					{{svg "octicon-git-pull-request"}} Pull requests
 				</a>
 
 				{{if and .EnableActions (not .UnitActionsGlobalDisabled) (.Permission.CanRead $.UnitTypeActions)}}

@@ -163,11 +163,17 @@
                         @click="computeMeta(entry)"
                       >Compute</button>
                     </div>
+                    <div class="datahub-file-mobile-metrics" aria-label="File metrics">
+                      <span><strong>Rows</strong> {{ formatCount(entry.row_count) }}</span>
+                      <span><strong>Chars</strong> {{ formatCount(entry.char_count) }}</span>
+                      <span><strong>Tokens</strong> {{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</span>
+                      <span><strong>Lang</strong> {{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</span>
+                    </div>
                   </td>
-                  <td class="right aligned">{{ formatCount(entry.row_count) }}</td>
-                  <td class="right aligned">{{ formatCount(entry.char_count) }}</td>
-                  <td class="right aligned">{{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</td>
-                  <td class="right aligned">{{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</td>
+                  <td class="right aligned datahub-metric-cell">{{ formatCount(entry.row_count) }}</td>
+                  <td class="right aligned datahub-metric-cell">{{ formatCount(entry.char_count) }}</td>
+                  <td class="right aligned datahub-metric-cell">{{ entry.token_estimate != null ? formatTokens(entry.token_estimate) : '—' }}</td>
+                  <td class="right aligned datahub-metric-cell">{{ entry.lang_distribution ? formatLang(entry.lang_distribution) : '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1151,6 +1157,10 @@ export default {
   padding-right: 9px !important;
 }
 
+.datahub-file-mobile-metrics {
+  display: none;
+}
+
 .datahub-empty-state {
   margin: 0;
 }
@@ -1170,10 +1180,15 @@ export default {
 }
 
 @media (max-width: 767px) {
-  .datahub-repo-controls,
-  .datahub-branch-meta {
+  .datahub-repo-controls {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .datahub-branch-meta {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .datahub-go-to-file {
@@ -1181,7 +1196,9 @@ export default {
   }
 
   .datahub-repo-actions {
+    flex: 0 1 auto;
     min-width: 0;
+    width: 100%;
   }
 
   .datahub-file-browser-tools {
@@ -1191,6 +1208,61 @@ export default {
 
   .datahub-latest-commit {
     flex-wrap: wrap;
+  }
+
+  .datahub-file-table-wrap {
+    overflow-x: visible;
+  }
+
+  .datahub-file-table,
+  .datahub-file-table tbody,
+  .datahub-file-table tr,
+  .datahub-file-table td {
+    display: block;
+  }
+
+  .ui.table.datahub-file-table > thead,
+  .ui.table.datahub-file-table > thead > tr,
+  .ui.table.datahub-file-table > thead > tr > th {
+    display: none !important;
+  }
+
+  .datahub-file-table tr.datahub-file-row {
+    padding: 12px 14px;
+  }
+
+  .datahub-file-table td:first-child,
+  .datahub-file-table td:last-child {
+    padding: 0 !important;
+  }
+
+  .ui.table.datahub-file-table > tbody > tr > td.datahub-metric-cell {
+    display: none !important;
+  }
+
+  .datahub-file-name-cell {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .datahub-file-link {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .datahub-file-mobile-metrics {
+    color: var(--color-text-light-2);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 12px;
+    gap: 6px 12px;
+    line-height: 1.4;
+    margin: 7px 0 0 38px;
+  }
+
+  .datahub-file-mobile-metrics strong {
+    color: var(--color-text);
+    font-weight: 600;
   }
 }
 </style>
