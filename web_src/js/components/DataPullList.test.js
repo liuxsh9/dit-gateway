@@ -8,7 +8,7 @@ vi.mock('../utils/datahub-api.js', () => ({
 import DataPullList from './DataPullList.vue';
 import {datahubFetch} from '../utils/datahub-api.js';
 
-test('loads open dit pull requests by default and renders github-like cards', async () => {
+test('loads dit pull request counts and renders a github-like inbox', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/pulls?status=open') {
       return {
@@ -24,6 +24,8 @@ test('loads open dit pull requests by default and renders github-like cards', as
             stats_added: 12,
             stats_removed: 3,
             stats_refreshed: 4,
+            comments_count: 2,
+            updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
           },
           {
             id: 8,
@@ -40,6 +42,12 @@ test('loads open dit pull requests by default and renders github-like cards', as
         ],
       };
     }
+    if (path === '/pulls?status=closed') {
+      return [{id: 9, title: 'Closed review', status: 'closed'}];
+    }
+    if (path === '/pulls?status=merged') {
+      return [{id: 10, title: 'Merged review', status: 'merged'}];
+    }
     throw new Error(`unexpected path ${path}`);
   });
 
@@ -50,25 +58,37 @@ test('loads open dit pull requests by default and renders github-like cards', as
   await vi.waitFor(() => expect(wrapper.text()).toContain('Refresh safety SFT split'));
 
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=open');
-  expect(wrapper.text()).toContain('DIT pull requests');
-  expect(wrapper.text()).toContain('Open');
-  expect(wrapper.text()).toContain('Closed');
-  expect(wrapper.text()).toContain('Merged');
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=closed');
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=merged');
+  expect(wrapper.find('input[aria-label="Search pull requests"]').element.value).toBe('is:pr is:open');
+  expect(wrapper.text()).toContain('Labels 0');
+  expect(wrapper.text()).toContain('Milestones 0');
+  expect(wrapper.text()).toContain('New pull request');
+  expect(wrapper.text()).toContain('2 Open');
+  expect(wrapper.text()).toContain('1 Closed');
+  expect(wrapper.text()).toContain('1 Merged');
+  expect(wrapper.text()).toContain('Author');
+  expect(wrapper.text()).toContain('Reviews');
+  expect(wrapper.text()).toContain('Assignee');
   expect(wrapper.text()).toContain('carol');
-  expect(wrapper.text()).toContain('safety-refresh → main');
+  expect(wrapper.text()).toContain('safety-refresh -> main');
   expect(wrapper.text()).toContain('+12');
   expect(wrapper.text()).toContain('-3');
   expect(wrapper.text()).toContain('~4');
-  expect(wrapper.text()).toContain('Mergeable');
+  expect(wrapper.text()).toContain('Review required');
   expect(wrapper.text()).toContain('Needs resolution');
+  expect(wrapper.text()).toContain('2');
   expect(wrapper.find('a[href="/alice/dataset/data/pulls/7"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/data/pulls/8"]').exists()).toBe(true);
 });
 
-test('shows pull requests returned for the selected status', async () => {
+test('switches pull request statuses without refetching', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/pulls?status=open') {
       return [{id: 1, title: 'Open review', status: 'open', source_ref: 'heads/a', target_ref: 'heads/main'}];
+    }
+    if (path === '/pulls?status=closed') {
+      return [{id: 3, title: 'Closed review', status: 'closed', source_ref: 'heads/c', target_ref: 'heads/main'}];
     }
     if (path === '/pulls?status=merged') {
       return [{id: 2, title: 'Merged review', status: 'merged', source_ref: 'heads/b', target_ref: 'heads/main'}];
@@ -82,23 +102,29 @@ test('shows pull requests returned for the selected status', async () => {
 
   await vi.waitFor(() => expect(wrapper.text()).toContain('Open review'));
   expect(wrapper.text()).not.toContain('Merged review');
+  expect(datahubFetch).toHaveBeenCalledTimes(3);
 
   await wrapper.findAll('button').find((button) => button.text().includes('Merged')).trigger('click');
 
   expect(wrapper.text()).toContain('Merged review');
   expect(wrapper.text()).not.toContain('Open review');
+  expect(wrapper.find('input[aria-label="Search pull requests"]').element.value).toBe('is:pr is:merged');
+  expect(datahubFetch).toHaveBeenCalledTimes(3);
 });
 
-test('reloads pull requests when switching status filters', async () => {
+test('filters pull requests by search text after qualifiers', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/pulls?status=open') {
-      return [{id: 1, title: 'Open review', status: 'open', source_ref: 'heads/a', target_ref: 'heads/main'}];
+      return [
+        {id: 1, title: 'Refresh safety rows', status: 'open', author: 'carol', source_ref: 'heads/safety', target_ref: 'heads/main'},
+        {id: 2, title: 'Clean eval split', status: 'open', author: 'dave', source_ref: 'heads/eval', target_ref: 'heads/main'},
+      ];
     }
     if (path === '/pulls?status=closed') {
-      return [{id: 2, title: 'Closed review', status: 'closed', source_ref: 'heads/b', target_ref: 'heads/main'}];
+      return [];
     }
     if (path === '/pulls?status=merged') {
-      return [{id: 3, title: 'Merged review', status: 'merged', source_ref: 'heads/c', target_ref: 'heads/main'}];
+      return [];
     }
     throw new Error(`unexpected path ${path}`);
   });
@@ -107,15 +133,11 @@ test('reloads pull requests when switching status filters', async () => {
     props: {owner: 'alice', repo: 'dataset'},
   });
 
-  await vi.waitFor(() => expect(wrapper.text()).toContain('Open review'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Refresh safety rows'));
+  expect(wrapper.text()).toContain('Clean eval split');
 
-  await wrapper.findAll('button').find((button) => button.text().includes('Closed')).trigger('click');
-  await vi.waitFor(() => expect(wrapper.text()).toContain('Closed review'));
-  expect(wrapper.text()).not.toContain('Open review');
+  await wrapper.find('input[aria-label="Search pull requests"]').setValue('is:pr is:open safety');
 
-  await wrapper.findAll('button').find((button) => button.text().includes('Merged')).trigger('click');
-  await vi.waitFor(() => expect(wrapper.text()).toContain('Merged review'));
-  expect(wrapper.text()).not.toContain('Closed review');
-  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=closed');
-  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=merged');
+  expect(wrapper.text()).toContain('Refresh safety rows');
+  expect(wrapper.text()).not.toContain('Clean eval split');
 });
