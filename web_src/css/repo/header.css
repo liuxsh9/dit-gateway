@@ -66,3 +66,16 @@
 .repo-buttons .ui.labeled.button.disabled > .button {
   pointer-events: none !important;
 }
+
+.repository.datahub-preview-shell > .secondary-nav > .ui.container,
+.repository.datahub-preview-shell > .secondary-nav > overflow-menu.ui.container {
+  max-width: none;
+  padding-left: var(--page-margin-x);
+  padding-right: var(--page-margin-x);
+  width: 100%;
+}
+
+.repository.datahub-preview-shell > .secondary-nav > .ui.tabs.divider {
+  margin-left: 0;
+  margin-right: 0;
+}

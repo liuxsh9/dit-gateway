@@ -860,6 +860,10 @@ generate-go: $(TAGS_PREREQ)
 	@echo "Running go generate..."
 	@CC= GOOS= GOARCH= CGO_ENABLED=0 $(GO) generate -tags '$(TAGS)' ./...
 
+ifeq ($(filter $(TAGS_SPLIT),bindata),bindata)
+generate-go: frontend
+endif
+
 .PHONY: merge-locales
 merge-locales:
 	@echo "NOT NEEDED: THIS IS A NOOP AS OF Forgejo 7.0 BUT KEPT FOR BACKWARD COMPATIBILITY"
