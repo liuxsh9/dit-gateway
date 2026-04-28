@@ -125,3 +125,43 @@ test('builds the preview tree from stats when the root tree only exposes folders
   expect(wrapper.find('a[href="/alice/dataset/data/preview/abcdef1234567890/eval/tool/weather.jsonl"]').exists()).toBe(true);
   expect(wrapper.findComponent(viewerStub).props('filePath')).toBe('eval/tool/weather.jsonl');
 });
+
+test('collapses and restores the preview files sidebar', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'eval/safety.jsonl', obj_type: 'manifest'},
+          {name: 'train/general.jsonl', obj_type: 'manifest'},
+        ],
+      };
+    }
+    if (path === '/stats/abcdef1234567890') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'abcdef1234567890',
+      filePath: 'eval/safety.jsonl',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Files'));
+  expect(wrapper.find('.datahub-preview-tree').exists()).toBe(true);
+
+  const hideButton = wrapper.find('button[data-testid="datahub-preview-sidebar-toggle"]');
+  expect(hideButton.text()).toContain('Hide files');
+  await hideButton.trigger('click');
+
+  expect(wrapper.find('.datahub-preview-workspace').classes()).toContain('is-sidebar-collapsed');
+  expect(wrapper.find('.datahub-preview-tree').exists()).toBe(false);
+  expect(wrapper.find('button[data-testid="datahub-preview-sidebar-toggle"]').text()).toContain('Show files');
+
+  await wrapper.find('button[data-testid="datahub-preview-sidebar-toggle"]').trigger('click');
+  expect(wrapper.find('.datahub-preview-workspace').classes()).not.toContain('is-sidebar-collapsed');
+  expect(wrapper.find('.datahub-preview-tree').exists()).toBe(true);
+});

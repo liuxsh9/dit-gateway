@@ -10,6 +10,16 @@
         </div>
       </div>
       <div class="datahub-header-actions">
+        <button
+          type="button"
+          class="ui small basic button datahub-sidebar-toggle"
+          data-testid="datahub-preview-sidebar-toggle"
+          :aria-pressed="filesSidebarCollapsed ? 'true' : 'false'"
+          @click="toggleFilesSidebar"
+        >
+          <i :class="filesSidebarCollapsed ? 'columns icon' : 'angle left icon'"></i>
+          {{ filesSidebarCollapsed ? 'Show files' : 'Hide files' }}
+        </button>
         <a class="ui small basic button" :href="rawPath" target="_blank" rel="nofollow">
           Raw
         </a>
@@ -21,8 +31,8 @@
         </a>
       </div>
     </div>
-    <div class="ui segment datahub-preview-workspace">
-      <aside class="datahub-preview-tree">
+    <div class="ui segment datahub-preview-workspace" :class="{'is-sidebar-collapsed': filesSidebarCollapsed}">
+      <aside v-if="!filesSidebarCollapsed" class="datahub-preview-tree">
         <div class="datahub-preview-tree-title">Files</div>
         <div v-if="treeLoading" class="ui active centered inline loader datahub-tree-loader"></div>
         <div v-else-if="treeError" class="ui tiny negative message">{{ treeError }}</div>
@@ -94,6 +104,7 @@ export default {
       treeError: null,
       openFolders: new Set(),
       stats: null,
+      filesSidebarCollapsed: false,
     };
   },
   computed: {
@@ -207,6 +218,9 @@ export default {
       else next.add(path);
       this.openFolders = next;
     },
+    toggleFilesSidebar() {
+      this.filesSidebarCollapsed = !this.filesSidebarCollapsed;
+    },
   },
 };
 </script>
@@ -258,6 +272,10 @@ export default {
   gap: 14px;
   grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
   padding: 0 !important;
+}
+
+.datahub-preview-workspace.is-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .datahub-preview-tree {
@@ -361,6 +379,15 @@ export default {
 .datahub-preview-review {
   min-width: 0;
   padding: 12px 12px 12px 0;
+}
+
+.datahub-preview-workspace.is-sidebar-collapsed .datahub-preview-review {
+  padding: 12px;
+}
+
+.datahub-sidebar-toggle[aria-pressed='true'] {
+  background: var(--color-active) !important;
+  color: var(--color-text) !important;
 }
 
 @media (max-width: 767px) {
