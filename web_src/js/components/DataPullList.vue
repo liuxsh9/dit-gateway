@@ -182,17 +182,17 @@ export default {
     },
     tableFilters() {
       return [
-        this.optionFilter('author', 'Author', this.uniquePullValues((pull) => pull.author, 'All authors')),
         this.optionFilter('label', 'Label', this.uniquePullValues((pull) => this.pullLabels(pull), 'All labels')),
-        this.optionFilter('project', 'Projects', this.uniquePullValues((pull) => pull.project || pull.project_name, 'All projects')),
-        this.optionFilter('milestone', 'Milestones', this.uniquePullValues((pull) => pull.milestone || pull.milestone_name, 'All milestones')),
+        this.optionFilter('milestone', 'Milestone', this.uniquePullValues((pull) => pull.milestone || pull.milestone_name, 'All milestones')),
+        this.optionFilter('project', 'Project', this.uniquePullValues((pull) => pull.project || pull.project_name, 'All projects')),
+        this.optionFilter('author', 'Author', this.uniquePullValues((pull) => pull.author, 'All authors')),
+        this.optionFilter('assignee', 'Assignee', this.uniquePullValues((pull) => this.pullAssignees(pull), 'All assignees')),
         this.optionFilter('review', 'Reviews', [
           {value: '', label: 'All reviews'},
           {value: 'required', label: 'Review required'},
           {value: 'blocked', label: 'Needs resolution'},
           {value: 'complete', label: 'Merged or closed'},
         ]),
-        this.optionFilter('assignee', 'Assignee', this.uniquePullValues((pull) => this.pullAssignees(pull), 'All assignees')),
         this.optionFilter('sort', 'Sort', [
           {value: 'updated-desc', label: 'Newest updated'},
           {value: 'updated-asc', label: 'Oldest updated'},
@@ -420,7 +420,7 @@ export default {
 
 <style scoped>
 .datahub-pr-toolbar {
-  align-items: stretch;
+  align-items: center;
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -438,8 +438,10 @@ export default {
 }
 
 .datahub-pr-search {
+  align-items: stretch;
   display: flex;
   flex: 1 1 auto;
+  height: 34px;
   position: relative;
   width: 100%;
 }
@@ -454,6 +456,7 @@ export default {
   display: inline-flex;
   font-size: 12px;
   font-weight: 600;
+  min-height: 34px;
   padding: 0 10px;
   white-space: nowrap;
 }

@@ -86,6 +86,31 @@ test('loads dit pull request counts and renders a github-like inbox', async () =
   expect(wrapper.find('a[href="/alice/dataset/data/pulls/8"]').exists()).toBe(true);
 });
 
+test('orders pull request filters like the issue list toolbar', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls?status=open') return [{id: 1, title: 'Review data rows', status: 'open'}];
+    if (path === '/pulls?status=closed') return [];
+    if (path === '/pulls?status=merged') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullList, {
+    props: {owner: 'alice', repo: 'dataset'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Review data rows'));
+
+  expect(wrapper.findAll('.datahub-pr-filter > button').map((button) => button.text().replace(/\s*▾$/, ''))).toEqual([
+    'Label',
+    'Milestone',
+    'Project',
+    'Author',
+    'Assignee',
+    'Reviews',
+    'Sort',
+  ]);
+});
+
 test('filters pull requests from dropdown controls and search qualifiers', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/pulls?status=open') {
