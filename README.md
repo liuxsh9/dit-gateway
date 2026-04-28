@@ -66,16 +66,24 @@ GATEWAY_URL=http://localhost:3000 \
 FORGEJO__datahub__ENABLED=true
 FORGEJO__datahub__CORE_URL=http://core:8000
 FORGEJO__datahub__SERVICE_TOKEN=${SERVICE_TOKEN}
+FORGEJO__i18n__LANGS=en-US
+FORGEJO__i18n__NAMES=English
 ```
 
 Equivalent `app.ini`:
 
 ```ini
+[i18n]
+LANGS = en-US
+NAMES = English
+
 [datahub]
 ENABLED = true
 CORE_URL = http://core:8000
 SERVICE_TOKEN = <same-as-core>
 ```
+
+DIT Gateway defaults to English-only UI terminology so inherited Forgejo pages and DIT pages use the same GitHub-style labels: `Issues`, `Pull requests`, `Actions`, `Security`, `Insights`, `Labels`, `Milestones`, `Assignees`, `Open`, `Closed`, and `Merged`.
 
 ## Build Notes
 
@@ -98,6 +106,7 @@ Before moving a server into use:
 - `curl http://localhost:8000/health` returns core `status: healthy`.
 - `curl http://localhost:3000/api/healthz` returns HTTP 200.
 - Creating a gateway data repo also creates the backing core repo.
+- The repository UI stays English even when the browser language is Chinese.
 - Pushing a small ML 2.0 / OpenAI messages JSONL dataset through `dit` succeeds.
 - The data repo page shows latest commit, row count, file size, metadata coverage, and quality checks.
 - JSONL rows and diffs render as structured SFT conversations, not one raw JSON string.
