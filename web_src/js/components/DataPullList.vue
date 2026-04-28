@@ -17,8 +17,6 @@
         </label>
       </div>
       <div class="datahub-pr-actions">
-        <a class="datahub-pr-secondary-action" :href="labelsHref">Labels</a>
-        <a class="datahub-pr-secondary-action" :href="milestonesHref">Milestones</a>
         <a class="primary button datahub-pr-new" :href="newPullHref">New pull request</a>
       </div>
     </div>
@@ -164,12 +162,6 @@ export default {
     },
     newPullHref() {
       return `${this.repoPath}#change-workflow`;
-    },
-    labelsHref() {
-      return `${this.repoPath}/labels`;
-    },
-    milestonesHref() {
-      return `${this.repoPath}/milestones`;
     },
     visiblePulls() {
       const query = this.searchText();

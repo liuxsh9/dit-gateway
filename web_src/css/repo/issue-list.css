@@ -195,17 +195,6 @@
   display: none;
 }
 
-.repository.issue-list .datahub-issue-list-header .issue-list-navbar {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  display: flex;
-  gap: 8px;
-  justify-content: flex-start;
-  margin: 0;
-  order: initial !important;
-}
-
 .repository.issue-list .datahub-issue-list-header .datahub-issue-actions {
   align-items: flex-start;
   display: flex;
@@ -215,23 +204,6 @@
   grid-column: 2;
   justify-content: flex-start;
   min-width: 0;
-}
-
-.repository.issue-list .datahub-issue-list-header .issue-list-navbar .item {
-  align-items: center;
-  border: 1px solid var(--color-secondary);
-  border-radius: 6px !important;
-  color: var(--color-text);
-  display: inline-flex;
-  font-weight: var(--font-weight-semibold);
-  gap: 6px;
-  min-height: 34px;
-  outline: 0 !important;
-  padding: 0 14px;
-}
-
-.repository.issue-list .datahub-issue-list-header .issue-list-navbar .item + .item {
-  border-left: 1px solid var(--color-secondary);
 }
 
 .repository.issue-list .datahub-issue-list-header .issue-list-new {

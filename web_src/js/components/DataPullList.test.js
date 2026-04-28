@@ -64,8 +64,8 @@ test('loads dit pull request counts and renders a github-like inbox', async () =
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=merged');
   expect(wrapper.find('input[aria-label="Search pull requests"]').element.value).toBe('is:pr is:open');
   expect(wrapper.text()).toContain('Filters');
-  expect(wrapper.text()).toContain('Labels');
-  expect(wrapper.text()).toContain('Milestones');
+  expect(wrapper.find('a[href="/alice/dataset/labels"]').exists()).toBe(false);
+  expect(wrapper.find('a[href="/alice/dataset/milestones"]').exists()).toBe(false);
   expect(wrapper.text()).toContain('New pull request');
   expect(wrapper.text()).toContain('2 Open');
   expect(wrapper.text()).toContain('1 Closed');

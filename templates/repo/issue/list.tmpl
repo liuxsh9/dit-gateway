@@ -17,7 +17,6 @@
 		<div class="list-header list-header-issues {{if .PageIsIssueList}}datahub-issue-list-header{{end}}">
 			{{template "repo/issue/search" .}}
 			<div class="datahub-issue-actions">
-				{{template "repo/issue/navbar" .}}
 				{{if not .Repository.IsArchived}}
 					{{if .PageIsIssueList}}
 						<a class="primary button issue-list-new" href="{{.RepoLink}}/issues/new{{if .NewIssueChooseTemplate}}/choose{{end}}">{{ctx.Locale.Tr "repo.issues.new"}}</a>
