@@ -1,0 +1,14 @@
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content repository commits">
+	{{template "repo/header" .}}
+	<div class="ui container">
+		{{template "base/alert" .}}
+		{{template "repo/sub_menu" .}}
+		<div id="data-commit-list"
+			data-owner="{{.Repository.OwnerName}}"
+			data-repo="{{.Repository.Name}}"
+			data-branch="{{.DataHubBranch}}">
+		</div>
+	</div>
+</div>
+{{template "base/footer" .}}

@@ -1,0 +1,15 @@
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content repository file list">
+	{{template "repo/header" .}}
+	<div class="ui container">
+		{{template "base/alert" .}}
+		{{template "repo/sub_menu" .}}
+		<div id="data-preview-page"
+			data-owner="{{.Repository.OwnerName}}"
+			data-repo="{{.Repository.Name}}"
+			data-commit="{{.DataHubCommit}}"
+			data-path="{{.DataHubPath}}">
+		</div>
+	</div>
+</div>
+{{template "base/footer" .}}

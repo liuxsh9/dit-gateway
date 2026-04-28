@@ -1195,6 +1195,11 @@ func registerRoutes(m *web.Route) {
 			m.Get("/{id}", repo.MilestoneIssuesAndPulls)
 		}, reqRepoIssuesOrPullsReader, context.RepoRef())
 		m.Get("/find/*", repo.FindFiles)
+		m.Group("/data", func() {
+			m.Get("/commits/*", repo.DataHubCommits)
+			m.Get("/commit/{hash:([a-f0-9]{4,64})$}", repo.DataHubCommit)
+			m.Get("/preview/{commit:([a-f0-9]{4,64})$}/*", repo.DataHubPreview)
+		}, reqRepoCodeReader)
 		m.Group("/tree-list", func() {
 			m.Get("/branch/*", context.RepoRefByType(context.RepoRefBranch), repo.TreeList)
 			m.Get("/tag/*", context.RepoRefByType(context.RepoRefTag), repo.TreeList)

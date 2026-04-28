@@ -68,7 +68,14 @@ import {initCompSearchUserBox} from './features/comp/SearchUserBox.js';
 import {initInstall} from './features/install.js';
 import {initCompWebHookEditor} from './features/comp/WebHookEditor.js';
 import {initRepoBranchButton} from './features/repo-branch.ts';
-import {initDatahubDataRepoHome, initDatahubDiffView, initDatahubConflictResolver} from './features/datahub.js';
+import {
+  initDatahubDataRepoHome,
+  initDatahubDiffView,
+  initDatahubCommitList,
+  initDatahubCommitPage,
+  initDatahubPreviewPage,
+  initDatahubConflictResolver,
+} from './features/datahub.js';
 import {initCommonOrganization} from './features/common-organization.js';
 import {initRepoWikiForm} from './features/repo-wiki.js';
 import {initRepoCommentForm, initRepository} from './features/repo-legacy.js';
@@ -184,6 +191,9 @@ onDomReady(() => {
   initRepoMilestoneEditor();
   initDatahubDataRepoHome();
   initDatahubDiffView();
+  initDatahubCommitList();
+  initDatahubCommitPage();
+  initDatahubPreviewPage();
   initDatahubConflictResolver();
 
   initCommitStatuses();

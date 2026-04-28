@@ -136,14 +136,14 @@
               <div class="datahub-file-name-cell">
                 <span class="datahub-file-name">
                   <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
-                  <a v-if="entry.type === 'manifest'" href="#" @click.prevent="selectFile(entry)">{{ entry.name }}</a>
+                  <a v-if="entry.type === 'manifest'" :href="previewHref(entry.name)">{{ entry.name }}</a>
                   <span v-else>{{ entry.name }}</span>
                 </span>
                 <div v-if="entry.type === 'manifest'" class="datahub-file-actions">
-                  <button
+                  <a
                     class="ui mini basic primary button"
-                    @click="selectFile(entry)"
-                  >Preview</button>
+                    :href="previewHref(entry.name)"
+                  >Preview</a>
                   <button
                     class="ui mini basic button"
                     @click="loadBlame(entry.name)"
@@ -215,15 +215,17 @@
               <div class="datahub-overview-detail">
                 {{ commit.author || 'unknown author' }} · {{ formatTimestamp(commit.timestamp) }}
               </div>
-              <button
-                v-if="commitBase(commit)"
+              <a
                 class="ui mini basic primary button datahub-commit-preview-button"
-                @click="previewCommit(commit)"
+                :href="commitHref(commit.commit_hash)"
               >
-                Preview
-              </button>
+                View commit
+              </a>
             </div>
           </div>
+          <a class="ui mini basic button datahub-view-all-link" :href="commitsHref">
+            View all commits
+          </a>
         </div>
         <div class="datahub-activity-panel">
           <div class="datahub-panel-title">
@@ -504,29 +506,15 @@
       </div>
     </div>
 
-    <!-- JSONL Viewer -->
-    <div class="ui segment" v-if="selectedFile">
-      <div class="ui secondary menu">
-        <a class="item" @click="clearSelection"><i class="arrow left icon"></i> Back to file list</a>
-        <div class="item"><strong>{{ selectedFile.name }}</strong></div>
-      </div>
-      <JsonlViewer
-        :owner="owner"
-        :repo="repo"
-        :commit-hash="commitHash"
-        :file-path="selectedFile.name"
-      />
-    </div>
   </div>
 </template>
 
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
 import DataDiffView from './DataDiffView.vue';
-import JsonlViewer from './JsonlViewer.vue';
 
 export default {
-  components: {DataDiffView, JsonlViewer},
+  components: {DataDiffView},
   props: {
     owner: String,
     repo: String,
@@ -540,7 +528,6 @@ export default {
       stats: null,
       loading: true,
       error: null,
-      selectedFile: null,
       sidecars: {},
       computingMeta: {},
       commitHash: null,
@@ -624,6 +611,12 @@ export default {
     repoUrl() {
       const origin = window.location?.origin || 'http://localhost';
       return `${origin}/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
+    },
+    repoPath() {
+      return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
+    },
+    commitsHref() {
+      return `${this.repoPath}/data/commits/${encodeURIComponent(this.branchName(this.currentBranch) || this.defaultBranch || 'main')}`;
     },
     cloneCommand() {
       return `dit clone ${this.repoUrl}`;
@@ -755,11 +748,11 @@ export default {
         return null;
       }
     },
-    selectFile(entry) {
-      this.selectedFile = entry;
+    previewHref(filePath) {
+      return `${this.repoPath}/data/preview/${encodeURIComponent(this.commitHash)}/${filePath.split('/').map(encodeURIComponent).join('/')}`;
     },
-    clearSelection() {
-      this.selectedFile = null;
+    commitHref(hash) {
+      return `${this.repoPath}/data/commit/${encodeURIComponent(hash)}`;
     },
     formatSize(bytes) {
       if (!bytes) return '—';
@@ -863,15 +856,6 @@ export default {
         oldCommit: pull.target_commit,
         newCommit: pull.source_commit,
         conflicts: pull.conflict_files || [],
-      };
-    },
-    previewCommit(commit) {
-      this.activeReview = {
-        id: commit.commit_hash,
-        title: `${this.shortHash(commit.commit_hash)} ${commit.message || 'No commit message'}`,
-        oldCommit: this.commitBase(commit),
-        newCommit: commit.commit_hash,
-        conflicts: [],
       };
     },
     closeReview() {

@@ -370,7 +370,7 @@ test('opens an inline data diff preview from the pull request queue', async () =
   expect(wrapper.text()).toContain('Conflicts: train.jsonl');
 });
 
-test('opens an inline data diff preview from a recent commit', async () => {
+test('links recent commits to the dedicated commit page', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
@@ -405,11 +405,9 @@ test('opens an inline data diff preview from a recent commit', async () => {
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('refresh chat data'));
 
-  await wrapper.findAll('button').find((button) => button.text() === 'Preview').trigger('click');
-
-  expect(wrapper.text()).toContain('Review data changes');
   expect(wrapper.text()).toContain('refresh chat data');
-  expect(wrapper.text()).toContain('Diff oldcommit123456..newcommit123456');
+  expect(wrapper.find('a[href="/alice/dataset/data/commit/newcommit123456"]').exists()).toBe(true);
+  expect(wrapper.find('.data-diff-stub').exists()).toBe(false);
 });
 
 test('surfaces metadata compute failures for a file', async () => {
@@ -517,7 +515,7 @@ test('renders blame response using entries and summary fields', async () => {
   expect(wrapper.text()).toContain('Explain LRU cache');
 });
 
-test('uses an explicit preview action to open a manifest file', async () => {
+test('uses explicit preview links for manifest files', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
@@ -551,10 +549,8 @@ test('uses an explicit preview action to open a manifest file', async () => {
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('train.jsonl'));
 
-  await wrapper.findAll('button').find((button) => button.text() === 'Preview').trigger('click');
-
-  expect(wrapper.text()).toContain('Back to file list');
-  expect(wrapper.text()).toContain('JSONL row preview');
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train.jsonl"]').exists()).toBe(true);
+  expect(wrapper.text()).not.toContain('Back to file list');
 });
 
 test('keeps missing metadata compute actions with the file name', async () => {
