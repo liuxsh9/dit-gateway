@@ -13,9 +13,9 @@
         >
       </label>
       <div class="datahub-pr-actions">
-        <button type="button" class="ui small basic button datahub-pr-secondary-action">Labels <span>0</span></button>
-        <button type="button" class="ui small basic button datahub-pr-secondary-action">Milestones <span>0</span></button>
-        <a class="ui small green button datahub-pr-new" :href="newPullHref">New pull request</a>
+        <a class="datahub-pr-secondary-action" :href="labelsHref">Labels</a>
+        <a class="datahub-pr-secondary-action" :href="milestonesHref">Milestones</a>
+        <a class="primary button datahub-pr-new" :href="newPullHref">New pull request</a>
       </div>
     </div>
 
@@ -128,6 +128,12 @@ export default {
     newPullHref() {
       return `${this.repoPath}#change-workflow`;
     },
+    labelsHref() {
+      return `${this.repoPath}/labels`;
+    },
+    milestonesHref() {
+      return `${this.repoPath}/milestones`;
+    },
     visiblePulls() {
       const query = this.searchText();
       return (this.pullsByStatus[this.selectedStatus] || []).filter((pull) => {
@@ -239,16 +245,12 @@ export default {
 </script>
 
 <style scoped>
-.datahub-pull-list {
-  display: grid;
-  gap: 16px;
-}
-
 .datahub-pr-toolbar {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .datahub-pr-search {
@@ -274,6 +276,7 @@ export default {
   border-radius: 6px;
   color: var(--color-text);
   height: 34px;
+  line-height: 20px;
   padding: 6px 10px 6px 34px;
   width: 100%;
 }
@@ -286,12 +289,26 @@ export default {
   gap: 8px;
 }
 
-.datahub-pr-secondary-action span {
-  color: var(--color-text-light-2);
+.datahub-pr-secondary-action {
+  align-items: center;
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  display: inline-flex;
+  font-weight: var(--font-weight-semibold);
+  min-height: 34px;
+  padding: 0 14px;
 }
 
 .datahub-pr-new {
-  font-weight: 600 !important;
+  align-items: center;
+  background: var(--color-green) !important;
+  border-radius: 6px;
+  color: var(--color-white) !important;
+  display: inline-flex;
+  font-weight: var(--font-weight-semibold);
+  margin-left: 0 !important;
+  min-height: 34px;
 }
 
 .datahub-pr-box {
@@ -306,10 +323,10 @@ export default {
   border-bottom: 1px solid var(--color-secondary);
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 14px;
   justify-content: space-between;
-  min-height: 48px;
-  padding: 8px 16px;
+  min-height: 0;
+  padding: 10px 16px;
 }
 
 .datahub-pr-state-links,
@@ -342,6 +359,9 @@ export default {
   align-items: center;
   display: inline-flex;
   gap: 5px;
+  line-height: 20px;
+  min-height: 0;
+  white-space: nowrap;
 }
 
 .datahub-pr-state.active {
@@ -380,6 +400,8 @@ export default {
 
 .datahub-pr-filters button {
   font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
 .datahub-pr-row {
@@ -483,7 +505,7 @@ export default {
 .datahub-pr-loading,
 .datahub-pr-message,
 .datahub-pr-empty {
-  padding: 32px 16px;
+  padding: 48px 16px;
 }
 
 .datahub-pr-empty {
@@ -510,9 +532,7 @@ export default {
 
 @media (max-width: 1000px) {
   .datahub-pr-toolbar,
-  .datahub-pr-statusbar,
-  .datahub-pr-row,
-  .datahub-pr-row-side {
+  .datahub-pr-statusbar {
     align-items: stretch;
     flex-direction: column;
   }
