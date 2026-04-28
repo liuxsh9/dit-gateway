@@ -10,13 +10,15 @@
 			<input type="hidden" name="poster" value="{{$.PosterID}}">
 			<input type="hidden" name="sort" value="{{$.SortType}}">
 		{{end}}
+		<span class="datahub-search-filter-prefix">Filters</span>
 		{{if .PageIsPullList}}
-			{{template "shared/search/combo" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.pull_kind") "Tooltip" (ctx.Locale.Tr "explore.go_to")}}
+			{{template "shared/search/input" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.pull_kind")}}
 		{{else if .PageIsMilestones}}
-			{{template "shared/search/combo" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.milestone_kind") "Tooltip" (ctx.Locale.Tr "explore.go_to")}}
+			{{template "shared/search/input" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.milestone_kind")}}
 		{{else}}
-			{{template "shared/search/combo" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.issue_kind") "Tooltip" (ctx.Locale.Tr "explore.go_to")}}
+			{{template "shared/search/input" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.issue_kind")}}
 		{{end}}
+		{{template "shared/search/button" dict "Tooltip" (ctx.Locale.Tr "explore.go_to")}}
 	</div>
 	{{if not .PageIsMilestones}}
 		{{template "shared/search/issue/syntax"}}

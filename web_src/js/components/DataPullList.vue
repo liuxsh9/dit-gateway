@@ -1,17 +1,24 @@
 <template>
   <div class="datahub-pull-list">
     <div class="datahub-pr-toolbar">
-      <label class="datahub-pr-search">
-        <svg viewBox="0 0 16 16" aria-hidden="true" class="datahub-pr-search-icon">
-          <path d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.29 3.29-1.06 1.06-3.29-3.29ZM11.5 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"></path>
-        </svg>
-        <input
-          v-model="query"
-          type="search"
-          aria-label="Search pull requests"
-          placeholder="is:pr is:open"
-        >
-      </label>
+      <div class="datahub-pr-search-group">
+        <label class="datahub-pr-search">
+          <span class="datahub-pr-filter-prefix">Filters</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true" class="datahub-pr-search-icon">
+            <path d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.29 3.29-1.06 1.06-3.29-3.29ZM11.5 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"></path>
+          </svg>
+          <input
+            v-model="query"
+            type="search"
+            aria-label="Search pull requests"
+            placeholder="is:pr is:open"
+            @input="syncStatusFromQuery"
+          >
+        </label>
+        <button type="button" class="datahub-pr-syntax" @click="showSyntax = true">
+          Search syntax
+        </button>
+      </div>
       <div class="datahub-pr-actions">
         <a class="datahub-pr-secondary-action" :href="labelsHref">Labels</a>
         <a class="datahub-pr-secondary-action" :href="milestonesHref">Milestones</a>
@@ -38,9 +45,33 @@
           </button>
         </div>
         <div class="datahub-pr-filters" aria-label="Pull request filters">
-          <button v-for="filter in tableFilters" :key="filter" type="button">
-            {{ filter }} <span aria-hidden="true">▾</span>
-          </button>
+          <div
+            v-for="filter in tableFilters"
+            :key="filter.key"
+            class="datahub-pr-filter"
+            :class="{disabled: filter.disabled}"
+          >
+            <button
+              type="button"
+              :disabled="filter.disabled"
+              :aria-expanded="activeFilter === filter.key ? 'true' : 'false'"
+              @click="toggleFilter(filter.key)"
+            >
+              {{ filter.label }} <span aria-hidden="true">▾</span>
+            </button>
+            <div v-if="activeFilter === filter.key" class="datahub-pr-filter-menu">
+              <button
+                v-for="option in filter.options"
+                :key="`${filter.key}-${option.value}`"
+                type="button"
+                class="datahub-pr-filter-option"
+                :class="{active: selectedFilters[filter.key] === option.value}"
+                @click="selectFilter(filter.key, option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -91,6 +122,24 @@
         </article>
       </template>
     </section>
+    <dialog v-if="showSyntax" class="datahub-pr-syntax-modal" open>
+      <article>
+        <header>
+          <strong>Search syntax</strong>
+          <button type="button" aria-label="Close search syntax" @click="showSyntax = false">×</button>
+        </header>
+        <div class="datahub-pr-syntax-content">
+          <table>
+            <tbody>
+              <tr v-for="row in syntaxRows" :key="row.filter">
+                <th><code>{{ row.filter }}</code></th>
+                <td>{{ row.description }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </dialog>
   </div>
 </template>
 
@@ -113,12 +162,22 @@ export default {
       error: null,
       query: 'is:pr is:open',
       selectedStatus: 'open',
+      activeFilter: null,
+      showSyntax: false,
+      selectedFilters: {
+        author: '',
+        label: '',
+        project: '',
+        milestone: '',
+        review: '',
+        assignee: '',
+        sort: 'updated-desc',
+      },
       filters: [
         {value: 'open', label: 'Open'},
         {value: 'closed', label: 'Closed'},
         {value: 'merged', label: 'Merged'},
       ],
-      tableFilters: ['Author', 'Label', 'Projects', 'Milestones', 'Reviews', 'Assignee', 'Sort'],
     };
   },
   computed: {
@@ -136,6 +195,7 @@ export default {
     },
     visiblePulls() {
       const query = this.searchText();
+      const sort = this.queryQualifierValue('sort') || this.selectedFilters.sort;
       return (this.pullsByStatus[this.selectedStatus] || []).filter((pull) => {
         if (!query) return true;
         return [
@@ -145,7 +205,47 @@ export default {
           this.branchName(this.targetRef(pull)),
           String(this.pullId(pull) || ''),
         ].some((value) => String(value || '').toLowerCase().includes(query));
-      });
+      }).filter((pull) => this.matchesSelectedFilters(pull)).sort((a, b) => this.comparePulls(a, b, sort));
+    },
+    allPulls() {
+      return Object.values(this.pullsByStatus).flat();
+    },
+    tableFilters() {
+      return [
+        this.optionFilter('author', 'Author', this.uniquePullValues((pull) => pull.author, 'All authors')),
+        this.optionFilter('label', 'Label', this.uniquePullValues((pull) => this.pullLabels(pull), 'All labels')),
+        this.optionFilter('project', 'Projects', this.uniquePullValues((pull) => pull.project || pull.project_name, 'All projects')),
+        this.optionFilter('milestone', 'Milestones', this.uniquePullValues((pull) => pull.milestone || pull.milestone_name, 'All milestones')),
+        this.optionFilter('review', 'Reviews', [
+          {value: '', label: 'All reviews'},
+          {value: 'required', label: 'Review required'},
+          {value: 'blocked', label: 'Needs resolution'},
+          {value: 'complete', label: 'Merged or closed'},
+        ]),
+        this.optionFilter('assignee', 'Assignee', this.uniquePullValues((pull) => this.pullAssignees(pull), 'All assignees')),
+        this.optionFilter('sort', 'Sort', [
+          {value: 'updated-desc', label: 'Newest updated'},
+          {value: 'updated-asc', label: 'Oldest updated'},
+          {value: 'created-desc', label: 'Newest created'},
+          {value: 'created-asc', label: 'Oldest created'},
+          {value: 'comments-desc', label: 'Most commented'},
+          {value: 'comments-asc', label: 'Least commented'},
+        ]),
+      ];
+    },
+    syntaxRows() {
+      return [
+        {filter: 'is:open', description: 'Show open pull requests'},
+        {filter: 'is:closed', description: 'Show closed pull requests'},
+        {filter: 'is:merged', description: 'Show merged pull requests'},
+        {filter: 'author:<name>', description: 'Filter by author'},
+        {filter: 'assignee:<name>', description: 'Filter by assignee'},
+        {filter: 'label:<name>', description: 'Filter by label'},
+        {filter: 'project:<name>', description: 'Filter by project'},
+        {filter: 'milestone:<name>', description: 'Filter by milestone'},
+        {filter: 'review:required', description: 'Show pull requests waiting for review'},
+        {filter: 'sort:updated-desc', description: 'Sort by updated time'},
+      ];
     },
   },
   async mounted() {
@@ -156,6 +256,28 @@ export default {
       if (this.selectedStatus === status) return;
       this.selectedStatus = status;
       this.query = `is:pr is:${status}`;
+    },
+    syncStatusFromQuery() {
+      const status = this.query.match(/\bis:(open|closed|merged)\b/i)?.[1]?.toLowerCase();
+      if (status && status !== this.selectedStatus) this.selectedStatus = status;
+      this.selectedFilters = {
+        ...this.selectedFilters,
+        author: this.queryQualifierValue('author'),
+        label: this.queryQualifierValue('label'),
+        project: this.queryQualifierValue('project'),
+        milestone: this.queryQualifierValue('milestone'),
+        review: this.queryQualifierValue('review'),
+        assignee: this.queryQualifierValue('assignee'),
+        sort: this.queryQualifierValue('sort') || 'updated-desc',
+      };
+    },
+    toggleFilter(key) {
+      this.activeFilter = this.activeFilter === key ? null : key;
+    },
+    selectFilter(key, value) {
+      this.selectedFilters = {...this.selectedFilters, [key]: value};
+      this.activeFilter = null;
+      this.syncQueryForFilter(key, value);
     },
     async loadPulls() {
       this.loading = true;
@@ -230,11 +352,107 @@ export default {
     commentCount(pull) {
       return pull.comments_count || pull.comment_count || pull.comments || 0;
     },
+    pullLabels(pull) {
+      const labels = pull.labels || pull.label_names || [];
+      if (Array.isArray(labels)) {
+        return labels.map((label) => (typeof label === 'string' ? label : label?.name)).filter(Boolean);
+      }
+      return labels ? [labels] : [];
+    },
+    pullAssignees(pull) {
+      const assignees = pull.assignees || pull.assignee_names || pull.assignee || [];
+      if (Array.isArray(assignees)) {
+        return assignees.map((assignee) => (typeof assignee === 'string' ? assignee : assignee?.name || assignee?.username)).filter(Boolean);
+      }
+      return assignees ? [assignees] : [];
+    },
+    uniquePullValues(accessor, allLabel) {
+      const values = new Set();
+      for (const pull of this.allPulls) {
+        const raw = accessor(pull);
+        const items = Array.isArray(raw) ? raw : [raw];
+        for (const item of items) {
+          const value = String(item || '').trim();
+          if (value) values.add(value);
+        }
+      }
+      return [
+        {value: '', label: allLabel},
+        ...Array.from(values).sort((a, b) => a.localeCompare(b)).map((value) => ({value, label: value})),
+      ];
+    },
+    optionFilter(key, label, options) {
+      return {
+        key,
+        label,
+        options,
+        disabled: key !== 'sort' && key !== 'review' && options.length <= 1,
+      };
+    },
+    matchesSelectedFilters(pull) {
+      const selected = this.selectedFilters;
+      const author = this.queryQualifierValue('author') || selected.author;
+      const label = this.queryQualifierValue('label') || selected.label;
+      const project = this.queryQualifierValue('project') || selected.project;
+      const milestone = this.queryQualifierValue('milestone') || selected.milestone;
+      const assignee = this.queryQualifierValue('assignee') || selected.assignee;
+      const review = this.queryQualifierValue('review') || selected.review;
+      if (author && pull.author !== author) return false;
+      if (label && !this.pullLabels(pull).includes(label)) return false;
+      if (project && ![pull.project, pull.project_name].includes(project)) return false;
+      if (milestone && ![pull.milestone, pull.milestone_name].includes(milestone)) return false;
+      if (assignee && !this.pullAssignees(pull).includes(assignee)) return false;
+      if (review === 'required' && this.reviewText(pull) !== 'Review required') return false;
+      if (review === 'blocked' && this.reviewText(pull) !== 'Needs resolution') return false;
+      if (review === 'complete' && !['Merged', 'Closed'].includes(this.reviewText(pull))) return false;
+      return true;
+    },
+    comparePulls(a, b, sort) {
+      const [field, direction] = (sort || 'updated-desc').split('-');
+      let left;
+      let right;
+      if (field === 'comments') {
+        left = this.commentCount(a);
+        right = this.commentCount(b);
+      } else if (field === 'created') {
+        left = new Date(a.created_at || a.created || 0).getTime();
+        right = new Date(b.created_at || b.created || 0).getTime();
+      } else {
+        left = new Date(this.pullTimestamp(a) || 0).getTime();
+        right = new Date(this.pullTimestamp(b) || 0).getTime();
+      }
+      if (left === right) return 0;
+      return direction === 'asc' ? left - right : right - left;
+    },
+    syncQueryForFilter(key, value) {
+      const qualifierMap = {
+        author: 'author',
+        label: 'label',
+        project: 'project',
+        milestone: 'milestone',
+        assignee: 'assignee',
+        review: 'review',
+        sort: 'sort',
+      };
+      const qualifier = qualifierMap[key];
+      if (!qualifier) return;
+      const tokens = this.query.split(/\s+/).filter((token) => token && !token.startsWith(`${qualifier}:`));
+      if (value) tokens.push(`${qualifier}:${this.formatQualifierValue(value)}`);
+      this.query = tokens.join(' ');
+    },
+    formatQualifierValue(value) {
+      return /\s/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+    },
+    queryQualifierValue(key) {
+      const match = this.query.match(new RegExp(`(?:^|\\s)${key}:(?:"([^"]+)"|(\\S+))`, 'i'));
+      return match ? (match[1] || match[2] || '') : '';
+    },
     searchText() {
       return this.query
         .toLowerCase()
         .replace(/\bis:pr\b/g, '')
         .replace(/\bis:(open|closed|merged)\b/g, '')
+        .replace(/\b(author|assignee|label|project|milestone|review|sort):(?:"[^"]+"|\S+)/g, '')
         .trim();
     },
     formatCount(value) {
@@ -246,23 +464,43 @@ export default {
 
 <style scoped>
 .datahub-pr-toolbar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  align-items: stretch;
+  display: grid;
   gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin-bottom: 14px;
 }
 
-.datahub-pr-search {
-  flex: 1 1 360px;
+.datahub-pr-search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: min(100%, 260px);
+}
+
+.datahub-pr-search {
+  display: flex;
   position: relative;
+}
+
+.datahub-pr-filter-prefix {
+  align-items: center;
+  background: var(--color-box-header);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px 0 0 6px;
+  border-right: 0;
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 
 .datahub-pr-search-icon {
   fill: var(--color-text-light-2);
   height: 16px;
-  left: 10px;
+  left: 72px;
   pointer-events: none;
   position: absolute;
   top: 50%;
@@ -273,12 +511,13 @@ export default {
 .datahub-pr-search input {
   background: var(--color-input-background);
   border: 1px solid var(--color-secondary);
-  border-radius: 6px;
+  border-radius: 0;
+  flex: 1 1 auto;
   color: var(--color-text);
   height: 34px;
   line-height: 20px;
   padding: 6px 10px 6px 34px;
-  width: 100%;
+  min-width: 0;
 }
 
 .datahub-pr-actions {
@@ -287,6 +526,26 @@ export default {
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.datahub-pr-syntax {
+  align-items: center;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-light);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.datahub-pr-syntax:hover {
+  color: var(--color-primary);
 }
 
 .datahub-pr-secondary-action {
@@ -314,7 +573,7 @@ export default {
 .datahub-pr-box {
   border: 1px solid var(--color-secondary);
   border-radius: 6px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .datahub-pr-statusbar {
@@ -346,7 +605,7 @@ export default {
 }
 
 .datahub-pr-state,
-.datahub-pr-filters button {
+.datahub-pr-filter > button {
   background: transparent;
   border: 0;
   color: var(--color-text-light);
@@ -398,10 +657,54 @@ export default {
   justify-content: flex-end;
 }
 
-.datahub-pr-filters button {
+.datahub-pr-filter {
+  position: relative;
+}
+
+.datahub-pr-filter > button {
   font-size: 12px;
   line-height: 20px;
   white-space: nowrap;
+}
+
+.datahub-pr-filter.disabled > button {
+  color: var(--color-text-light-3);
+  cursor: default;
+}
+
+.datahub-pr-filter-menu {
+  background: var(--color-menu);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px var(--color-shadow);
+  min-width: 180px;
+  padding: 6px 0;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 1001;
+}
+
+.datahub-pr-filter-option {
+  background: transparent;
+  border: 0;
+  color: var(--color-text);
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  line-height: 20px;
+  padding: 6px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.datahub-pr-filter-option:hover,
+.datahub-pr-filter-option.active {
+  background: var(--color-hover);
+}
+
+.datahub-pr-filter-option.active {
+  font-weight: 600;
 }
 
 .datahub-pr-row {
@@ -530,19 +833,87 @@ export default {
   width: 28px;
 }
 
+.datahub-pr-syntax-modal {
+  background: transparent;
+  border: 0;
+  color: var(--color-text);
+  margin: auto;
+  max-width: min(620px, calc(100vw - 32px));
+  padding: 0;
+}
+
+.datahub-pr-syntax-modal::backdrop {
+  background: var(--color-shadow);
+}
+
+.datahub-pr-syntax-modal article {
+  background: var(--color-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px var(--color-shadow);
+  overflow: hidden;
+}
+
+.datahub-pr-syntax-modal header {
+  align-items: center;
+  background: var(--color-box-header);
+  border-bottom: 1px solid var(--color-secondary);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.datahub-pr-syntax-modal header button {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-light);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.datahub-pr-syntax-content {
+  padding: 10px 16px 16px;
+}
+
+.datahub-pr-syntax-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.datahub-pr-syntax-content th,
+.datahub-pr-syntax-content td {
+  border-bottom: 1px solid var(--color-secondary);
+  padding: 8px 6px;
+  text-align: left;
+}
+
+.datahub-pr-syntax-content tr:last-child th,
+.datahub-pr-syntax-content tr:last-child td {
+  border-bottom: 0;
+}
+
+.datahub-pr-syntax-content th {
+  white-space: nowrap;
+}
+
 @media (max-width: 1000px) {
-  .datahub-pr-toolbar,
   .datahub-pr-statusbar {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .datahub-pr-toolbar {
+    grid-template-columns: 1fr;
+  }
+
   .datahub-pr-actions {
+    justify-content: flex-start;
     flex-wrap: wrap;
     width: 100%;
   }
 
-  .datahub-pr-search,
+  .datahub-pr-search-group,
   .datahub-pr-state-links,
   .datahub-pr-filters {
     flex: 0 1 auto;
