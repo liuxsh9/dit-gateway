@@ -32,7 +32,7 @@
             aria-label="Hide files sidebar"
             @click="toggleFilesSidebar"
           >
-            <i class="angle left icon"></i>
+            <SvgIcon name="octicon-chevron-left" :size="14"/>
           </button>
         </div>
         <div v-if="treeLoading" class="ui active centered inline loader datahub-tree-loader"></div>
@@ -80,7 +80,7 @@
           aria-label="Show files sidebar"
           @click="toggleFilesSidebar"
         >
-          <i class="angle right icon"></i>
+          <SvgIcon name="octicon-chevron-right" :size="14"/>
           <span>Files</span>
         </button>
       </aside>
@@ -288,8 +288,8 @@ export default {
 }
 
 .datahub-preview-workspace.is-sidebar-collapsed {
-  gap: 10px;
-  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  grid-template-columns: 42px minmax(0, 1fr);
 }
 
 .datahub-preview-tree {
@@ -305,7 +305,9 @@ export default {
   display: flex;
   gap: 8px;
   justify-content: space-between;
+  min-height: 28px;
   margin-bottom: 8px;
+  padding-right: 8px;
 }
 
 .datahub-preview-tree-title {
@@ -319,26 +321,36 @@ export default {
 .datahub-sidebar-edge-toggle,
 .datahub-sidebar-rail-toggle {
   align-items: center;
-  background: var(--color-body);
+  background: var(--color-box-body);
   border: 1px solid var(--color-secondary);
   color: var(--color-text-light);
   cursor: pointer;
   display: inline-flex;
   justify-content: center;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
 }
 
 .datahub-sidebar-edge-toggle {
-  border-radius: 999px;
-  height: 26px;
-  margin-right: -25px;
-  width: 26px;
+  border-radius: 0 8px 8px 0;
+  box-shadow: 1px 1px 2px var(--color-shadow);
+  height: 34px;
+  margin-right: -32px;
+  position: absolute;
+  right: -1px;
+  top: 16px;
+  width: 22px;
   z-index: 1;
 }
 
 .datahub-sidebar-edge-toggle:hover,
-.datahub-sidebar-rail-toggle:hover {
+.datahub-sidebar-rail-toggle:hover,
+.datahub-sidebar-edge-toggle:focus-visible,
+.datahub-sidebar-rail-toggle:focus-visible {
   background: var(--color-active);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
   color: var(--color-text);
+  outline: none;
 }
 
 .datahub-preview-tree-rail {
@@ -348,14 +360,14 @@ export default {
   display: flex;
   justify-content: center;
   min-height: 680px;
-  padding: 12px 0;
+  padding: 14px 0;
 }
 
 .datahub-sidebar-rail-toggle {
-  border-radius: 6px;
+  border-radius: 8px;
   flex-direction: column;
-  gap: 8px;
-  min-height: 90px;
+  gap: 10px;
+  min-height: 108px;
   padding: 10px 4px;
   width: 28px;
 }
@@ -484,7 +496,11 @@ export default {
   }
 
   .datahub-sidebar-edge-toggle {
+    border-radius: 8px;
+    height: 30px;
     margin-right: 0;
+    position: static;
+    width: 30px;
   }
 
   .datahub-preview-tree-rail {
@@ -499,7 +515,7 @@ export default {
   .datahub-sidebar-rail-toggle {
     flex-direction: row;
     min-height: 30px;
-    padding: 4px 10px;
+    padding: 5px 10px;
     width: auto;
   }
 
