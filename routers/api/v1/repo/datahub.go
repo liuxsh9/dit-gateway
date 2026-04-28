@@ -13,6 +13,10 @@ import (
 )
 
 func proxyToDatahub(ctx *context.APIContext, fn func() ([]byte, int, error)) {
+	proxyToDatahubWithContentType(ctx, "application/json", fn)
+}
+
+func proxyToDatahubWithContentType(ctx *context.APIContext, contentType string, fn func() ([]byte, int, error)) {
 	if !setting.DataHub.Enabled {
 		ctx.NotFound()
 		return
@@ -26,7 +30,7 @@ func proxyToDatahub(ctx *context.APIContext, fn func() ([]byte, int, error)) {
 		ctx.Error(http.StatusBadGateway, "datahub proxy", err)
 		return
 	}
-	ctx.Resp.Header().Set("Content-Type", "application/json")
+	ctx.Resp.Header().Set("Content-Type", contentType)
 	ctx.Resp.WriteHeader(status)
 	_, _ = ctx.Resp.Write(data)
 }
@@ -146,6 +150,26 @@ func DatahubGetManifest(ctx *context.APIContext) {
 			ctx.Params("*"),
 			ctx.FormString("offset"),
 			ctx.FormString("limit"),
+		)
+	})
+}
+
+func DatahubExportFile(ctx *context.APIContext) {
+	format := ctx.FormString("format")
+	if format == "" {
+		format = "jsonl"
+	}
+	contentType := "application/x-ndjson"
+	if format == "csv" {
+		contentType = "text/csv"
+	}
+	proxyToDatahubWithContentType(ctx, contentType, func() ([]byte, int, error) {
+		return datahub.DefaultClient().ExportFileWithFallback(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":commit"),
+			ctx.Params("*"),
+			format,
 		)
 	})
 }

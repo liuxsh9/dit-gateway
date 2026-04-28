@@ -9,6 +9,68 @@
       <span class="ui label" v-if="totalRows">{{ totalRows.toLocaleString() }} rows</span>
     </div>
 
+    <div class="ui attached segment datahub-viewer-tools" v-if="!loading && !error && totalRows">
+      <form
+        class="datahub-row-jump-form"
+        data-testid="datahub-row-jump-form"
+        @submit.prevent="jumpToRow"
+      >
+        <label for="datahub-row-jump-input">Go to row</label>
+        <div class="ui action input">
+          <input
+            id="datahub-row-jump-input"
+            v-model="rowJumpValue"
+            data-testid="datahub-row-jump-input"
+            type="number"
+            min="1"
+            :max="totalRows || undefined"
+            inputmode="numeric"
+            placeholder="Row number"
+          >
+          <button class="ui button" type="button" @click="jumpToRow">Go</button>
+        </div>
+      </form>
+      <form
+        class="datahub-row-search-form"
+        data-testid="datahub-row-search-form"
+        @submit.prevent="searchRows"
+      >
+        <label for="datahub-row-search-input">Search file</label>
+        <div class="ui action input">
+          <input
+            id="datahub-row-search-input"
+            v-model="searchQuery"
+            data-testid="datahub-row-search-input"
+            type="search"
+            placeholder="Search JSONL rows"
+          >
+          <button class="ui button" type="button" :class="{loading: searchLoading}" :disabled="searchLoading" @click="searchRows">Search</button>
+        </div>
+      </form>
+    </div>
+    <div v-if="rowJumpError || searchError" class="ui attached segment datahub-viewer-feedback">
+      <div v-if="rowJumpError" class="ui small negative message">{{ rowJumpError }}</div>
+      <div v-if="searchError" class="ui small negative message">{{ searchError }}</div>
+    </div>
+    <div v-if="searchResults.length" class="ui attached segment datahub-search-results">
+      <div class="datahub-search-results-header">
+        <strong>{{ searchResults.length }} {{ searchResults.length === 1 ? 'match' : 'matches' }}</strong>
+        <span v-if="searchTotalScanned">scanned {{ searchTotalScanned.toLocaleString() }} rows</span>
+        <span v-if="searchLimitReached">showing first {{ searchResults.length.toLocaleString() }}</span>
+      </div>
+      <button
+        v-for="result in searchResults"
+        :key="`${result.file}:${result.row_index}:${result.row_hash || ''}`"
+        type="button"
+        class="datahub-search-result"
+        :data-testid="`datahub-search-result-${result.row_index}`"
+        @click="goToRowIndex(result.row_index)"
+      >
+        <span>Row {{ result.row_index + 1 }}</span>
+        <small>{{ result.highlight || rowSummary(result.content) }}</small>
+      </button>
+    </div>
+
     <div v-if="loading" class="ui attached segment">
       <div class="ui active centered inline loader"></div>
     </div>
@@ -100,6 +162,7 @@ import {createVirtualScroll} from '../utils/virtual-scroll.js';
 import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
 const PAGE_SIZE = 50;
+const PLACEHOLDER_ROW_HASH_PATTERN = /^row-\d+$/i;
 
 export default {
   components: {JsonlRowRenderer},
@@ -128,6 +191,14 @@ export default {
       loadedChunks: {},
       virtualScroll: null,
       selectedRowOffset: 0,
+      rowJumpValue: '',
+      rowJumpError: null,
+      searchQuery: '',
+      searchLoading: false,
+      searchError: null,
+      searchResults: [],
+      searchTotalScanned: 0,
+      searchLimitReached: false,
     };
   },
   computed: {
@@ -136,8 +207,7 @@ export default {
     },
     visibleRows() {
       if (this.usesStructuredRows) {
-        const start = (this.currentPage - 1) * PAGE_SIZE;
-        return this.rows.slice(start, start + PAGE_SIZE);
+        return this.rows;
       }
       if (this.virtualScroll) {
         return this.virtualScroll.visibleItems;
@@ -152,15 +222,6 @@ export default {
       return this.startIndex + this.selectedRowOffset + 1;
     },
   },
-  async mounted() {
-    try {
-      await this.loadManifest();
-    } catch (e) {
-      this.error = e.message;
-    } finally {
-      this.loading = false;
-    }
-  },
   watch: {
     rows(newRows) {
       if (newRows.length > 0) {
@@ -172,6 +233,15 @@ export default {
       }
     },
   },
+  async mounted() {
+    try {
+      await this.loadManifest();
+    } catch (e) {
+      this.error = e.message;
+    } finally {
+      this.loading = false;
+    }
+  },
   methods: {
     async loadManifest() {
       const manifest = await datahubFetch(
@@ -182,24 +252,67 @@ export default {
       this.totalRows = manifest.total || 0;
       this.totalPages = Math.max(1, Math.ceil(this.totalRows / PAGE_SIZE));
       this.rows = await this.loadRows(manifest.entries || []);
+      this.startIndex = manifest.offset || 0;
       this.loadedChunks[0] = true;
       if (this.rows.length > 0 && this.columns.length === 0) {
         this.columns = this.deriveColumns(this.rows);
       }
     },
     async loadRows(entries) {
-      const rows = [];
-      for (const entry of entries) {
-        const data = await datahubFetch(this.owner, this.repo, `/objects/rows/${entry.row_hash}`);
-        rows.push({
-          ...data,
-          __datahubRowHash: entry.row_hash,
-        });
+      return Promise.all(entries.map((entry) => this.loadRow(entry)));
+    },
+    async loadRow(entry) {
+      const inlineRow = this.extractInlineRow(entry);
+      if (inlineRow) return inlineRow;
+
+      if (!this.isFetchableRowHash(entry?.row_hash)) {
+        return {
+          __datahubRowHash: entry?.row_hash || null,
+          __datahubPreviewError: 'Row object is not available in this manifest entry.',
+        };
       }
-      return rows;
+
+      const data = await datahubFetch(this.owner, this.repo, `/objects/rows/${entry.row_hash}`);
+      return {
+        ...data,
+        __datahubRowHash: entry.row_hash,
+      };
+    },
+    extractInlineRow(entry) {
+      for (const key of ['row', 'content', 'json', 'data', 'raw_json', 'raw']) {
+        const value = entry?.[key];
+        if (value === undefined || value === null) continue;
+        const row = this.parseInlineRowValue(value);
+        if (row) {
+          return {
+            ...row,
+            ...(this.isFetchableRowHash(entry?.row_hash) ? {__datahubRowHash: entry.row_hash} : {}),
+          };
+        }
+      }
+      return null;
+    },
+    parseInlineRowValue(value) {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+      return typeof value === 'object' && !Array.isArray(value) ? value : null;
+    },
+    isFetchableRowHash(rowHash) {
+      if (!rowHash || PLACEHOLDER_ROW_HASH_PATTERN.test(String(rowHash))) return false;
+      return true;
     },
     async loadPage(page) {
       const offset = (page - 1) * PAGE_SIZE;
+      await this.loadOffset(offset);
+      this.currentPage = page;
+    },
+    async loadOffset(offset) {
       const manifest = await datahubFetch(
         this.owner,
         this.repo,
@@ -210,6 +323,60 @@ export default {
       this.selectedRowOffset = 0;
       if (this.rows.length > 0 && this.columns.length === 0) {
         this.columns = this.deriveColumns(this.rows);
+      }
+    },
+    async jumpToRow() {
+      this.rowJumpError = null;
+      const rowNumber = Number.parseInt(this.rowJumpValue);
+      if (!Number.isFinite(rowNumber) || rowNumber < 1 || rowNumber > this.totalRows) {
+        this.rowJumpError = `Enter a row number between 1 and ${this.totalRows.toLocaleString()}.`;
+        return;
+      }
+      await this.goToRowIndex(rowNumber - 1);
+    },
+    async goToRowIndex(rowIndex) {
+      if (!Number.isFinite(rowIndex) || rowIndex < 0 || rowIndex >= this.totalRows) return;
+      const page = Math.floor(rowIndex / PAGE_SIZE) + 1;
+      const offset = (page - 1) * PAGE_SIZE;
+      if (page !== this.currentPage) {
+        await this.loadOffset(offset);
+        this.currentPage = page;
+      }
+      this.selectedRowOffset = rowIndex - offset;
+      this.rowJumpValue = String(rowIndex + 1);
+    },
+    async searchRows() {
+      const query = this.searchQuery.trim();
+      this.searchError = null;
+      this.searchResults = [];
+      this.searchTotalScanned = 0;
+      this.searchLimitReached = false;
+      if (!query) {
+        this.searchError = 'Enter a search query.';
+        return;
+      }
+
+      this.searchLoading = true;
+      try {
+        const result = await datahubFetch(this.owner, this.repo, '/search', {
+          method: 'POST',
+          body: JSON.stringify({
+            ref: this.commitHash,
+            query,
+            file: this.filePath,
+            limit: 50,
+          }),
+        });
+        this.searchResults = result.matches || [];
+        this.searchTotalScanned = result.total_scanned || 0;
+        this.searchLimitReached = Boolean(result.limit_reached);
+        if (!this.searchResults.length) {
+          this.searchError = 'No matching rows in this file.';
+        }
+      } catch (e) {
+        this.searchError = e.message;
+      } finally {
+        this.searchLoading = false;
       }
     },
     deriveColumns(rows) {
@@ -237,7 +404,7 @@ export default {
       for (const key of preferred) {
         if (seen.delete(key)) columns.push(key);
       }
-      return columns.concat([...seen].sort());
+      return columns.concat(Array.from(seen).sort());
     },
     formatCell(value) {
       if (value === null || value === undefined) return '—';
@@ -275,7 +442,6 @@ export default {
     },
     async goPage(page) {
       if (page < 1 || page > this.totalPages) return;
-      this.currentPage = page;
       await this.loadPage(page);
     },
     onScroll(event) {
@@ -303,6 +469,91 @@ export default {
   border: 1px solid var(--color-secondary);
   border-top: 0;
   background: var(--color-body);
+}
+
+.datahub-viewer-tools {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.datahub-row-jump-form,
+.datahub-row-search-form {
+  display: grid;
+  gap: 4px;
+}
+
+.datahub-row-jump-form label,
+.datahub-row-search-form label {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.datahub-row-jump-form input {
+  width: 130px;
+}
+
+.datahub-row-search-form {
+  flex: 1 1 280px;
+}
+
+.datahub-row-search-form .input {
+  width: 100%;
+}
+
+.datahub-viewer-feedback {
+  display: grid;
+  gap: 8px;
+}
+
+.datahub-viewer-feedback .message {
+  margin: 0;
+}
+
+.datahub-search-results {
+  background: var(--color-box-header);
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.datahub-search-results-header {
+  align-items: center;
+  color: var(--color-text-light-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.datahub-search-result {
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.datahub-search-result:hover {
+  border-color: var(--color-primary-light-4);
+}
+
+.datahub-search-result span {
+  font-weight: 600;
+}
+
+.datahub-search-result small {
+  color: var(--color-text-light-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .datahub-row-review {
@@ -411,6 +662,11 @@ export default {
 @media (max-width: 767px) {
   .datahub-viewer-header {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .datahub-viewer-tools {
+    align-items: stretch;
     flex-direction: column;
   }
 

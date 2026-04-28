@@ -1,12 +1,11 @@
 import {mount} from '@vue/test-utils';
 import {expect, test, vi} from 'vitest';
+import DataPreviewPage from './DataPreviewPage.vue';
+import {datahubFetch} from '../utils/datahub-api.js';
 
 vi.mock('../utils/datahub-api.js', () => ({
   datahubFetch: vi.fn(),
 }));
-
-import DataPreviewPage from './DataPreviewPage.vue';
-import {datahubFetch} from '../utils/datahub-api.js';
 
 const viewerStub = {
   name: 'JsonlViewer',
@@ -15,7 +14,7 @@ const viewerStub = {
 };
 
 test('mounts a dedicated JSONL preview page with tree navigation and single-row review', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/tree/abcdef1234567890') {
       return {
         entries: [
@@ -45,6 +44,7 @@ test('mounts a dedicated JSONL preview page with tree navigation and single-row 
   expect(wrapper.text()).toContain('eval');
   expect(wrapper.findComponent(viewerStub).props('singleRowMode')).toBe(true);
   expect(wrapper.text()).toContain('Viewer abcdef1234567890 / train/sft.jsonl');
+  expect(wrapper.find('a[href="/api/v1/repos/alice/dataset/datahub/export/abcdef1234567890/train/sft.jsonl"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/data/commit/abcdef1234567890"]').exists()).toBe(true);
 
@@ -53,7 +53,7 @@ test('mounts a dedicated JSONL preview page with tree navigation and single-row 
 });
 
 test('renders preview tree rows with folder chevrons, file icons, and active file state', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/tree/abcdef1234567890') {
       return {
         entries: [
@@ -87,7 +87,7 @@ test('renders preview tree rows with folder chevrons, file icons, and active fil
 });
 
 test('builds the preview tree from stats when the root tree only exposes folders', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/tree/abcdef1234567890') {
       return {
         entries: [

@@ -10,6 +10,9 @@
         </div>
       </div>
       <div class="datahub-header-actions">
+        <a class="ui small basic button" :href="rawPath" target="_blank" rel="nofollow">
+          Raw
+        </a>
         <a class="ui small basic button" :href="repoPath">
           <i class="arrow left icon"></i> Dataset summary
         </a>
@@ -38,7 +41,7 @@
                 aria-hidden="true"
               ></span>
               <span class="datahub-tree-entry-icon datahub-tree-folder-icon" aria-hidden="true">
-                <SvgIcon name="octicon-file-directory-fill" :size="16" />
+                <SvgIcon name="octicon-file-directory-fill" :size="16"/>
               </span>
               <span class="datahub-tree-label">{{ entry.name }}</span>
             </button>
@@ -51,7 +54,7 @@
             >
               <span class="datahub-tree-file-spacer" aria-hidden="true"></span>
               <span class="datahub-tree-entry-icon datahub-tree-file-icon" aria-hidden="true">
-                <SvgIcon name="octicon-file" :size="16" />
+                <SvgIcon name="octicon-file" :size="16"/>
               </span>
               <span class="datahub-tree-label">{{ entry.name }}</span>
             </a>
@@ -100,9 +103,11 @@ export default {
     commitPath() {
       return `${this.repoPath}/data/commit/${encodeURIComponent(this.commitHash)}`;
     },
+    rawPath() {
+      return `/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub/export/${encodeURIComponent(this.commitHash)}/${this.filePath.split('/').map(encodeURIComponent).join('/')}`;
+    },
     treeRows() {
-      const manifestPaths = this.manifestPaths
-        .sort();
+      const manifestPaths = this.manifestPaths.toSorted();
       const folderPaths = new Set();
       for (const path of manifestPaths) {
         const parts = path.split('/');
@@ -113,7 +118,7 @@ export default {
 
       const rows = [];
       const appendLevel = (prefix, depth) => {
-        const folders = [...folderPaths]
+        const folders = Array.from(folderPaths)
           .filter((folder) => folder.startsWith(prefix) && folder.slice(prefix.length).split('/').filter(Boolean).length === 1)
           .sort();
         for (const folder of folders) {
@@ -150,7 +155,7 @@ export default {
           paths.add(this.normalizePath(entry.name || entry.path));
         }
       }
-      return [...paths].filter(Boolean);
+      return Array.from(paths).filter(Boolean);
     },
   },
   async mounted() {

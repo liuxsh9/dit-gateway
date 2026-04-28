@@ -189,6 +189,80 @@ func TestGetManifest(t *testing.T) {
 	assert.Contains(t, string(data), "entries")
 }
 
+func TestSearch(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/search", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		body, _ := io.ReadAll(r.Body)
+		assert.JSONEq(t, `{"ref":"commit123","query":"needle","file":"train.jsonl","limit":50}`, string(body))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"matches":[{"row_index":3}]}`))
+	}))
+	data, status, err := client.Search(context.Background(), "myrepo", []byte(`{"ref":"commit123","query":"needle","file":"train.jsonl","limit":50}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "matches")
+}
+
+func TestExportFile(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/export/commit123/train/data.jsonl", r.URL.Path)
+		assert.Equal(t, "jsonl", r.URL.Query().Get("format"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"messages":[]}` + "\n"))
+	}))
+	data, status, err := client.ExportFile(context.Background(), "myrepo", "commit123", "train/data.jsonl", "jsonl")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "messages")
+}
+
+func TestExportFileFallbackBuildsJSONLFromInlineManifestRows(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/repos/myrepo/export/commit123/eval.jsonl":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"detail":"not found"}`))
+		case "/api/v1/repos/myrepo/manifest/commit123/eval.jsonl":
+			assert.Equal(t, "0", r.URL.Query().Get("offset"))
+			assert.Equal(t, "500", r.URL.Query().Get("limit"))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"total":2,"entries":[{"row_hash":"row-0","row":{"messages":[{"role":"user","content":"first"}]}},{"row_hash":"row-1","content":{"messages":[{"role":"user","content":"second"}]}}]}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	data, status, err := client.ExportFileWithFallback(context.Background(), "myrepo", "commit123", "eval.jsonl", "jsonl")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "{\"messages\":[{\"role\":\"user\",\"content\":\"first\"}]}\n{\"messages\":[{\"role\":\"user\",\"content\":\"second\"}]}\n", string(data))
+}
+
+func TestExportFileFallbackFetchesRowObjectsWhenManifestHasHashesOnly(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/repos/myrepo/export/commit123/train.jsonl":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"detail":"not found"}`))
+		case "/api/v1/repos/myrepo/manifest/commit123/train.jsonl":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"total":1,"entries":[{"row_hash":"abc123"}]}`))
+		case "/api/v1/repos/myrepo/objects/rows/abc123":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"messages":[{"role":"user","content":"from object"}]}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	data, status, err := client.ExportFileWithFallback(context.Background(), "myrepo", "commit123", "train.jsonl", "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "{\"messages\":[{\"role\":\"user\",\"content\":\"from object\"}]}\n", string(data))
+}
+
 func TestMergePull(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)

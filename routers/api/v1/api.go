@@ -1437,6 +1437,7 @@ func Routes() *web.Route {
 					m.Get("/pulls/{id}", repo.DatahubGetPull)
 					m.Post("/pulls/{id}/merge", repo.DatahubMergePull)
 					m.Get("/manifest/{commit}/*", repo.DatahubGetManifest)
+					m.Get("/export/{commit}/*", repo.DatahubExportFile)
 					m.Post("/meta/compute", repo.DatahubMetaCompute)
 					m.Get("/meta/diff/{old}/{new}", repo.DatahubMetaDiff)
 					m.Get("/meta/{commit}/*", repo.DatahubMetaGet)

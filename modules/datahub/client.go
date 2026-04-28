@@ -6,10 +6,12 @@ package datahub
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -20,6 +22,21 @@ type Client struct {
 	baseURL      string
 	serviceToken string
 	httpClient   *http.Client
+}
+
+type manifestPage struct {
+	Total   int             `json:"total"`
+	Entries []manifestEntry `json:"entries"`
+}
+
+type manifestEntry struct {
+	RowHash string          `json:"row_hash"`
+	Row     json.RawMessage `json:"row"`
+	Content json.RawMessage `json:"content"`
+	JSON    json.RawMessage `json:"json"`
+	Data    json.RawMessage `json:"data"`
+	RawJSON json.RawMessage `json:"raw_json"`
+	Raw     json.RawMessage `json:"raw"`
 }
 
 var (
@@ -185,6 +202,90 @@ func (c *Client) GetManifest(ctx context.Context, repoName, commit, filePath, of
 		path += "?" + encoded
 	}
 	return c.do(ctx, http.MethodGet, path, nil)
+}
+
+func (c *Client) ExportFile(ctx context.Context, repoName, commitHash, filePath, format string) ([]byte, int, error) {
+	path := "/api/v1/repos/" + repoName + "/export/" + url.PathEscape(commitHash) + "/" + escapePath(filePath)
+	query := url.Values{}
+	if format != "" {
+		query.Set("format", format)
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return c.do(ctx, http.MethodGet, path, nil)
+}
+
+func (c *Client) ExportFileWithFallback(ctx context.Context, repoName, commitHash, filePath, format string) ([]byte, int, error) {
+	data, status, err := c.ExportFile(ctx, repoName, commitHash, filePath, format)
+	if err != nil || status != http.StatusNotFound || (format != "" && format != "jsonl") {
+		return data, status, err
+	}
+	return c.exportJSONLFromManifest(ctx, repoName, commitHash, filePath)
+}
+
+func (c *Client) exportJSONLFromManifest(ctx context.Context, repoName, commitHash, filePath string) ([]byte, int, error) {
+	const pageSize = 500
+	var output bytes.Buffer
+	offset := 0
+
+	for {
+		data, status, err := c.GetManifest(ctx, repoName, commitHash, filePath, strconv.Itoa(offset), strconv.Itoa(pageSize))
+		if err != nil || status < 200 || status >= 300 {
+			return data, status, err
+		}
+
+		var page manifestPage
+		if err := json.Unmarshal(data, &page); err != nil {
+			return nil, 0, fmt.Errorf("decode manifest page: %w", err)
+		}
+		if len(page.Entries) == 0 {
+			break
+		}
+
+		for _, entry := range page.Entries {
+			raw := entry.inlineRow()
+			if len(raw) == 0 && entry.RowHash != "" {
+				rowData, rowStatus, err := c.GetObject(ctx, repoName, "rows", entry.RowHash)
+				if err != nil || rowStatus < 200 || rowStatus >= 300 {
+					if err != nil {
+						return nil, 0, err
+					}
+					return rowData, rowStatus, nil
+				}
+				raw = rowData
+			}
+			if len(raw) == 0 {
+				return nil, 0, fmt.Errorf("manifest entry at offset %d has no row content", offset)
+			}
+
+			var compacted bytes.Buffer
+			if err := json.Compact(&compacted, raw); err != nil {
+				return nil, 0, fmt.Errorf("compact row at offset %d: %w", offset, err)
+			}
+			output.Write(compacted.Bytes())
+			output.WriteByte('\n')
+		}
+
+		offset += len(page.Entries)
+		if page.Total > 0 && offset >= page.Total {
+			break
+		}
+		if len(page.Entries) < pageSize {
+			break
+		}
+	}
+
+	return output.Bytes(), http.StatusOK, nil
+}
+
+func (entry manifestEntry) inlineRow() json.RawMessage {
+	for _, raw := range []json.RawMessage{entry.Row, entry.Content, entry.JSON, entry.Data, entry.RawJSON, entry.Raw} {
+		if len(raw) > 0 && string(raw) != "null" {
+			return raw
+		}
+	}
+	return nil
 }
 
 func (c *Client) MetaCompute(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {

@@ -1,15 +1,14 @@
 import {mount} from '@vue/test-utils';
 import {expect, test, vi} from 'vitest';
+import JsonlViewer from './JsonlViewer.vue';
+import {datahubFetch} from '../utils/datahub-api.js';
 
 vi.mock('../utils/datahub-api.js', () => ({
   datahubFetch: vi.fn(),
 }));
 
-import JsonlViewer from './JsonlViewer.vue';
-import {datahubFetch} from '../utils/datahub-api.js';
-
 test('loads paged manifest entries and row objects from core API', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
       return {
         total: 2,
@@ -43,8 +42,45 @@ test('loads paged manifest entries and row objects from core API', async () => {
   expect(wrapper.text()).toContain('Explain LFU');
 });
 
+test('renders inline manifest rows without fetching placeholder row hashes', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/eval.jsonl?offset=0&limit=50') {
+      return {
+        total: 1,
+        entries: [
+          {
+            row_hash: 'row-0',
+            content: {
+              version: '2.0.0',
+              messages: [
+                {role: 'user', content: 'Inline question'},
+                {role: 'assistant', content: 'Inline answer'},
+              ],
+            },
+          },
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'eval.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Inline question'));
+
+  expect(wrapper.text()).toContain('Inline answer');
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/objects/rows/row-0');
+});
+
 test('orders common SFT columns before incidental JSON fields', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
       return {
         total: 1,
@@ -78,7 +114,7 @@ test('orders common SFT columns before incidental JSON fields', async () => {
 });
 
 test('renders ML2 message rows as conversation cards instead of JSON strings', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
       return {
         total: 1,
@@ -148,7 +184,7 @@ test('renders ML2 message rows as conversation cards instead of JSON strings', a
 });
 
 test('supports single-row review with quick row switching', async () => {
-  datahubFetch.mockImplementation(async (owner, repo, path) => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
       return {
         total: 2,
@@ -195,4 +231,107 @@ test('supports single-row review with quick row switching', async () => {
 
   expect(wrapper.text()).toContain('second answer');
   expect(wrapper.text()).not.toContain('第一行回答');
+});
+
+test('jumps directly to a row by loading the containing manifest page', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {total: 120, entries: [{row_hash: 'row1'}]};
+    }
+    if (path === '/objects/rows/row1') {
+      return {messages: [{role: 'user', content: 'first page'}]};
+    }
+    if (path === '/manifest/commit123/train.jsonl?offset=50&limit=50') {
+      return {total: 120, entries: [{row_hash: 'row51'}, {row_hash: 'row52'}, {row_hash: 'row53'}]};
+    }
+    if (path === '/objects/rows/row51') return {messages: [{role: 'user', content: 'row 51'}]};
+    if (path === '/objects/rows/row52') return {messages: [{role: 'user', content: 'row 52'}]};
+    if (path === '/objects/rows/row53') return {messages: [{role: 'user', content: 'target row 53'}]};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first page'));
+
+  await wrapper.find('[data-testid="datahub-row-jump-input"]').setValue('53');
+  await wrapper.find('[data-testid="datahub-row-jump-form"] button').trigger('click');
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('target row 53'));
+  expect(wrapper.text()).toContain('Row 53');
+  expect(datahubFetch).toHaveBeenCalledWith(
+    'alice',
+    'dataset',
+    '/manifest/commit123/train.jsonl?offset=50&limit=50',
+  );
+});
+
+test('searches the current JSONL file and lets reviewers jump to matching rows', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path, options) => {
+    if (path === '/manifest/commit123/eval.jsonl?offset=0&limit=50') {
+      return {total: 100, entries: [{row_hash: 'row1'}]};
+    }
+    if (path === '/objects/rows/row1') {
+      return {messages: [{role: 'user', content: 'first row'}]};
+    }
+    if (path === '/search') {
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body)).toEqual({
+        ref: 'commit123',
+        query: 'needle',
+        file: 'eval.jsonl',
+        limit: 50,
+      });
+      return {
+        matches: [
+          {
+            file: 'eval.jsonl',
+            row_index: 73,
+            highlight: '...needle...',
+            content: {messages: [{role: 'user', content: 'needle row'}]},
+          },
+        ],
+        total_scanned: 74,
+        limit_reached: false,
+      };
+    }
+    if (path === '/manifest/commit123/eval.jsonl?offset=50&limit=50') {
+      return {
+        total: 100,
+        entries: Array.from({length: 50}, (_, index) => ({row_hash: `row${51 + index}`})),
+      };
+    }
+    if (path.startsWith('/objects/rows/row')) {
+      const rowNumber = path.replace('/objects/rows/row', '');
+      return {messages: [{role: 'user', content: rowNumber === '74' ? 'needle row' : `row ${rowNumber}`}]};
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'eval.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first row'));
+
+  await wrapper.find('[data-testid="datahub-row-search-input"]').setValue('needle');
+  await wrapper.find('[data-testid="datahub-row-search-form"] button').trigger('click');
+  await vi.waitFor(() => expect(wrapper.text()).toContain('1 match'));
+
+  await wrapper.find('[data-testid="datahub-search-result-73"]').trigger('click');
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('needle row'));
+  expect(wrapper.text()).toContain('Row 74');
 });
