@@ -81,7 +81,6 @@
           @click="toggleFilesSidebar"
         >
           <SvgIcon name="octicon-chevron-right" :size="14"/>
-          <span>Files</span>
         </button>
       </aside>
       <main class="datahub-preview-review">
@@ -282,13 +281,13 @@ export default {
 
 .datahub-preview-workspace {
   display: grid;
-  gap: 14px;
+  gap: 0;
   grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
   padding: 0 !important;
 }
 
 .datahub-preview-workspace.is-sidebar-collapsed {
-  gap: 12px;
+  gap: 0;
   grid-template-columns: 42px minmax(0, 1fr);
 }
 
@@ -334,9 +333,9 @@ export default {
   border-radius: 0 8px 8px 0;
   box-shadow: 1px 1px 2px var(--color-shadow);
   height: 34px;
-  margin-right: -32px;
+  margin-right: 0;
   position: absolute;
-  right: -1px;
+  right: -22px;
   top: 50%;
   transform: translateY(-50%);
   width: 22px;
@@ -355,31 +354,24 @@ export default {
 }
 
 .datahub-preview-tree-rail {
-  align-items: flex-start;
   background: var(--color-box-header);
   border-right: 1px solid var(--color-secondary);
-  display: flex;
-  justify-content: center;
   min-height: 680px;
-  padding: 14px 0;
+  padding: 0;
+  position: relative;
 }
 
 .datahub-sidebar-rail-toggle {
-  border-radius: 8px;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 108px;
-  padding: 10px 4px;
-  width: 28px;
-}
-
-.datahub-sidebar-rail-toggle span {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-orientation: mixed;
-  text-transform: uppercase;
-  writing-mode: vertical-rl;
+  border-radius: 0 8px 8px 0;
+  box-shadow: 1px 1px 2px var(--color-shadow);
+  height: 34px;
+  padding: 0;
+  position: absolute;
+  right: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  z-index: 1;
 }
 
 .datahub-tree-loader {
@@ -466,11 +458,11 @@ export default {
 
 .datahub-preview-review {
   min-width: 0;
-  padding: 12px 12px 12px 0;
+  padding: 12px 12px 12px 32px;
 }
 
 .datahub-preview-workspace.is-sidebar-collapsed .datahub-preview-review {
-  padding: 12px 12px 12px 0;
+  padding: 12px 12px 12px 32px;
 }
 
 @media (max-width: 767px) {
@@ -511,18 +503,18 @@ export default {
     border-bottom: 1px solid var(--color-secondary);
     justify-content: flex-start;
     min-height: 0;
+    position: static;
     padding: 8px 12px;
   }
 
   .datahub-sidebar-rail-toggle {
     flex-direction: row;
+    height: 30px;
     min-height: 30px;
     padding: 5px 10px;
+    position: static;
+    transform: none;
     width: auto;
-  }
-
-  .datahub-sidebar-rail-toggle span {
-    writing-mode: horizontal-tb;
   }
 
   .datahub-preview-review {
