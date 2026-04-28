@@ -1,15 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 212" width="32" height="32" aria-hidden="true">
-  <style>
-    .frame,.branch,.node{fill:none;stroke-linecap:round;stroke-linejoin:round}
-    .frame{stroke:#18191b;stroke-width:24}
-    .branch{stroke:#f05a1a;stroke-width:15}
-    .node{stroke:#f05a1a;stroke-width:13;fill:#fff}
-  </style>
-  <path class="frame" d="M54 36v140h52c43 0 76-30 76-70S149 36 106 36H54Z"/>
-  <path class="branch" d="M72 155V58"/>
-  <path class="branch" d="M72 82h39"/>
-  <path class="branch" d="M72 127c22 0 31-24 53-24h22"/>
-  <circle class="node" cx="72" cy="155" r="14"/>
-  <circle class="node" cx="124" cy="82" r="14"/>
-  <circle class="node" cx="158" cy="103" r="14"/>
+  <defs>
+    <mask id="m">
+      <rect width="212" height="212" fill="white"/>
+      <circle cx="30" cy="30" r="29" fill="black"/>
+      <circle cx="30" cy="182" r="29" fill="black"/>
+      <circle cx="100" cy="30" r="29" fill="black"/>
+      <circle cx="100" cy="182" r="29" fill="black"/>
+      <circle cx="182" cy="106" r="29" fill="black"/>
+    </mask>
+  </defs>
+  <g mask="url(#m)">
+    <line x1="30" y1="30" x2="30" y2="182" stroke="#4F46E5" stroke-width="17" stroke-linecap="round"/>
+    <line x1="30" y1="30" x2="100" y2="30" stroke="#4F46E5" stroke-width="17" stroke-linecap="round"/>
+    <line x1="30" y1="182" x2="100" y2="182" stroke="#4F46E5" stroke-width="17" stroke-linecap="round"/>
+    <path d="M100 30 C162 30, 182 68, 182 106 C182 144, 162 182, 100 182" fill="none" stroke="#06B6D4" stroke-width="17" stroke-linecap="round"/>
+  </g>
+  <circle cx="30" cy="30" r="19" fill="none" stroke="#4F46E5" stroke-width="17"/>
+  <circle cx="30" cy="182" r="19" fill="none" stroke="#4F46E5" stroke-width="17"/>
+  <circle cx="100" cy="30" r="19" fill="none" stroke="#06B6D4" stroke-width="17"/>
+  <circle cx="100" cy="182" r="19" fill="none" stroke="#06B6D4" stroke-width="17"/>
+  <circle cx="182" cy="106" r="19" fill="none" stroke="#06B6D4" stroke-width="17"/>
 </svg>

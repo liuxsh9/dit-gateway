@@ -1,27 +1,23 @@
-<svg viewBox="0 0 212 212" xmlns="http://www.w3.org/2000/svg">
-  <style type="text/css">
-    circle {
-      fill: none;
-      stroke: #000;
-      stroke-width: 15;
-    }
-    path {
-      fill: none;
-      stroke: #000;
-      stroke-width: 25;
-    }
-    .orange {
-      stroke:#ff6600;
-    }
-    .red {
-      stroke:#d40000;
-    }
-  </style>
-  <g transform="translate(6,6)">
-    <path d="M58 168 v-98 a50 50 0 0 1 50-50 h20" class="orange" />
-    <path d="M58 168 v-30 a50 50 0 0 1 50-50 h20" class="red" />
-    <circle cx="142" cy="20" r="18" class="orange" />
-    <circle cx="142" cy="88" r="18" class="red" />
-    <circle cx="58" cy="180" r="18" class="red" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 212" width="32" height="32" aria-hidden="true">
+  <defs>
+    <mask id="m">
+      <rect width="212" height="212" fill="white"/>
+      <circle cx="30" cy="30" r="29" fill="black"/>
+      <circle cx="30" cy="182" r="29" fill="black"/>
+      <circle cx="100" cy="30" r="29" fill="black"/>
+      <circle cx="100" cy="182" r="29" fill="black"/>
+      <circle cx="182" cy="106" r="29" fill="black"/>
+    </mask>
+  </defs>
+  <g mask="url(#m)">
+    <line x1="30" y1="30" x2="30" y2="182" stroke="#4F46E5" stroke-width="17" stroke-linecap="round"/>
+    <line x1="30" y1="30" x2="100" y2="30" stroke="#4F46E5" stroke-width="17" stroke-linecap="round"/>
+    <line x1="30" y1="182" x2="100" y2="182" stroke="#4F46E5" stroke-width="17" stroke-linecap="round"/>
+    <path d="M100 30 C162 30, 182 68, 182 106 C182 144, 162 182, 100 182" fill="none" stroke="#06B6D4" stroke-width="17" stroke-linecap="round"/>
   </g>
+  <circle cx="30" cy="30" r="19" fill="none" stroke="#4F46E5" stroke-width="17"/>
+  <circle cx="30" cy="182" r="19" fill="none" stroke="#4F46E5" stroke-width="17"/>
+  <circle cx="100" cy="30" r="19" fill="none" stroke="#06B6D4" stroke-width="17"/>
+  <circle cx="100" cy="182" r="19" fill="none" stroke="#06B6D4" stroke-width="17"/>
+  <circle cx="182" cy="106" r="19" fill="none" stroke="#06B6D4" stroke-width="17"/>
 </svg>
