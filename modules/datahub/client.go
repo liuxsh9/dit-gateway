@@ -139,6 +139,14 @@ func (c *Client) PushObjects(ctx context.Context, repoName string, body []byte) 
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/objects/batch", body)
 }
 
+func (c *Client) BatchExists(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/objects/batch-exists", body)
+}
+
+func (c *Client) BatchUpload(ctx context.Context, repoName string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/objects/batch-upload", body)
+}
+
 func (c *Client) GetTree(ctx context.Context, repoName, hash, treePath string) ([]byte, int, error) {
 	path := "/api/v1/repos/" + repoName + "/tree/" + url.PathEscape(hash) + "/"
 	if strings.Trim(treePath, "/") != "" {
@@ -187,6 +195,22 @@ func (c *Client) GetPull(ctx context.Context, repoName, id string) ([]byte, int,
 
 func (c *Client) MergePull(ctx context.Context, repoName, id string, body []byte) ([]byte, int, error) {
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls/"+id+"/merge", body)
+}
+
+func (c *Client) ListPullComments(ctx context.Context, repoName, id string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/pulls/"+id+"/comments", nil)
+}
+
+func (c *Client) CreatePullComment(ctx context.Context, repoName, id string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls/"+id+"/comments", body)
+}
+
+func (c *Client) ListPullReviews(ctx context.Context, repoName, id string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/pulls/"+id+"/reviews", nil)
+}
+
+func (c *Client) CreatePullReview(ctx context.Context, repoName, id string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls/"+id+"/reviews", body)
 }
 
 func (c *Client) GetManifest(ctx context.Context, repoName, commit, filePath, offset, limit string) ([]byte, int, error) {

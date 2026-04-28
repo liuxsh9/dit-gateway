@@ -70,6 +70,13 @@
         <small>{{ result.highlight || rowSummary(result.content) }}</small>
       </button>
     </div>
+    <div v-if="openIssueCount" class="ui attached warning message datahub-open-issue-warning">
+      <div>
+        <strong>{{ openIssueCount }} {{ openIssueCount === 1 ? 'open data issue' : 'open data issues' }}</strong>
+        affect this preview. Resolve them before final export.
+      </div>
+      <a class="ui tiny basic button" :href="openIssuesHref">View issues</a>
+    </div>
 
     <div v-if="loading" class="ui attached segment">
       <div class="ui active centered inline loader"></div>
@@ -88,14 +95,38 @@
           :key="row.__datahubRowHash || idx"
           type="button"
           class="datahub-row-index-item"
-          :class="{active: idx === selectedRowOffset}"
+          :class="{active: idx === selectedRowOffset, 'has-open-issue': rowIssues(row).length}"
           @click="selectedRowOffset = idx"
         >
-          <span>Row {{ startIndex + idx + 1 }}</span>
+          <span>
+            Row {{ startIndex + idx + 1 }}
+            <span v-if="rowIssues(row).length" class="ui mini red label datahub-row-issue-count">{{ rowIssues(row).length }}</span>
+          </span>
           <small>{{ rowSummary(row) }}</small>
         </button>
       </aside>
       <section class="datahub-selected-row">
+        <div class="datahub-selected-row-actions">
+          <div>
+            <strong>Row {{ selectedRowNumber }}</strong>
+            <span v-if="responsibleOwner(selectedRow)" class="datahub-row-owner">owner: {{ responsibleOwner(selectedRow) }}</span>
+          </div>
+          <div class="datahub-selected-row-buttons">
+            <a
+              class="ui small basic button datahub-preview-issue-link"
+              :href="issueLinkForRow(selectedRow, selectedRowNumber)"
+            >
+              Open issue
+            </a>
+            <a
+              v-if="rowIssues(selectedRow).length"
+              class="ui small red basic button"
+              :href="issueHref(rowIssues(selectedRow)[0])"
+            >
+              {{ rowIssues(selectedRow).length }} open
+            </a>
+          </div>
+        </div>
         <JsonlRowRenderer
           v-if="Array.isArray(selectedRow?.messages)"
           :row="selectedRow"
@@ -163,9 +194,11 @@ import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
 const PAGE_SIZE = 50;
 const PLACEHOLDER_ROW_HASH_PATTERN = /^row-\d+$/i;
+const DATAHUB_ROW_CONTEXT_MARKER = 'datahub-row-context';
 
 export default {
   components: {JsonlRowRenderer},
+  emits: ['open-issues-loaded'],
   props: {
     owner: String,
     repo: String,
@@ -199,6 +232,9 @@ export default {
       searchResults: [],
       searchTotalScanned: 0,
       searchLimitReached: false,
+      openIssuesByRowHash: {},
+      openIssueCount: 0,
+      openIssuesHref: '',
     };
   },
   computed: {
@@ -257,6 +293,7 @@ export default {
       if (this.rows.length > 0 && this.columns.length === 0) {
         this.columns = this.deriveColumns(this.rows);
       }
+      await this.loadOpenRowIssues();
     },
     async loadRows(entries) {
       return Promise.all(entries.map((entry) => this.loadRow(entry)));
@@ -324,6 +361,7 @@ export default {
       if (this.rows.length > 0 && this.columns.length === 0) {
         this.columns = this.deriveColumns(this.rows);
       }
+      await this.loadOpenRowIssues();
     },
     async jumpToRow() {
       this.rowJumpError = null;
@@ -426,6 +464,106 @@ export default {
       const keys = Object.keys(row).filter((key) => !key.startsWith('__')).slice(0, 4);
       return keys.join(', ') || 'json';
     },
+    rowHash(row) {
+      return row?.__datahubRowHash || row?.row_hash || row?.hash || null;
+    },
+    responsibleOwner(row) {
+      return row?.meta_info?.owner ||
+        row?.meta_info?.responsible_owner ||
+        row?.meta_info?.assignee ||
+        row?.metadata?.owner ||
+        row?.owner ||
+        '';
+    },
+    issueLinkForRow(row, rowNumber) {
+      const title = `[Data issue] ${this.filePath} row ${rowNumber}`;
+      const lines = [
+        '<!-- datahub-row-context -->',
+        'datahub-row-context: true',
+        '### Data row context',
+        '',
+        `path: ${this.filePath}`,
+        `commit: ${this.commitHash || 'unknown'}`,
+        `row: ${rowNumber}`,
+        `row_hash: ${this.rowHash(row) || 'unknown'}`,
+        `responsible_owner: ${this.responsibleOwner(row) || 'unknown'}`,
+        '',
+        '### Issue description',
+        '',
+        '- ',
+      ];
+      const params = new URLSearchParams({title, body: lines.join('\n')});
+      return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/issues/new?${params.toString()}`;
+    },
+    async loadOpenRowIssues() {
+      this.openIssuesHref = this.issueListHref();
+      this.openIssuesByRowHash = {};
+      this.openIssueCount = 0;
+      if (!this.singleRowMode || !this.rows.length) {
+        this.$emit('open-issues-loaded', {count: 0, href: this.openIssuesHref, issues: []});
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          state: 'open',
+          type: 'issues',
+          q: DATAHUB_ROW_CONTEXT_MARKER,
+          limit: '50',
+        });
+        const response = await fetch(`/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/issues?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': document.querySelector('meta[name=_csrf]')?.content || '',
+          },
+        });
+        if (!response.ok) throw new Error(`Issue API ${response.status}`);
+        const issues = await response.json();
+        this.applyOpenIssues(Array.isArray(issues) ? issues : []);
+      } catch {
+        this.$emit('open-issues-loaded', {count: 0, href: this.openIssuesHref, issues: []});
+      }
+    },
+    applyOpenIssues(issues) {
+      const byRowHash = {};
+      const linkedIssues = [];
+      for (const issue of issues) {
+        if (issue?.state && issue.state !== 'open') continue;
+        const body = String(issue?.body || '');
+        if (!body.includes(DATAHUB_ROW_CONTEXT_MARKER)) continue;
+        if (!body.includes(`path: ${this.filePath}`)) continue;
+        if (this.commitHash && !body.includes(`commit: ${this.commitHash}`)) continue;
+        for (const row of this.rows) {
+          const rowHash = this.rowHash(row);
+          if (!rowHash || !body.includes(`row_hash: ${rowHash}`)) continue;
+          if (!byRowHash[rowHash]) byRowHash[rowHash] = [];
+          byRowHash[rowHash].push(issue);
+          linkedIssues.push(issue);
+        }
+      }
+      this.openIssuesByRowHash = byRowHash;
+      this.openIssueCount = new Set(linkedIssues.map((issue) => issue.id || issue.number || issue.html_url || issue.title)).size;
+      this.$emit('open-issues-loaded', {
+        count: this.openIssueCount,
+        href: this.openIssuesHref,
+        issues: linkedIssues,
+      });
+    },
+    rowIssues(row) {
+      const rowHash = this.rowHash(row);
+      return rowHash ? (this.openIssuesByRowHash[rowHash] || []) : [];
+    },
+    issueHref(issue) {
+      return issue?.html_url || `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/issues/${issue?.number || issue?.index || ''}`;
+    },
+    issueListHref() {
+      const params = new URLSearchParams({
+        q: DATAHUB_ROW_CONTEXT_MARKER,
+        type: 'issues',
+        state: 'open',
+      });
+      return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/issues?${params.toString()}`;
+    },
     isComplex(value) {
       return value !== null && typeof value === 'object';
     },
@@ -512,6 +650,13 @@ export default {
   margin: 0;
 }
 
+.datahub-open-issue-warning {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .datahub-search-results {
   background: var(--color-box-header);
   display: grid;
@@ -590,8 +735,49 @@ export default {
   border-color: var(--color-primary-light-4);
 }
 
+.datahub-row-index-item.has-open-issue {
+  border-color: var(--color-red);
+}
+
 .datahub-row-index-item span {
-  display: block;
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  font-weight: 600;
+  justify-content: space-between;
+}
+
+.datahub-row-issue-count {
+  margin-left: auto !important;
+}
+
+.datahub-row-owner {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.datahub-selected-row-actions {
+  align-items: center;
+  background: var(--color-box-header);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+}
+
+.datahub-selected-row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.datahub-row-index-item > span {
   font-weight: 600;
 }
 

@@ -10,7 +10,13 @@ vi.mock('../utils/datahub-api.js', () => ({
 const viewerStub = {
   name: 'JsonlViewer',
   props: ['owner', 'repo', 'commitHash', 'filePath', 'singleRowMode'],
-  template: '<div class="jsonl-viewer-stub">Viewer {{ commitHash }} / {{ filePath }} / single={{ singleRowMode }}</div>',
+  emits: ['open-issues-loaded'],
+  template: `
+    <div class="jsonl-viewer-stub">
+      Viewer {{ commitHash }} / {{ filePath }} / single={{ singleRowMode }}
+      <button type="button" data-testid="emit-open-issues" @click="$emit('open-issues-loaded', {count: 2, href: '/alice/dataset/issues?q=datahub-row-context'})">emit</button>
+    </div>
+  `,
 };
 
 test('mounts a dedicated JSONL preview page with tree navigation and single-row review', async () => {
@@ -50,6 +56,60 @@ test('mounts a dedicated JSONL preview page with tree navigation and single-row 
 
   await wrapper.findAll('.datahub-tree-folder').find((button) => button.text() === 'eval').trigger('click');
   expect(wrapper.find('a[href="/alice/dataset/data/preview/abcdef1234567890/eval/hard.jsonl"]').exists()).toBe(true);
+});
+
+test('resolves a branch-only preview URL to the first manifest file', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/refs/heads/main') return {target_hash: 'abcdef1234567890'};
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'train/sft.jsonl', obj_type: 'manifest'},
+          {name: 'eval/hard.jsonl', obj_type: 'manifest'},
+        ],
+      };
+    }
+    if (path === '/stats/abcdef1234567890') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'main',
+      filePath: '',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('eval/hard.jsonl'));
+
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/refs/heads/main');
+  expect(wrapper.text()).toContain('Viewer abcdef1234567890 / eval/hard.jsonl');
+  expect(wrapper.findComponent(viewerStub).props('commitHash')).toBe('abcdef1234567890');
+  expect(wrapper.findComponent(viewerStub).props('filePath')).toBe('eval/hard.jsonl');
+});
+
+test('shows a useful message when a branch-only preview has no manifest files', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/refs/heads/empty') return {target_hash: 'abcdef1234567890'};
+    if (path === '/tree/abcdef1234567890') return {entries: []};
+    if (path === '/stats/abcdef1234567890') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'empty',
+      filePath: '',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('No JSONL manifest files are available'));
+
+  expect(wrapper.findComponent(viewerStub).exists()).toBe(false);
 });
 
 test('renders preview tree rows with folder chevrons, file icons, and active file state', async () => {
@@ -167,4 +227,28 @@ test('collapses and restores the preview files sidebar', async () => {
   expect(wrapper.find('.datahub-preview-workspace').classes()).not.toContain('is-sidebar-collapsed');
   expect(wrapper.find('.datahub-preview-tree').exists()).toBe(true);
   expect(wrapper.find('.datahub-preview-tree-rail').exists()).toBe(false);
+});
+
+test('warns near the export action when preview rows have open linked issues', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/tree/abcdef1234567890') return {entries: [{name: 'eval/safety.jsonl', obj_type: 'manifest'}]};
+    if (path === '/stats/abcdef1234567890') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'abcdef1234567890',
+      filePath: 'eval/safety.jsonl',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Viewer abcdef1234567890'));
+
+  await wrapper.find('[data-testid="emit-open-issues"]').trigger('click');
+
+  expect(wrapper.text()).toContain('2 open data issues before export');
+  expect(wrapper.find('a[href="/alice/dataset/issues?q=datahub-row-context"]').exists()).toBe(true);
 });

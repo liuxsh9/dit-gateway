@@ -106,6 +106,40 @@ func TestGetObject(t *testing.T) {
 	assert.Contains(t, string(data), "chunk")
 }
 
+func TestBatchExists(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/objects/batch-exists", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
+		body, _ := io.ReadAll(r.Body)
+		assert.JSONEq(t, `{"obj_type":"rows","hashes":["a","b"]}`, string(body))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"exists":{"a":true,"b":false}}`))
+	}))
+	data, status, err := client.BatchExists(context.Background(), "myrepo", []byte(`{"obj_type":"rows","hashes":["a","b"]}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), `"a":true`)
+}
+
+func TestBatchUpload(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/objects/batch-upload", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "test-token", r.Header.Get("X-Service-Token"))
+		body, _ := io.ReadAll(r.Body)
+		assert.JSONEq(t, `{"obj_type":"rows","items":[{"hash":"a","data_b64":"e30="}]}`, string(body))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"accepted":1,"errors":[]}`))
+	}))
+	data, status, err := client.BatchUpload(context.Background(), "myrepo", []byte(`{"obj_type":"rows","items":[{"hash":"a","data_b64":"e30="}]}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), `"accepted":1`)
+}
+
 func TestGetTree(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/repos/myrepo/tree/abc123/", r.URL.Path)

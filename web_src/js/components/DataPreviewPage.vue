@@ -3,14 +3,18 @@
     <div class="ui segment datahub-page-header">
       <div>
         <div class="datahub-eyebrow">JSONL preview</div>
-        <h2 class="ui header datahub-page-title">{{ filePath }}</h2>
+        <h2 class="ui header datahub-page-title">{{ resolvedFilePath || filePath || commitHash }}</h2>
         <div class="datahub-overview-detail">
-          <span class="datahub-hash">{{ shortHash(commitHash) }}</span>
+          <span class="datahub-hash">{{ shortHash(resolvedCommitHash || commitHash) }}</span>
           semantic row preview for SFT data
         </div>
       </div>
       <div class="datahub-header-actions">
-        <a class="ui small basic button" :href="rawPath" target="_blank" rel="nofollow">
+        <div v-if="openDataIssueCount" class="ui tiny warning message datahub-export-warning">
+          <span>{{ openDataIssueCount }} open data {{ openDataIssueCount === 1 ? 'issue' : 'issues' }} before export</span>
+          <a :href="openDataIssuesHref">Review</a>
+        </div>
+        <a v-if="canPreviewFile" class="ui small basic button" :href="rawPath" target="_blank" rel="nofollow">
           Raw
         </a>
         <a class="ui small basic button" :href="repoPath">
@@ -59,7 +63,7 @@
             <a
               v-else
               class="datahub-tree-row"
-              :class="{active: entry.path === filePath}"
+              :class="{active: entry.path === resolvedFilePath}"
               :href="previewHref(entry.path)"
               :style="{paddingLeft: `${8 + entry.depth * 14}px`}"
             >
@@ -84,12 +88,17 @@
         </button>
       </aside>
       <main class="datahub-preview-review">
+        <div v-if="!treeLoading && !treeError && !canPreviewFile" class="ui message">
+          No JSONL manifest files are available for this ref yet.
+        </div>
         <JsonlViewer
+          v-else-if="canPreviewFile"
           :owner="owner"
           :repo="repo"
-          :commit-hash="commitHash"
-          :file-path="filePath"
+          :commit-hash="resolvedCommitHash"
+          :file-path="resolvedFilePath"
           :single-row-mode="true"
+          @open-issues-loaded="handleOpenIssuesLoaded"
         />
       </main>
     </div>
@@ -117,17 +126,24 @@ export default {
       openFolders: new Set(),
       stats: null,
       filesSidebarCollapsed: false,
+      openDataIssueCount: 0,
+      openDataIssuesHref: '',
+      resolvedCommitHash: '',
+      resolvedFilePath: '',
     };
   },
   computed: {
+    canPreviewFile() {
+      return Boolean(this.resolvedCommitHash && this.resolvedFilePath);
+    },
     repoPath() {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
     },
     commitPath() {
-      return `${this.repoPath}/data/commit/${encodeURIComponent(this.commitHash)}`;
+      return `${this.repoPath}/data/commit/${encodeURIComponent(this.resolvedCommitHash || this.commitHash)}`;
     },
     rawPath() {
-      return `/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub/export/${encodeURIComponent(this.commitHash)}/${this.filePath.split('/').map(encodeURIComponent).join('/')}`;
+      return `/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub/export/${encodeURIComponent(this.resolvedCommitHash)}/${this.resolvedFilePath.split('/').map(encodeURIComponent).join('/')}`;
     },
     treeRows() {
       const manifestPaths = this.manifestPaths.toSorted();
@@ -184,12 +200,15 @@ export default {
   async mounted() {
     this.seedOpenFolders();
     try {
+      this.resolvedCommitHash = await this.resolveCommitHash();
       const [tree, stats] = await Promise.all([
-        datahubFetch(this.owner, this.repo, `/tree/${this.commitHash}`),
+        datahubFetch(this.owner, this.repo, `/tree/${this.resolvedCommitHash}`),
         this.fetchStats(),
       ]);
       this.tree = tree;
       this.stats = stats;
+      this.resolvedFilePath = this.resolveFilePath();
+      this.seedOpenFolders();
     } catch (e) {
       this.treeError = e.message;
     } finally {
@@ -201,20 +220,34 @@ export default {
       return hash ? hash.slice(0, 7) : '-';
     },
     previewHref(path) {
-      return `${this.repoPath}/data/preview/${encodeURIComponent(this.commitHash)}/${path.split('/').map(encodeURIComponent).join('/')}`;
+      return `${this.repoPath}/data/preview/${encodeURIComponent(this.resolvedCommitHash || this.commitHash)}/${path.split('/').map(encodeURIComponent).join('/')}`;
     },
     normalizePath(path) {
       return String(path || '').replace(/^\/+/, '');
     },
+    encodePath(path) {
+      return String(path || '').split('/').map(encodeURIComponent).join('/');
+    },
     async fetchStats() {
       try {
-        return await datahubFetch(this.owner, this.repo, `/stats/${this.commitHash}`);
+        return await datahubFetch(this.owner, this.repo, `/stats/${this.resolvedCommitHash}`);
       } catch {
         return null;
       }
     },
+    async resolveCommitHash() {
+      if (/^[a-f0-9]{4,64}$/.test(this.commitHash || '')) return this.commitHash;
+      const refName = String(this.commitHash || '').replace(/^heads\//, '');
+      const ref = await datahubFetch(this.owner, this.repo, `/refs/heads/${this.encodePath(refName)}`);
+      return ref.target_hash || ref.object_hash || ref.hash || ref.commit_hash || '';
+    },
+    resolveFilePath() {
+      const normalized = this.normalizePath(this.filePath);
+      if (normalized) return normalized;
+      return this.manifestPaths.toSorted()[0] || '';
+    },
     seedOpenFolders() {
-      const parts = this.normalizePath(this.filePath).split('/');
+      const parts = this.normalizePath(this.resolvedFilePath || this.filePath).split('/');
       const open = new Set();
       for (let index = 1; index < parts.length; index++) {
         open.add(`${parts.slice(0, index).join('/')}/`);
@@ -232,6 +265,10 @@ export default {
     },
     toggleFilesSidebar() {
       this.filesSidebarCollapsed = !this.filesSidebarCollapsed;
+    },
+    handleOpenIssuesLoaded(payload = {}) {
+      this.openDataIssueCount = Number(payload.count) || 0;
+      this.openDataIssuesHref = payload.href || `${this.repoPath}/issues`;
     },
   },
 };
@@ -255,10 +292,20 @@ export default {
 }
 
 .datahub-header-actions {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
+}
+
+.datahub-export-warning {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  margin: 0 !important;
+  min-height: 32px;
+  padding: 6px 10px !important;
 }
 
 .datahub-eyebrow {

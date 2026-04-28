@@ -1,7 +1,7 @@
 {{template "base/head" .}}
 <div role="main" aria-label="{{.Title}}" class="page-content repository">
 	{{template "repo/header" .}}
-	<div class="ui container">
+	<div class="ui container fluid padded datahub-pull-container">
 		{{template "base/alert" .}}
 		<div id="data-pull-page"
 			data-owner="{{.Repository.OwnerName}}"
@@ -11,4 +11,3 @@
 	</div>
 </div>
 {{template "base/footer" .}}
-

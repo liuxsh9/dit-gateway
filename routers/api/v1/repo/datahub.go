@@ -4,12 +4,18 @@
 package repo
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
+	git_model "forgejo.org/models/git"
+	repo_model "forgejo.org/models/repo"
+	unit_model "forgejo.org/models/unit"
 	"forgejo.org/modules/datahub"
 	"forgejo.org/modules/setting"
 	"forgejo.org/services/context"
+	"forgejo.org/services/convert"
 )
 
 func proxyToDatahub(ctx *context.APIContext, fn func() ([]byte, int, error)) {
@@ -87,6 +93,26 @@ func DatahubPushObjects(ctx *context.APIContext) {
 	})
 }
 
+func DatahubBatchExists(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().BatchExists(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
+func DatahubBatchUpload(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().BatchUpload(ctx, ctx.Repo.Repository.Name, body)
+	})
+}
+
 func DatahubGetTree(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().GetTree(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"), ctx.Params("*"))
@@ -132,12 +158,176 @@ func DatahubGetPull(ctx *context.APIContext) {
 }
 
 func DatahubMergePull(ctx *context.APIContext) {
+	if !setting.DataHub.Enabled {
+		ctx.NotFound()
+		return
+	}
+	if !ctx.Repo.Repository.IsDataRepo {
+		ctx.NotFound()
+		return
+	}
+
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+
+	pullData, status, err := datahub.DefaultClient().GetPull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+	if err != nil {
+		ctx.Error(http.StatusBadGateway, "datahub proxy", err)
+		return
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		ctx.Resp.Header().Set("Content-Type", "application/json")
+		ctx.Resp.WriteHeader(status)
+		_, _ = ctx.Resp.Write(pullData)
+		return
+	}
+	targetBranch := datahubPullTargetBranch(pullData)
+	canMerge, err := datahubCanCurrentUserMerge(ctx, targetBranch)
+	if err != nil {
+		ctx.Error(http.StatusInternalServerError, "GetFirstMatchProtectedBranchRule", err)
+		return
+	}
+	if !canMerge {
+		ctx.Error(http.StatusForbidden, "DatahubMergePull", "user is not allowed to merge this data pull request")
+		return
+	}
+
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().MergePull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+	})
+}
+
+func datahubPullTargetBranch(payload []byte) string {
+	var pull struct {
+		TargetRef    string `json:"target_ref"`
+		TargetBranch string `json:"target_branch"`
+		BaseRef      string `json:"base_ref"`
+		BaseBranch   string `json:"base_branch"`
+	}
+	if err := json.Unmarshal(payload, &pull); err != nil {
+		return ""
+	}
+	for _, branch := range []string{pull.TargetRef, pull.TargetBranch, pull.BaseRef, pull.BaseBranch} {
+		if branch != "" {
+			return datahubBranchName(branch)
+		}
+	}
+	return ""
+}
+
+func datahubBranchName(refName string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(refName, "refs/heads/"), "heads/")
+}
+
+func datahubCanCurrentUserMerge(ctx *context.APIContext, targetBranch string) (bool, error) {
+	if ctx.Doer == nil || !ctx.Repo.Permission.CanWrite(unit_model.TypeCode) {
+		return false, nil
+	}
+	if targetBranch == "" {
+		return true, nil
+	}
+	protectedBranchRule, err := git_model.GetFirstMatchProtectedBranchRule(ctx, ctx.Repo.Repository.ID, targetBranch)
+	if err != nil {
+		return false, err
+	}
+	if protectedBranchRule == nil {
+		return true, nil
+	}
+	return git_model.IsUserMergeWhitelisted(ctx, protectedBranchRule, ctx.Doer.ID, ctx.Repo.Permission), nil
+}
+
+func DatahubListPullComments(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().ListPullComments(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+	})
+}
+
+func DatahubCreatePullComment(ctx *context.APIContext) {
 	body, ok := readBody(ctx)
 	if !ok {
 		return
 	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().MergePull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+		return datahub.DefaultClient().CreatePullComment(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+	})
+}
+
+func DatahubListPullReviews(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().ListPullReviews(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+	})
+}
+
+func DatahubCreatePullReview(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().CreatePullReview(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+	})
+}
+
+func DatahubGovernance(ctx *context.APIContext) {
+	if !setting.DataHub.Enabled {
+		ctx.NotFound()
+		return
+	}
+	if !ctx.Repo.Repository.IsDataRepo {
+		ctx.NotFound()
+		return
+	}
+
+	if err := ctx.Repo.Repository.LoadAttributes(ctx); err != nil {
+		ctx.Error(http.StatusInternalServerError, "LoadAttributes", err)
+		return
+	}
+
+	var doerID int64
+	if ctx.Doer != nil {
+		doerID = ctx.Doer.ID
+	}
+	reviewers, err := repo_model.GetReviewers(ctx, ctx.Repo.Repository, doerID, 0)
+	if err != nil {
+		ctx.Error(http.StatusInternalServerError, "GetReviewers", err)
+		return
+	}
+
+	protectedBranches, err := git_model.FindRepoProtectedBranchRules(ctx, ctx.Repo.Repository.ID)
+	if err != nil {
+		ctx.Error(http.StatusInternalServerError, "FindRepoProtectedBranchRules", err)
+		return
+	}
+	apiProtections := make([]any, len(protectedBranches))
+	for i := range protectedBranches {
+		apiProtections[i] = convert.ToBranchProtection(ctx, protectedBranches[i], ctx.Repo.Repository)
+	}
+
+	targetBranch := ctx.FormString("target_branch")
+	protectedBranchRule := protectedBranches.GetFirstMatched(targetBranch)
+	canMerge := ctx.Doer != nil && ctx.Repo.Permission.CanWrite(unit_model.TypeCode)
+	if protectedBranchRule != nil {
+		canMerge = git_model.IsUserMergeWhitelisted(ctx, protectedBranchRule, doerID, ctx.Repo.Permission)
+	}
+
+	repoLink := ctx.Repo.Repository.Link()
+	ctx.JSON(http.StatusOK, map[string]any{
+		"repository":         convert.ToRepo(ctx, ctx.Repo.Repository, ctx.Repo.Permission),
+		"reviewers":          convert.ToUsers(ctx, ctx.Doer, reviewers),
+		"branch_protections": apiProtections,
+		"current_user": map[string]any{
+			"is_authenticated": ctx.Doer != nil,
+			"can_merge":        canMerge,
+			"target_branch":    targetBranch,
+		},
+		"links": map[string]string{
+			"settings":        repoLink + "/settings",
+			"collaboration":   repoLink + "/settings/collaboration",
+			"branches":        repoLink + "/settings/branches",
+			"new_branch_rule": repoLink + "/settings/branches/edit",
+		},
 	})
 }
 

@@ -1203,6 +1203,8 @@ func registerRoutes(m *web.Route) {
 			m.Get("/commits/*", repo.DataHubCommits)
 			m.Get("/commit/{hash:([a-f0-9]{4,64})$}", repo.DataHubCommit)
 			m.Get("/preview/{commit:([a-f0-9]{4,64})$}/*", repo.DataHubPreview)
+			m.Get("/preview/{ref}", repo.DataHubPreview)
+			m.Get("/preview/{ref}/*", repo.DataHubPreview)
 		}, reqRepoCodeReader)
 		m.Group("/tree-list", func() {
 			m.Get("/branch/*", context.RepoRefByType(context.RepoRefBranch), repo.TreeList)

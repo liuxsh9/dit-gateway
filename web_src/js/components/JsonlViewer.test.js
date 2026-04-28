@@ -1,11 +1,24 @@
 import {mount} from '@vue/test-utils';
-import {expect, test, vi} from 'vitest';
+import {afterEach, expect, test, vi} from 'vitest';
 import JsonlViewer from './JsonlViewer.vue';
 import {datahubFetch} from '../utils/datahub-api.js';
 
 vi.mock('../utils/datahub-api.js', () => ({
   datahubFetch: vi.fn(),
 }));
+
+global.fetch = vi.fn(async () => ({
+  ok: true,
+  json: async () => [],
+}));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  global.fetch = vi.fn(async () => ({
+    ok: true,
+    json: async () => [],
+  }));
+});
 
 test('loads paged manifest entries and row objects from core API', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
@@ -334,4 +347,77 @@ test('searches the current JSONL file and lets reviewers jump to matching rows',
 
   await vi.waitFor(() => expect(wrapper.text()).toContain('needle row'));
   expect(wrapper.text()).toContain('Row 74');
+});
+
+test('offers prefilled issue creation from a preview row and marks open linked issues', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train/sft.jsonl?offset=0&limit=50') {
+      return {
+        total: 1,
+        entries: [
+          {row_hash: 'abc123def456'},
+        ],
+      };
+    }
+    if (path === '/objects/rows/abc123def456') {
+      return {
+        version: '2.0.0',
+        meta_info: {
+          owner: 'erin',
+          query_source: 'human_eval',
+        },
+        messages: [
+          {role: 'user', content: 'bad source row'},
+          {role: 'assistant', content: 'answer'},
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+  vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+    expect(String(url)).toContain('/api/v1/repos/alice/dataset/issues?');
+    return {
+      ok: true,
+      json: async () => [
+        {
+          number: 17,
+          title: '[Data issue] train/sft.jsonl row 1',
+          state: 'open',
+          html_url: '/alice/dataset/issues/17',
+          body: [
+            '<!-- datahub-row-context -->',
+            'path: train/sft.jsonl',
+            'commit: commit123',
+            'row: 1',
+            'row_hash: abc123def456',
+          ].join('\n'),
+        },
+      ],
+    };
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train/sft.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('bad source row'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('1 open data issue'));
+
+  const link = wrapper.find('a.datahub-preview-issue-link');
+  expect(link.exists()).toBe(true);
+  expect(link.attributes('href')).toContain('/alice/dataset/issues/new?');
+  const issueUrl = new URL(link.attributes('href'), 'http://localhost');
+  expect(issueUrl.searchParams.get('title')).toBe('[Data issue] train/sft.jsonl row 1');
+  expect(issueUrl.searchParams.get('body')).toContain('<!-- datahub-row-context -->');
+  expect(issueUrl.searchParams.get('body')).toContain('path: train/sft.jsonl');
+  expect(issueUrl.searchParams.get('body')).toContain('commit: commit123');
+  expect(issueUrl.searchParams.get('body')).toContain('row_hash: abc123def456');
+  expect(issueUrl.searchParams.get('body')).toContain('responsible_owner: erin');
+  expect(wrapper.find('.datahub-row-index-item.has-open-issue').exists()).toBe(true);
+  expect(wrapper.emitted('open-issues-loaded')?.[0]?.[0]).toMatchObject({count: 1});
 });
