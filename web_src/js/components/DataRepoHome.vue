@@ -100,10 +100,34 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="entry in filteredDirectoryEntries" :key="entry.path">
+                <tr
+                  v-for="entry in filteredDirectoryEntries"
+                  :key="entry.path"
+                  class="datahub-file-row"
+                  :class="entry.type === 'tree' ? 'datahub-file-row-folder' : 'datahub-file-row-file'"
+                >
                   <td>
                     <div class="datahub-file-name-cell">
-                      <i :class="entry.type === 'tree' ? 'folder icon' : 'file outline icon'"></i>
+                      <span
+                        v-if="entry.type === 'tree'"
+                        class="datahub-tree-chevron"
+                        aria-hidden="true"
+                      ></span>
+                      <span
+                        v-else
+                        class="datahub-tree-file-spacer"
+                        aria-hidden="true"
+                      ></span>
+                      <span
+                        class="datahub-tree-entry-icon"
+                        :class="entry.type === 'tree' ? 'datahub-tree-folder-icon' : 'datahub-tree-file-icon'"
+                        aria-hidden="true"
+                      >
+                        <SvgIcon
+                          :name="entry.type === 'tree' ? 'octicon-file-directory-fill' : 'octicon-file'"
+                          :size="16"
+                        />
+                      </span>
                       <a
                         v-if="entry.type === 'tree'"
                         class="datahub-file-link"
@@ -247,9 +271,10 @@
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
 import DataDiffView from './DataDiffView.vue';
+import {SvgIcon} from '../svg.js';
 
 export default {
-  components: {DataDiffView},
+  components: {DataDiffView, SvgIcon},
   props: {
     owner: String,
     repo: String,
@@ -929,23 +954,80 @@ export default {
 .datahub-file-actions {
   align-items: center;
   display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.datahub-file-name-cell {
+  flex-wrap: nowrap;
+}
+
+.datahub-file-actions {
   flex-wrap: wrap;
-  gap: 4px;
 }
 
 .datahub-file-name {
   margin-right: 6px;
 }
 
+.datahub-file-row {
+  border-top: 1px solid var(--color-secondary);
+}
+
+.datahub-file-row:first-child {
+  border-top: 0;
+}
+
+.datahub-file-row:hover {
+  background: var(--color-hover);
+}
+
 .datahub-file-link {
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datahub-file-row-folder .datahub-file-link {
+  color: var(--color-text);
 }
 
 .datahub-file-path {
   color: var(--color-text-light-2);
   font-size: 12px;
-  margin-left: 22px;
+  margin-left: 46px;
   margin-top: 2px;
+}
+
+.datahub-tree-chevron,
+.datahub-tree-file-spacer {
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  flex: 0 0 14px;
+  font-size: 17px;
+  justify-content: center;
+  line-height: 1;
+}
+
+.datahub-tree-chevron::before {
+  content: '›';
+}
+
+.datahub-tree-entry-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 18px;
+  justify-content: center;
+}
+
+.datahub-tree-folder-icon {
+  color: var(--color-accent);
+}
+
+.datahub-tree-file-icon {
+  color: var(--color-text-light-2);
 }
 
 .datahub-table-message {

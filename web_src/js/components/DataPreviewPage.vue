@@ -32,8 +32,15 @@
               :style="{paddingLeft: `${8 + entry.depth * 14}px`}"
               @click="toggleFolder(entry.path)"
             >
-              <i :class="isFolderOpen(entry.path) ? 'folder open icon' : 'folder icon'"></i>
-              <span>{{ entry.name }}</span>
+              <span
+                class="datahub-tree-chevron"
+                :class="{'is-open': isFolderOpen(entry.path)}"
+                aria-hidden="true"
+              ></span>
+              <span class="datahub-tree-entry-icon datahub-tree-folder-icon" aria-hidden="true">
+                <SvgIcon name="octicon-file-directory-fill" :size="16" />
+              </span>
+              <span class="datahub-tree-label">{{ entry.name }}</span>
             </button>
             <a
               v-else
@@ -42,8 +49,11 @@
               :href="previewHref(entry.path)"
               :style="{paddingLeft: `${8 + entry.depth * 14}px`}"
             >
-              <i class="file outline icon"></i>
-              <span>{{ entry.name }}</span>
+              <span class="datahub-tree-file-spacer" aria-hidden="true"></span>
+              <span class="datahub-tree-entry-icon datahub-tree-file-icon" aria-hidden="true">
+                <SvgIcon name="octicon-file" :size="16" />
+              </span>
+              <span class="datahub-tree-label">{{ entry.name }}</span>
             </a>
           </template>
         </nav>
@@ -64,9 +74,10 @@
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
 import JsonlViewer from './JsonlViewer.vue';
+import {SvgIcon} from '../svg.js';
 
 export default {
-  components: {JsonlViewer},
+  components: {JsonlViewer, SvgIcon},
   props: {
     owner: String,
     repo: String,
@@ -281,6 +292,7 @@ export default {
   gap: 6px;
   min-height: 32px;
   overflow: hidden;
+  padding-right: 8px;
   text-align: left;
   width: 100%;
 }
@@ -292,10 +304,53 @@ export default {
   text-decoration: none;
 }
 
-.datahub-tree-row span {
+.datahub-tree-row.active {
+  border-left-color: var(--color-accent);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+  font-weight: 600;
+}
+
+.datahub-tree-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.datahub-tree-chevron,
+.datahub-tree-file-spacer {
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  flex: 0 0 14px;
+  font-size: 17px;
+  justify-content: center;
+  line-height: 1;
+}
+
+.datahub-tree-chevron {
+  transition: transform 0.12s ease;
+}
+
+.datahub-tree-chevron::before {
+  content: '›';
+}
+
+.datahub-tree-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.datahub-tree-entry-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 18px;
+  justify-content: center;
+}
+
+.datahub-tree-folder-icon {
+  color: var(--color-accent);
+}
+
+.datahub-tree-file-icon {
+  color: var(--color-text-light-2);
 }
 
 .datahub-preview-review {

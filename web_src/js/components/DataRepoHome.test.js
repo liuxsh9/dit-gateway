@@ -289,6 +289,50 @@ test('renders a GitHub-like Data file browser without duplicate side rails', asy
   expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train/general.jsonl"]').exists()).toBe(true);
 });
 
+test('uses distinct tree affordances for folders and files in the Data browser', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'eval/tool/weather.jsonl', obj_type: 'manifest', obj_hash: 'manifest1', sidecar_hash: 'sidecar1'},
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest2', sidecar_hash: 'sidecar2'},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'eval/tool/weather.jsonl', row_count: 1, char_count: 64, token_estimate: 16, lang_distribution: {en: 1}, has_sidecar: true},
+          {path: 'train.jsonl', row_count: 2, char_count: 128, token_estimate: 32, lang_distribution: {en: 2}, has_sidecar: true},
+        ],
+        totals: {file_count: 2, row_count: 3, char_count: 192, token_estimate: 48, lang_distribution: {en: 3}},
+      };
+    }
+    if (path === '/meta/commit123/eval/tool/weather.jsonl/summary') return {row_count: 1, char_count: 64, token_estimate: 16, lang_distribution: {en: 1}};
+    if (path === '/meta/commit123/train.jsonl/summary') return {row_count: 2, char_count: 128, token_estimate: 32, lang_distribution: {en: 2}};
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
+
+  const folderRows = wrapper.findAll('.datahub-file-row-folder');
+  const fileRows = wrapper.findAll('.datahub-file-row-file');
+  expect(folderRows).toHaveLength(1);
+  expect(fileRows).toHaveLength(1);
+  expect(folderRows[0].find('.datahub-tree-chevron').exists()).toBe(true);
+  expect(folderRows[0].find('.datahub-tree-folder-icon').exists()).toBe(true);
+  expect(fileRows[0].find('.datahub-tree-file-spacer').exists()).toBe(true);
+  expect(fileRows[0].find('.datahub-tree-file-icon').exists()).toBe(true);
+});
+
 test('uses stats file paths to expose nested JSONL files when the root tree only has folders', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];

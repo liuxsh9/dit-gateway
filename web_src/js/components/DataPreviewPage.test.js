@@ -52,6 +52,40 @@ test('mounts a dedicated JSONL preview page with tree navigation and single-row 
   expect(wrapper.find('a[href="/alice/dataset/data/preview/abcdef1234567890/eval/hard.jsonl"]').exists()).toBe(true);
 });
 
+test('renders preview tree rows with folder chevrons, file icons, and active file state', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'eval/tool/weather.jsonl', obj_type: 'manifest'},
+          {name: 'eval/safety.jsonl', obj_type: 'manifest'},
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'abcdef1234567890',
+      filePath: 'eval/tool/weather.jsonl',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.findAll('.datahub-tree-folder').length).toBeGreaterThanOrEqual(1));
+
+  const folderRows = wrapper.findAll('.datahub-tree-folder');
+  const activeFile = wrapper.find('.datahub-tree-row.active');
+  expect(folderRows.length).toBeGreaterThanOrEqual(1);
+  expect(folderRows[0].find('.datahub-tree-chevron').exists()).toBe(true);
+  expect(folderRows[0].find('.datahub-tree-folder-icon').exists()).toBe(true);
+  expect(activeFile.text()).toContain('weather.jsonl');
+  expect(activeFile.find('.datahub-tree-file-spacer').exists()).toBe(true);
+  expect(activeFile.find('.datahub-tree-file-icon').exists()).toBe(true);
+});
+
 test('builds the preview tree from stats when the root tree only exposes folders', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/tree/abcdef1234567890') {
