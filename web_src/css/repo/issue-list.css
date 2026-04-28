@@ -110,3 +110,295 @@
   margin-bottom: 8px;
   min-width: fit-content;
 }
+
+.repository.issue-list .datahub-issue-list-header {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  margin-bottom: 14px;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-search {
+  grid-column: 1;
+  min-width: 0;
+  order: initial !important;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-search .ui.action.input {
+  display: flex;
+  width: 100%;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-search .ui.action.input > input {
+  border-radius: 6px 0 0 6px;
+  min-height: 34px;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-search .ui.action.input > button {
+  border-radius: 0 6px 6px 0;
+  min-height: 34px;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-navbar {
+  display: flex;
+  grid-column: 2;
+  justify-content: flex-end;
+  margin: 0;
+  order: initial !important;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-navbar .item {
+  align-items: center;
+  border: 1px solid var(--color-secondary);
+  color: var(--color-text);
+  display: inline-flex;
+  font-weight: var(--font-weight-semibold);
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-navbar .item:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-navbar .item + .item {
+  border-left: 0;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-navbar .item:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.repository.issue-list .datahub-issue-list-header .issue-list-new {
+  background: var(--color-green) !important;
+  border-radius: 6px;
+  color: var(--color-white) !important;
+  font-weight: var(--font-weight-semibold);
+  grid-column: 3;
+  margin-left: 0 !important;
+  min-height: 34px;
+  order: initial !important;
+}
+
+.repository.issue-list #issue-filters {
+  align-items: center;
+  background: var(--color-box-header);
+  border: 1px solid var(--color-secondary);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  margin: 0;
+  min-height: 0;
+  overflow: visible;
+  padding: 8px 16px;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-left,
+.repository.issue-list #issue-filters .issue-list-toolbar-right {
+  min-width: 0;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-left {
+  flex: 0 0 auto;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-right {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-left .switch {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-left .switch .item {
+  align-items: center;
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--color-text-light);
+  display: inline-flex;
+  font-weight: var(--font-weight-medium);
+  gap: 5px;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-left .switch .item.active {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-left .switch .item .svg {
+  color: inherit;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  justify-content: flex-end;
+  margin: 0;
+  min-height: 20px;
+  overflow: visible;
+  position: relative;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu > .dropdown.item > .menu:not(.visible) {
+  display: none !important;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu > .dropdown.item > .menu.visible {
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  position: absolute;
+  z-index: 1001;
+  min-height: 0;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu > .item {
+  color: var(--color-text-light);
+  font-size: 12px;
+  margin: 0 !important;
+  min-height: 0;
+  padding: 0 !important;
+}
+
+.repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu > .item::before {
+  display: none;
+}
+
+.repository.issue-list #issue-filters .ui.dropdown > .menu {
+  display: none !important;
+  position: absolute !important;
+}
+
+.repository.issue-list #issue-filters .ui.dropdown > .menu.hidden.transition {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.repository.issue-list #issue-filters .ui.dropdown.active.visible > .menu,
+.repository.issue-list #issue-filters .ui.dropdown > .menu.visible:not(.hidden) {
+  display: block !important;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  z-index: 1001;
+}
+
+.repository.issue-list #issue-list {
+  border: 1px solid var(--color-secondary);
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+
+.repository.issue-list #issue-list > .flex-item {
+  background: var(--color-body);
+  padding: 12px 16px;
+}
+
+.repository.issue-list #issue-list > .flex-item:hover {
+  background: var(--color-hover);
+}
+
+.repository.issue-list #issue-list .flex-item-icon {
+  margin-top: 2px;
+}
+
+.repository.issue-list #issue-list .issue-title {
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.25;
+}
+
+.repository.issue-list #issue-list .labels-list .label {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 18px;
+  padding: 0 8px;
+}
+
+.repository.issue-list #issue-list .issue-meta {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.repository.issue-list #issue-list .flex-item-trailing {
+  color: var(--color-text-light-2);
+  min-width: 48px;
+}
+
+.repository.issue-list #issue-list > .tw-text-center {
+  background: var(--color-body);
+  border-top: 1px solid var(--color-secondary);
+  padding: 48px 16px !important;
+}
+
+.repository.issue-list #issue-list > .tw-text-center h3 {
+  color: var(--color-text);
+  font-size: 18px;
+  margin-bottom: 6px !important;
+}
+
+@media (max-width: 900px) {
+  .repository.issue-list .datahub-issue-list-header {
+    grid-template-columns: auto auto 1fr;
+  }
+
+  .repository.issue-list .datahub-issue-list-header .issue-list-search {
+    grid-column: 1 / -1;
+  }
+
+  .repository.issue-list .datahub-issue-list-header .issue-list-navbar {
+    grid-column: 1;
+    justify-content: flex-start;
+  }
+
+  .repository.issue-list .datahub-issue-list-header .issue-list-new {
+    grid-column: 2;
+    justify-self: flex-start;
+  }
+
+  .repository.issue-list #issue-filters {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .repository.issue-list #issue-filters .issue-list-toolbar-right {
+    width: auto;
+  }
+
+  .repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu {
+    justify-content: flex-end;
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+  }
+
+  .repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu > .dropdown.item {
+    position: relative;
+  }
+}
+
+@media (max-width: 640px) {
+  .repository.issue-list .datahub-issue-list-header {
+    grid-template-columns: 1fr;
+  }
+
+  .repository.issue-list .datahub-issue-list-header .issue-list-navbar,
+  .repository.issue-list .datahub-issue-list-header .issue-list-new {
+    grid-column: 1;
+  }
+}
