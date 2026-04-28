@@ -90,6 +90,18 @@
             </a>
           </div>
 
+          <div v-if="currentPath" class="datahub-path-bar" aria-label="Current folder">
+            <button type="button" class="datahub-path-root" @click="openFolder('')">
+              {{ repo }}
+            </button>
+            <template v-for="crumb in pathCrumbs" :key="crumb.path">
+              <span class="datahub-path-separator">/</span>
+              <button type="button" class="datahub-path-crumb" @click="openFolder(crumb.path)">
+                {{ crumb.name }}
+              </button>
+            </template>
+          </div>
+
           <div v-if="manifestEntries.length === 0" class="ui message datahub-table-message">
             This data repository has no JSONL manifests on the selected branch yet.
           </div>
@@ -118,6 +130,30 @@
               </thead>
               <tbody>
                 <tr
+                  v-if="currentPath && !fileFilter"
+                  class="datahub-file-row datahub-file-row-folder datahub-parent-row"
+                >
+                  <td>
+                    <button
+                      type="button"
+                      class="datahub-file-name-cell datahub-folder-button"
+                      aria-label="Open parent directory"
+                      @click="openFolder(parentPath)"
+                    >
+                      <span class="datahub-tree-chevron is-parent" aria-hidden="true"></span>
+                      <span class="datahub-tree-entry-icon datahub-tree-folder-icon" aria-hidden="true">
+                        <SvgIcon name="octicon-file-directory-fill" :size="16" />
+                      </span>
+                      <span class="datahub-file-link">..</span>
+                    </button>
+                  </td>
+                  <td class="datahub-metric-cell datahub-file-commit-cell">Parent directory</td>
+                  <td class="datahub-metric-cell datahub-file-updated-cell">—</td>
+                  <td class="right aligned datahub-metric-cell">—</td>
+                  <td class="right aligned datahub-metric-cell">—</td>
+                  <td class="datahub-metric-cell datahub-lang-cell">—</td>
+                </tr>
+                <tr
                   v-for="entry in filteredDirectoryEntries"
                   :key="entry.path"
                   class="datahub-file-row"
@@ -145,12 +181,13 @@
                           :size="16"
                         />
                       </span>
-                      <a
+                      <button
                         v-if="entry.type === 'tree'"
-                        class="datahub-file-link"
-                        href="#"
-                        @click.prevent="openFolder(entry.path)"
-                      >{{ entry.displayName }}</a>
+                        type="button"
+                        class="datahub-file-link datahub-folder-name-button"
+                        :aria-label="`Open folder ${entry.displayName}`"
+                        @click="openFolder(entry.path)"
+                      >{{ entry.displayName }}</button>
                       <a
                         v-else
                         class="datahub-file-link"
@@ -433,6 +470,11 @@ export default {
         name,
         path: `${parts.slice(0, index + 1).join('/')}/`,
       }));
+    },
+    parentPath() {
+      const parts = this.normalizePath(this.currentPath).replace(/\/$/, '').split('/').filter(Boolean);
+      if (parts.length <= 1) return '';
+      return `${parts.slice(0, -1).join('/')}/`;
     },
     repoUrl() {
       const origin = window.location?.origin || 'http://localhost';
@@ -1258,6 +1300,37 @@ export default {
   text-decoration: none;
 }
 
+.datahub-path-bar {
+  align-items: center;
+  background: var(--color-body);
+  border-bottom: 1px solid var(--color-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 16px;
+}
+
+.datahub-path-root,
+.datahub-path-crumb {
+  background: transparent;
+  border: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+  padding: 0;
+}
+
+.datahub-path-root:hover,
+.datahub-path-crumb:hover {
+  text-decoration: underline;
+}
+
+.datahub-path-separator {
+  color: var(--color-text-light-2);
+}
+
 .datahub-file-name-cell,
 .datahub-file-actions {
   align-items: center;
@@ -1290,16 +1363,45 @@ export default {
   background: var(--color-hover);
 }
 
+.datahub-parent-row {
+  background: var(--color-box-header);
+}
+
 .datahub-file-link {
+  background: transparent;
+  border: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  display: inline-block;
+  font: inherit;
   font-weight: 600;
+  margin: 0;
   min-width: 0;
   overflow: hidden;
+  padding: 0;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .datahub-file-row-folder .datahub-file-link {
   color: var(--color-text);
+}
+
+.datahub-file-row-folder .datahub-file-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.datahub-folder-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  margin: 0;
+  padding: 0;
+  width: 100%;
 }
 
 .datahub-tree-chevron,
@@ -1314,6 +1416,10 @@ export default {
 
 .datahub-tree-chevron::before {
   content: '›';
+}
+
+.datahub-tree-chevron.is-parent::before {
+  content: '‹';
 }
 
 .datahub-tree-entry-icon {

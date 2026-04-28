@@ -292,6 +292,8 @@ test('renders a GitHub-like Data file browser without duplicate side rails', asy
   expect(wrapper.text()).not.toContain('Blame');
 
   await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'train').trigger('click');
+  expect(wrapper.text()).toContain('dataset/train');
+  expect(wrapper.find('.datahub-parent-row').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train/general.jsonl"]').exists()).toBe(true);
 });
 
@@ -458,7 +460,10 @@ test('renders mobile-readable file row metrics without relying on table columns'
   await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
   await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'eval').trigger('click');
+  expect(wrapper.find('.datahub-path-bar').text()).toContain('dataset/eval');
+  expect(wrapper.find('.datahub-parent-row').text()).toContain('Parent directory');
   await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'tool').trigger('click');
+  expect(wrapper.find('.datahub-path-bar').text()).toContain('dataset/eval/tool');
 
   const mobileMetrics = wrapper.find('.datahub-file-mobile-metrics');
   expect(mobileMetrics.exists()).toBe(true);
@@ -507,6 +512,7 @@ test('uses stats file paths to expose nested JSONL files when the root tree only
   await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
   await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'eval').trigger('click');
+  expect(wrapper.find('.datahub-parent-row').exists()).toBe(true);
   expect(wrapper.text()).toContain('tool');
   expect(wrapper.text()).not.toContain('weather.jsonl');
 
@@ -514,6 +520,13 @@ test('uses stats file paths to expose nested JSONL files when the root tree only
   expect(wrapper.text()).toContain('weather.jsonl');
   expect(wrapper.text()).toContain('702 B');
   expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/eval/tool/weather.jsonl"]').exists()).toBe(true);
+
+  const parentButton = wrapper.find('.datahub-parent-row .datahub-folder-button');
+  expect(parentButton.attributes('aria-label')).toBe('Open parent directory');
+  await parentButton.trigger('click');
+  expect(wrapper.find('.datahub-path-bar').text()).toContain('dataset/eval');
+  expect(wrapper.text()).toContain('tool');
+  expect(wrapper.text()).not.toContain('weather.jsonl');
 });
 
 test('shows dit workflow commands for dataset collaboration', async () => {
