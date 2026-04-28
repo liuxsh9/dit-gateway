@@ -115,23 +115,27 @@
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin-bottom: 14px;
 }
 
 .repository.issue-list .datahub-issue-list-header .issue-list-search {
   align-items: flex-start;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 4px;
   grid-column: 1;
+  max-width: calc(100vw - 460px);
   min-width: 0;
   order: initial !important;
 }
 
 .repository.issue-list .datahub-issue-list-header .issue-list-search .ui.action.input {
   display: flex;
+  flex: 1 1 auto;
   overflow: visible;
+  position: relative;
   width: 100%;
 }
 
@@ -154,30 +158,34 @@
   flex: 1 1 auto;
   min-height: 34px;
   min-width: 0;
+  padding-left: 34px;
 }
 
-.repository.issue-list .datahub-issue-list-header .issue-list-search .ui.action.input > button {
-  border-radius: 0 6px 6px 0;
-  min-height: 34px;
+.repository.issue-list .datahub-issue-list-header .datahub-issue-search-icon {
+  color: var(--color-text-light-2);
+  fill: currentColor;
+  height: 16px;
+  left: 72px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  z-index: 1;
+}
+
+.repository.issue-list .datahub-issue-list-header .datahub-issue-search-submit {
+  border: 0;
+  height: 1px;
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 1px;
 }
 
 .repository.issue-list .datahub-issue-list-header .issue-list-search > a.show-modal {
-  align-self: flex-start;
-  color: var(--color-text-light);
-  display: inline-flex;
-  font-size: 12px;
-  gap: 4px;
-  margin-top: 4px;
-  min-height: 0;
-  padding: 0 !important;
-}
-
-.repository.issue-list .datahub-issue-list-header .issue-list-search > a.show-modal::after {
-  content: "Search syntax";
-}
-
-.repository.issue-list .datahub-issue-list-header .issue-list-search .ui.action.input > a.show-modal::after {
-  content: "Search syntax";
+  display: none;
 }
 
 .repository.issue-list .datahub-issue-list-header .issue-list-navbar {
@@ -186,10 +194,20 @@
   border-radius: 0;
   display: flex;
   gap: 8px;
-  grid-column: 2;
-  justify-content: flex-end;
+  justify-content: flex-start;
   margin: 0;
   order: initial !important;
+}
+
+.repository.issue-list .datahub-issue-list-header .datahub-issue-actions {
+  align-items: flex-start;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 2;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .repository.issue-list .datahub-issue-list-header .issue-list-navbar .item {
@@ -213,11 +231,12 @@
   background: var(--color-green) !important;
   border-radius: 6px;
   color: var(--color-white) !important;
+  flex: 0 0 auto;
   font-weight: var(--font-weight-semibold);
-  grid-column: 3;
   margin-left: 0 !important;
   min-height: 34px;
   order: initial !important;
+  white-space: nowrap;
 }
 
 .repository.issue-list #issue-filters {
@@ -404,23 +423,15 @@
   margin-bottom: 6px !important;
 }
 
-@media (max-width: 1000px) {
-  .repository.issue-list .datahub-issue-list-header {
-    grid-template-columns: auto auto 1fr;
-  }
-
+@media (max-width: 1200px) {
   .repository.issue-list .datahub-issue-list-header .issue-list-search {
     grid-column: 1 / -1;
+    max-width: none;
   }
 
-  .repository.issue-list .datahub-issue-list-header .issue-list-navbar {
-    grid-column: 1;
-    justify-content: flex-start;
-  }
-
-  .repository.issue-list .datahub-issue-list-header .issue-list-new {
-    grid-column: 2;
-    justify-self: flex-start;
+  .repository.issue-list .datahub-issue-list-header .datahub-issue-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 
   .repository.issue-list #issue-filters {
@@ -450,8 +461,12 @@
     grid-template-columns: 1fr;
   }
 
-  .repository.issue-list .datahub-issue-list-header .issue-list-navbar,
-  .repository.issue-list .datahub-issue-list-header .issue-list-new {
+  .repository.issue-list .datahub-issue-list-header .issue-list-search,
+  .repository.issue-list .datahub-issue-list-header .datahub-issue-actions {
     grid-column: 1;
+  }
+
+  .repository.issue-list .datahub-issue-list-header .datahub-issue-actions {
+    justify-content: flex-start;
   }
 }

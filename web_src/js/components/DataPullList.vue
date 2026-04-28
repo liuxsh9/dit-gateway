@@ -15,9 +15,6 @@
             @input="syncStatusFromQuery"
           >
         </label>
-        <button type="button" class="datahub-pr-syntax" @click="showSyntax = true">
-          Search syntax
-        </button>
       </div>
       <div class="datahub-pr-actions">
         <a class="datahub-pr-secondary-action" :href="labelsHref">Labels</a>
@@ -122,24 +119,6 @@
         </article>
       </template>
     </section>
-    <dialog v-if="showSyntax" class="datahub-pr-syntax-modal" open>
-      <article>
-        <header>
-          <strong>Search syntax</strong>
-          <button type="button" aria-label="Close search syntax" @click="showSyntax = false">×</button>
-        </header>
-        <div class="datahub-pr-syntax-content">
-          <table>
-            <tbody>
-              <tr v-for="row in syntaxRows" :key="row.filter">
-                <th><code>{{ row.filter }}</code></th>
-                <td>{{ row.description }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </dialog>
   </div>
 </template>
 
@@ -163,7 +142,6 @@ export default {
       query: 'is:pr is:open',
       selectedStatus: 'open',
       activeFilter: null,
-      showSyntax: false,
       selectedFilters: {
         author: '',
         label: '',
@@ -231,20 +209,6 @@ export default {
           {value: 'comments-desc', label: 'Most commented'},
           {value: 'comments-asc', label: 'Least commented'},
         ]),
-      ];
-    },
-    syntaxRows() {
-      return [
-        {filter: 'is:open', description: 'Show open pull requests'},
-        {filter: 'is:closed', description: 'Show closed pull requests'},
-        {filter: 'is:merged', description: 'Show merged pull requests'},
-        {filter: 'author:<name>', description: 'Filter by author'},
-        {filter: 'assignee:<name>', description: 'Filter by assignee'},
-        {filter: 'label:<name>', description: 'Filter by label'},
-        {filter: 'project:<name>', description: 'Filter by project'},
-        {filter: 'milestone:<name>', description: 'Filter by milestone'},
-        {filter: 'review:required', description: 'Show pull requests waiting for review'},
-        {filter: 'sort:updated-desc', description: 'Sort by updated time'},
       ];
     },
   },
@@ -473,14 +437,19 @@ export default {
 
 .datahub-pr-search-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 4px;
+  grid-column: 1;
+  max-width: calc(100vw - 460px);
   min-width: min(100%, 260px);
 }
 
 .datahub-pr-search {
   display: flex;
+  flex: 1 1 auto;
   position: relative;
+  width: 100%;
 }
 
 .datahub-pr-filter-prefix {
@@ -526,26 +495,9 @@ export default {
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
-}
-
-.datahub-pr-syntax {
-  align-items: center;
-  align-self: flex-start;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: var(--color-text-light);
-  cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  font-size: 12px;
-  padding: 0 4px;
-  white-space: nowrap;
-}
-
-.datahub-pr-syntax:hover {
-  color: var(--color-primary);
+  grid-column: 2;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .datahub-pr-secondary-action {
@@ -568,6 +520,7 @@ export default {
   font-weight: var(--font-weight-semibold);
   margin-left: 0 !important;
   min-height: 34px;
+  white-space: nowrap;
 }
 
 .datahub-pr-box {
@@ -833,87 +786,22 @@ export default {
   width: 28px;
 }
 
-.datahub-pr-syntax-modal {
-  background: transparent;
-  border: 0;
-  color: var(--color-text);
-  margin: auto;
-  max-width: min(620px, calc(100vw - 32px));
-  padding: 0;
-}
-
-.datahub-pr-syntax-modal::backdrop {
-  background: var(--color-shadow);
-}
-
-.datahub-pr-syntax-modal article {
-  background: var(--color-body);
-  border: 1px solid var(--color-secondary);
-  border-radius: 8px;
-  box-shadow: 0 16px 48px var(--color-shadow);
-  overflow: hidden;
-}
-
-.datahub-pr-syntax-modal header {
-  align-items: center;
-  background: var(--color-box-header);
-  border-bottom: 1px solid var(--color-secondary);
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 16px;
-}
-
-.datahub-pr-syntax-modal header button {
-  background: transparent;
-  border: 0;
-  color: var(--color-text-light);
-  cursor: pointer;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.datahub-pr-syntax-content {
-  padding: 10px 16px 16px;
-}
-
-.datahub-pr-syntax-content table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.datahub-pr-syntax-content th,
-.datahub-pr-syntax-content td {
-  border-bottom: 1px solid var(--color-secondary);
-  padding: 8px 6px;
-  text-align: left;
-}
-
-.datahub-pr-syntax-content tr:last-child th,
-.datahub-pr-syntax-content tr:last-child td {
-  border-bottom: 0;
-}
-
-.datahub-pr-syntax-content th {
-  white-space: nowrap;
-}
-
-@media (max-width: 1000px) {
+@media (max-width: 1200px) {
   .datahub-pr-statusbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .datahub-pr-toolbar {
-    grid-template-columns: 1fr;
-  }
-
   .datahub-pr-actions {
-    justify-content: flex-start;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
     flex-wrap: wrap;
-    width: 100%;
   }
 
-  .datahub-pr-search-group,
+  .datahub-pr-search-group {
+    max-width: none;
+  }
+
   .datahub-pr-state-links,
   .datahub-pr-filters {
     flex: 0 1 auto;
@@ -928,6 +816,18 @@ export default {
     justify-content: flex-start;
     overflow-x: auto;
     width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .datahub-pr-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .datahub-pr-search-group,
+  .datahub-pr-actions {
+    grid-column: 1;
+    justify-content: flex-start;
   }
 }
 

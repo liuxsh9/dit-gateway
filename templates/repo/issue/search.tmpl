@@ -11,6 +11,7 @@
 			<input type="hidden" name="sort" value="{{$.SortType}}">
 		{{end}}
 		<span class="datahub-search-filter-prefix">Filters</span>
+		{{svg "octicon-search" 16 "datahub-issue-search-icon"}}
 		{{if .PageIsPullList}}
 			{{template "shared/search/input" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.pull_kind")}}
 		{{else if .PageIsMilestones}}
@@ -18,9 +19,6 @@
 		{{else}}
 			{{template "shared/search/input" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.issue_kind")}}
 		{{end}}
-		{{template "shared/search/button" dict "Tooltip" (ctx.Locale.Tr "explore.go_to")}}
+		<button class="datahub-issue-search-submit" type="submit" aria-label="{{ctx.Locale.Tr "search.search"}}"></button>
 	</div>
-	{{if not .PageIsMilestones}}
-		{{template "shared/search/issue/syntax"}}
-	{{end}}
 </form>

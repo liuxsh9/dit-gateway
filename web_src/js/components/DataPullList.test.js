@@ -64,7 +64,6 @@ test('loads dit pull request counts and renders a github-like inbox', async () =
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls?status=merged');
   expect(wrapper.find('input[aria-label="Search pull requests"]').element.value).toBe('is:pr is:open');
   expect(wrapper.text()).toContain('Filters');
-  expect(wrapper.text()).toContain('Search syntax');
   expect(wrapper.text()).toContain('Labels');
   expect(wrapper.text()).toContain('Milestones');
   expect(wrapper.text()).toContain('New pull request');
@@ -132,28 +131,6 @@ test('filters pull requests from dropdown controls and search qualifiers', async
 
   expect(wrapper.text()).toContain('Refresh safety rows');
   expect(wrapper.text()).not.toContain('Clean eval split');
-});
-
-test('opens pull request search syntax help', async () => {
-  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
-    if (path === '/pulls?status=open') return [];
-    if (path === '/pulls?status=closed') return [];
-    if (path === '/pulls?status=merged') return [];
-    throw new Error(`unexpected path ${path}`);
-  });
-
-  const wrapper = mount(DataPullList, {
-    props: {owner: 'alice', repo: 'dataset'},
-  });
-
-  await vi.waitFor(() => expect(datahubFetch).toHaveBeenCalledTimes(3));
-  expect(wrapper.find('.datahub-pr-syntax-modal').exists()).toBe(false);
-
-  await wrapper.findAll('button').find((button) => button.text() === 'Search syntax').trigger('click');
-
-  expect(wrapper.find('.datahub-pr-syntax-modal').exists()).toBe(true);
-  expect(wrapper.text()).toContain('author:<name>');
-  expect(wrapper.text()).toContain('label:<name>');
 });
 
 test('switches pull request statuses without refetching', async () => {
