@@ -490,5 +490,71 @@ test('renders refreshed ML2 rows as before and after conversation cards', async 
   expect(wrapper.text()).toContain('Before');
   expect(wrapper.text()).toContain('After');
   expect(wrapper.text()).toContain('旧回答');
+  expect(wrapper.text()).toContain('messages[1].content');
   expect(wrapper.findAll('.datahub-sft-row-card')).toHaveLength(2);
+});
+
+test('summarizes refreshed row field changes before the before and after cards', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 0, rows_removed: 0, rows_refreshed: 1},
+        files: [
+          {
+            path: 'train.jsonl',
+            added: 0,
+            removed: 0,
+            refreshed: 1,
+            refreshed_rows: [
+              {
+                old_row_hash: 'oldhash123',
+                new_row_hash: 'newhash456',
+                position: 0,
+                old_content: {
+                  version: '2.0.0',
+                  meta_info: {
+                    owner: '00000000',
+                    response_update_time: '2026-03-14',
+                    risk_level: null,
+                  },
+                  messages: [{role: 'user', content: 'old prompt'}],
+                },
+                new_content: {
+                  version: '2.0.0',
+                  meta_info: {
+                    owner: 'codex-rich-reviewer',
+                    response_update_time: '2026-04-29',
+                    risk_level: 'medium',
+                  },
+                  messages: [{role: 'user', content: 'new prompt'}],
+                },
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {owner: 'alice', repo: 'dataset', oldCommit: 'old123', newCommit: 'new456'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('codex-rich-reviewer'));
+
+  const summary = wrapper.find('.datahub-refresh-field-summary');
+  expect(summary.exists()).toBe(true);
+  expect(summary.text()).toContain('Changed fields');
+  expect(summary.text()).toContain('meta_info.owner');
+  expect(summary.text()).toContain('00000000');
+  expect(summary.text()).toContain('codex-rich-reviewer');
+  expect(summary.text()).toContain('meta_info.response_update_time');
+  expect(summary.text()).toContain('2026-03-14');
+  expect(summary.text()).toContain('2026-04-29');
+  expect(summary.text()).toContain('meta_info.risk_level');
+  expect(summary.text()).toContain('medium');
+  expect(summary.text()).toContain('messages');
+  expect(wrapper.find('.datahub-diff-refresh-pair').exists()).toBe(true);
 });

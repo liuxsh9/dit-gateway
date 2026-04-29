@@ -223,97 +223,126 @@
 
                 <div
                   v-else
-                  class="datahub-diff-refresh-pair datahub-row-review-item"
+                  class="datahub-row-review-item"
                 >
-                  <div class="datahub-diff-refresh-side negative">
-                    <div class="datahub-diff-side-label">Before</div>
-                    <div class="datahub-row-actions">
-                      <span>{{ rowContextLabel(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh') }}</span>
-                      <span class="datahub-row-action-buttons">
-                        <button
-                          v-if="reviewMode && canComment"
-                          type="button"
-                          class="datahub-row-comment-button"
-                          @click="toggleCommentForm(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
-                        >
-                          Comment
-                        </button>
-                        <a
-                          class="datahub-row-issue-link"
-                          :href="issueLinkForRow(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh')"
-                        >
-                          Open issue
-                        </a>
+                  <div
+                    v-if="refreshFieldChanges(selectedReviewRow).length"
+                    class="datahub-refresh-field-summary"
+                  >
+                    <div class="datahub-refresh-field-heading">
+                      <strong>Changed fields</strong>
+                      <span>{{ refreshFieldChangeCount(selectedReviewRow) }} fields</span>
+                    </div>
+                    <div
+                      v-for="change in refreshFieldChanges(selectedReviewRow)"
+                      :key="change.path"
+                      class="datahub-refresh-field-row"
+                    >
+                      <code>{{ change.path }}</code>
+                      <span class="datahub-refresh-field-values">
+                        <span class="negative">{{ change.before }}</span>
+                        <span aria-hidden="true">-&gt;</span>
+                        <span class="positive">{{ change.after }}</span>
                       </span>
                     </div>
-                    <form
-                      v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
-                      class="datahub-inline-comment-form"
-                      @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                    <div
+                      v-if="refreshFieldChangeCount(selectedReviewRow) > refreshFieldChanges(selectedReviewRow).length"
+                      class="datahub-refresh-field-more"
                     >
-                      <textarea
-                        v-model="inlineCommentBody"
-                        class="datahub-inline-comment-textarea"
-                        placeholder="Leave a row-level review comment"
-                      ></textarea>
-                      <div class="datahub-inline-comment-actions">
-                        <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
-                        <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
-                        <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))">
-                          Add comment
-                        </button>
-                      </div>
-                    </form>
-                    <JsonlRowRenderer
-                      :row="rowContent(selectedReviewRow.beforeRow)"
-                      :row-number="rowPosition(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex)"
-                      collapse-whitespace
-                    />
+                      +{{ refreshFieldChangeCount(selectedReviewRow) - refreshFieldChanges(selectedReviewRow).length }} more
+                    </div>
                   </div>
-                  <div class="datahub-diff-refresh-side positive">
-                    <div class="datahub-diff-side-label">After</div>
-                    <div class="datahub-row-actions">
-                      <span>{{ rowContextLabel(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh') }}</span>
-                      <span class="datahub-row-action-buttons">
-                        <button
-                          v-if="reviewMode && canComment"
-                          type="button"
-                          class="datahub-row-comment-button"
-                          @click="toggleCommentForm(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
-                        >
-                          Comment
-                        </button>
-                        <a
-                          class="datahub-row-issue-link"
-                          :href="issueLinkForRow(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh')"
-                        >
-                          Open issue
-                        </a>
-                      </span>
-                    </div>
-                    <form
-                      v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
-                      class="datahub-inline-comment-form"
-                      @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
-                    >
-                      <textarea
-                        v-model="inlineCommentBody"
-                        class="datahub-inline-comment-textarea"
-                        placeholder="Leave a row-level review comment"
-                      ></textarea>
-                      <div class="datahub-inline-comment-actions">
-                        <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
-                        <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
-                        <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))">
-                          Add comment
-                        </button>
+                  <div class="datahub-diff-refresh-pair">
+                    <div class="datahub-diff-refresh-side negative">
+                      <div class="datahub-diff-side-label">Before</div>
+                      <div class="datahub-row-actions">
+                        <span>{{ rowContextLabel(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh') }}</span>
+                        <span class="datahub-row-action-buttons">
+                          <button
+                            v-if="reviewMode && canComment"
+                            type="button"
+                            class="datahub-row-comment-button"
+                            @click="toggleCommentForm(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                          >
+                            Comment
+                          </button>
+                          <a
+                            class="datahub-row-issue-link"
+                            :href="issueLinkForRow(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh')"
+                          >
+                            Open issue
+                          </a>
+                        </span>
                       </div>
-                    </form>
-                    <JsonlRowRenderer
-                      :row="rowContent(selectedReviewRow.afterRow)"
-                      :row-number="rowPosition(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex)"
-                      collapse-whitespace
-                    />
+                      <form
+                        v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                        class="datahub-inline-comment-form"
+                        @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                      >
+                        <textarea
+                          v-model="inlineCommentBody"
+                          class="datahub-inline-comment-textarea"
+                          placeholder="Leave a row-level review comment"
+                        ></textarea>
+                        <div class="datahub-inline-comment-actions">
+                          <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
+                          <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
+                          <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))">
+                            Add comment
+                          </button>
+                        </div>
+                      </form>
+                      <JsonlRowRenderer
+                        :row="rowContent(selectedReviewRow.beforeRow)"
+                        :row-number="rowPosition(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex)"
+                        collapse-whitespace
+                      />
+                    </div>
+                    <div class="datahub-diff-refresh-side positive">
+                      <div class="datahub-diff-side-label">After</div>
+                      <div class="datahub-row-actions">
+                        <span>{{ rowContextLabel(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh') }}</span>
+                        <span class="datahub-row-action-buttons">
+                          <button
+                            v-if="reviewMode && canComment"
+                            type="button"
+                            class="datahub-row-comment-button"
+                            @click="toggleCommentForm(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
+                          >
+                            Comment
+                          </button>
+                          <a
+                            class="datahub-row-issue-link"
+                            :href="issueLinkForRow(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh')"
+                          >
+                            Open issue
+                          </a>
+                        </span>
+                      </div>
+                      <form
+                        v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
+                        class="datahub-inline-comment-form"
+                        @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
+                      >
+                        <textarea
+                          v-model="inlineCommentBody"
+                          class="datahub-inline-comment-textarea"
+                          placeholder="Leave a row-level review comment"
+                        ></textarea>
+                        <div class="datahub-inline-comment-actions">
+                          <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
+                          <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
+                          <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))">
+                            Add comment
+                          </button>
+                        </div>
+                      </form>
+                      <JsonlRowRenderer
+                        :row="rowContent(selectedReviewRow.afterRow)"
+                        :row-number="rowPosition(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex)"
+                        collapse-whitespace
+                      />
+                    </div>
                   </div>
                 </div>
               </section>
@@ -334,6 +363,8 @@ import {datahubFetch} from '../utils/datahub-api.js';
 import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
 const ROW_PAGE_SIZE = 50;
+const REFRESH_FIELD_SUMMARY_LIMIT = 8;
+const FIELD_VALUE_MAX_LENGTH = 96;
 
 export default {
   components: {JsonlRowRenderer},
@@ -554,11 +585,13 @@ export default {
     refreshedReviewRow(row, index) {
       const beforeRow = {content: row.old_content, row_hash: row.old_row_hash, position: row.position};
       const afterRow = {content: row.new_content, row_hash: row.new_row_hash, position: row.position};
+      const fieldChanges = this.rowFieldChanges(row.old_content, row.new_content);
       return {
         kind: 'refresh',
         key: `refreshed:${row.old_row_hash || index}:${row.new_row_hash || index}`,
         beforeRow,
         afterRow,
+        fieldChanges,
         sourceIndex: index,
         changeType: 'refreshed',
         variant: 'refreshed',
@@ -566,6 +599,91 @@ export default {
         title: `Row ${this.rowPosition(afterRow, index)}`,
         summary: this.rowSummary(this.rowContent(afterRow)),
       };
+    },
+    refreshFieldChanges(row) {
+      return this.refreshFieldChangeList(row).slice(0, REFRESH_FIELD_SUMMARY_LIMIT);
+    },
+    refreshFieldChangeCount(row) {
+      return this.refreshFieldChangeList(row).length;
+    },
+    refreshFieldChangeList(row) {
+      if (!row) return [];
+      if (row.fieldChanges?.length) return row.fieldChanges;
+      if (!row.beforeRow || !row.afterRow) return [];
+      return this.rowFieldChanges(this.rowContent(row.beforeRow), this.rowContent(row.afterRow));
+    },
+    rowFieldChanges(beforeContent, afterContent) {
+      const beforeFields = {};
+      const afterFields = {};
+      this.flattenRowFields(beforeContent, afterContent, '', beforeFields, 'before');
+      this.flattenRowFields(afterContent, beforeContent, '', afterFields, 'after');
+      const paths = Array.from(new Set([
+        ...Object.keys(beforeFields),
+        ...Object.keys(afterFields),
+      ])).sort();
+      return paths
+        .filter((path) => !this.fieldValuesEqual(beforeFields[path], afterFields[path]))
+        .map((path) => ({
+          path,
+          before: this.formatFieldValue(beforeFields[path]),
+          after: this.formatFieldValue(afterFields[path]),
+        }));
+    },
+    flattenRowFields(value, peerValue, path, output, side = 'before') {
+      if (Array.isArray(value)) {
+        if (path === 'messages') {
+          this.flattenMessageFields(value, peerValue, path, output, side);
+          return;
+        }
+        const changed = side === 'after' && !this.fieldValuesEqual(value, peerValue) ? ' changed' : '';
+        output[path || 'value'] = `<list len=${value.length}${changed}>`;
+        return;
+      }
+      if (value && typeof value === 'object') {
+        const keys = Object.keys(value).filter((key) => !key.startsWith('__'));
+        if (!keys.length && path) {
+          output[path] = '{}';
+          return;
+        }
+        for (const key of keys) {
+          const nextPath = path ? `${path}.${key}` : key;
+          this.flattenRowFields(value[key], peerValue?.[key], nextPath, output, side);
+        }
+        return;
+      }
+      output[path || 'value'] = value;
+    },
+    flattenMessageFields(messages, peerMessages, path, output, side = 'before') {
+      const peers = Array.isArray(peerMessages) ? peerMessages : [];
+      const length = Math.max(messages.length, peers.length);
+      for (let index = 0; index < length; index += 1) {
+        const message = messages[index];
+        const peerMessage = peers[index];
+        const messagePath = `${path}[${index}]`;
+        if (message === undefined) {
+          output[messagePath] = 'missing';
+          continue;
+        }
+        if (!message || typeof message !== 'object' || Array.isArray(message)) {
+          output[messagePath] = message;
+          continue;
+        }
+        const keys = Object.keys(message).filter((key) => !key.startsWith('__'));
+        for (const key of keys) {
+          this.flattenRowFields(message[key], peerMessage?.[key], `${messagePath}.${key}`, output, side);
+        }
+      }
+    },
+    fieldValuesEqual(beforeValue, afterValue) {
+      return JSON.stringify(beforeValue) === JSON.stringify(afterValue);
+    },
+    formatFieldValue(value) {
+      if (value === undefined) return 'missing';
+      if (value === null) return 'null';
+      if (value === '') return 'empty';
+      const text = typeof value === 'string' ? value : JSON.stringify(value);
+      if (text.length <= FIELD_VALUE_MAX_LENGTH) return text;
+      return `${text.slice(0, FIELD_VALUE_MAX_LENGTH - 3)}...`;
     },
     isViewed(path) {
       return Boolean(this.viewedFiles[path]);
@@ -1237,6 +1355,76 @@ export default {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.datahub-refresh-field-summary {
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.datahub-refresh-field-heading,
+.datahub-refresh-field-row,
+.datahub-refresh-field-more {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(170px, 34%) minmax(0, 1fr);
+  padding: 8px 10px;
+}
+
+.datahub-refresh-field-heading {
+  background: var(--color-box-header);
+  border-bottom: 1px solid var(--color-secondary);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.datahub-refresh-field-heading span,
+.datahub-refresh-field-more {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+}
+
+.datahub-refresh-field-row {
+  border-bottom: 1px solid var(--color-secondary);
+}
+
+.datahub-refresh-field-row code {
+  color: var(--color-text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.datahub-refresh-field-values {
+  align-items: center;
+  display: grid;
+  font-family: var(--fonts-monospace);
+  font-size: 12px;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.datahub-refresh-field-values span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datahub-refresh-field-values .negative {
+  color: var(--color-red);
+}
+
+.datahub-refresh-field-values .positive {
+  color: var(--color-green);
+}
+
+.datahub-refresh-field-more {
+  border-bottom: 1px solid var(--color-secondary);
+}
+
 .datahub-diff-refresh-side {
   border-radius: 6px;
   padding: 10px;
@@ -1296,6 +1484,13 @@ export default {
   .datahub-diff-refresh-pair,
   .datahub-diff-row-review {
     height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .datahub-refresh-field-heading,
+  .datahub-refresh-field-row,
+  .datahub-refresh-field-more,
+  .datahub-refresh-field-values {
     grid-template-columns: 1fr;
   }
 

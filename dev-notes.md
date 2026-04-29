@@ -136,6 +136,49 @@ Important route detail:
 - Browser console may contain old errors from previous asset versions. Prefer current page DOM plus service logs for the active verification.
 - Service logs can show transient database context-canceled errors during navigation/restart. Re-check the same API after the service settles before treating it as a root cause.
 
+### Recent PR Diff Workflow Pitfalls
+
+- Sparse `dit` testing is useful for small PR fixtures. Keep scratch clones under `/Users/lxs/Documents/AI/datahub-e2e-20260428`, not under `/Users/lxs`:
+
+  ```sh
+  dit clone --sparse --branch main --token "$DIT_TOKEN" \
+    http://127.0.0.1:8000/sft-e2e-20260428 /tmp/or-clean-documents-path/repo
+  dit sparse-checkout add stress/multi_turn/fast/chunk_000.jsonl
+  ```
+
+- For the current DataHub diff logic, changing only an existing row's assistant response content is classified as refreshed, not add/remove. `dit diff` should show a shape like `2 -> 2 rows (~1 refreshed)`, and the PR stats should be `stats_added: 0`, `stats_removed: 0`, `stats_refreshed: 1`.
+- A `dit_*` token works for datahub-core on `8000`, but the gateway `POST /api/v1/repos/{owner}/{repo}/datahub/pulls` on `3003` expects a Forgejo API token. If you only have the DIT token, create the PR through core:
+
+  ```sh
+  curl -X POST http://127.0.0.1:8000/api/v1/repos/sft-e2e-20260428/pulls \
+    -H "Authorization: token $DIT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"source_branch":"your-branch","target_branch":"main","title":"Smoke test","author":"codex"}'
+  ```
+
+- PR pages use `DataPullPage.vue`, but the Files changed tab mounts `DataDiffView.vue`. If a files-tab UI issue appears, inspect both the PR shell and the diff component before assuming the wrong file owns the bug.
+- The `#files` URL hash may not activate the Files changed tab in non-interactive DOM dumps. In browser automation, explicitly click the `Files changed N` tab before checking row-level UI.
+- Refreshed row payloads from `/datahub/diff/<base>/<head>` use `old_content` and `new_content`. If field-level hints are missing, confirm the frontend is reading those keys and not alternate names such as `old_row`, `new_row`, `before`, or `after`.
+- For response-only refreshed rows, array-level summaries like `messages <list len=...>` are not enough for review. `DataDiffView` should surface message-level paths such as `messages[6].content` so reviewers can see which turn changed.
+- `make webpack` can update `public/assets` without changing the `gitea` binary or the HTML asset version. If a current in-app browser tab still shows stale behavior, verify the served chunk directly and then use a fresh Chrome profile or a test build with a temporary `GITEA_VERSION` suffix:
+
+  ```sh
+  curl -sS http://127.0.0.1:3003/assets/js/datahub-repo-home-datahub-diff-view-datahub-commit-page-datahub-pull-page.74e93850.js \
+    | rg 'Changed fields|flattenMessageFields|messages\['
+  ```
+
+- For cache-sensitive UI validation, a fresh system Chrome profile is often more reliable than the already-open in-app browser tab:
+
+  ```sh
+  tmp=$(mktemp -d /tmp/datahub-chrome-XXXXXX)
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+    --headless=new --disable-gpu --no-first-run --no-default-browser-check \
+    --user-data-dir="$tmp" --virtual-time-budget=8000 --dump-dom \
+    'http://127.0.0.1:3003/e2e/sft-e2e-20260428/data/pulls/5#files' \
+    | rg 'Changed fields|messages\[[0-9]+\]\.content'
+  rm -rf "$tmp"
+  ```
+
 ## Focused Test Commands
 
 Use focused component tests while iterating:
