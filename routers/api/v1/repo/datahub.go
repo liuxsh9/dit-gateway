@@ -4,7 +4,6 @@
 package repo
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	repo_model "forgejo.org/models/repo"
 	unit_model "forgejo.org/models/unit"
 	"forgejo.org/modules/datahub"
+	"forgejo.org/modules/json"
 	"forgejo.org/modules/setting"
 	"forgejo.org/services/context"
 	"forgejo.org/services/convert"
@@ -144,10 +144,7 @@ func DatahubGetDiff(ctx *context.APIContext) {
 
 func DatahubGetLog(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		ref, err := datahubRefForCore(ctx, ctx.FormString("ref"), ctx.Params(":ref"), ctx.Params("*"))
-		if err != nil {
-			return nil, 0, err
-		}
+		ref := datahubRefForCore(ctx, ctx.FormString("ref"), ctx.Params(":ref"), ctx.Params("*"))
 		return datahub.DefaultClient().GetLog(ctx, ctx.Repo.Repository.Name, ref, ctx.FormString("limit"))
 	})
 }
@@ -239,7 +236,7 @@ func datahubBranchName(refName string) string {
 }
 
 func datahubCanCurrentUserMerge(ctx *context.APIContext, targetBranch string) (bool, error) {
-	if ctx.Doer == nil || !ctx.Repo.Permission.CanWrite(unit_model.TypeCode) {
+	if ctx.Doer == nil || !ctx.Repo.CanWrite(unit_model.TypeCode) {
 		return false, nil
 	}
 	if targetBranch == "" {
@@ -324,7 +321,7 @@ func DatahubGovernance(ctx *context.APIContext) {
 
 	targetBranch := ctx.FormString("target_branch")
 	protectedBranchRule := protectedBranches.GetFirstMatched(targetBranch)
-	canMerge := ctx.Doer != nil && ctx.Repo.Permission.CanWrite(unit_model.TypeCode)
+	canMerge := ctx.Doer != nil && ctx.Repo.CanWrite(unit_model.TypeCode)
 	if protectedBranchRule != nil {
 		canMerge = git_model.IsUserMergeWhitelisted(ctx, protectedBranchRule, doerID, ctx.Repo.Permission)
 	}
@@ -526,14 +523,14 @@ func datahubParam(ctx *context.APIContext, names ...string) string {
 	return ""
 }
 
-func datahubRefForCore(ctx *context.APIContext, values ...string) (string, error) {
+func datahubRefForCore(ctx *context.APIContext, values ...string) string {
 	for _, ref := range values {
 		ref = strings.TrimSpace(ref)
 		if ref != "" {
-			return datahubNormalizeBranchRef(ref), nil
+			return datahubNormalizeBranchRef(ref)
 		}
 	}
-	return datahubNormalizeBranchRef(ctx.Repo.Repository.DefaultBranch), nil
+	return datahubNormalizeBranchRef(ctx.Repo.Repository.DefaultBranch)
 }
 
 func datahubNormalizeBranchRef(ref string) string {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -322,7 +323,10 @@ func TestExportFileFallbackBuildsJSONLFromInlineManifestRows(t *testing.T) {
 	data, status, err := client.ExportFileWithFallback(context.Background(), "myrepo", "commit123", "eval.jsonl", "jsonl")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "{\"messages\":[{\"role\":\"user\",\"content\":\"first\"}]}\n{\"messages\":[{\"role\":\"user\",\"content\":\"second\"}]}\n", string(data))
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	require.Len(t, lines, 2)
+	assert.JSONEq(t, `{"messages":[{"role":"user","content":"first"}]}`, lines[0])
+	assert.JSONEq(t, `{"messages":[{"role":"user","content":"second"}]}`, lines[1])
 }
 
 func TestExportFileFallbackFetchesRowObjectsWhenManifestHasHashesOnly(t *testing.T) {
@@ -344,7 +348,7 @@ func TestExportFileFallbackFetchesRowObjectsWhenManifestHasHashesOnly(t *testing
 	data, status, err := client.ExportFileWithFallback(context.Background(), "myrepo", "commit123", "train.jsonl", "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "{\"messages\":[{\"role\":\"user\",\"content\":\"from object\"}]}\n", string(data))
+	assert.JSONEq(t, `{"messages":[{"role":"user","content":"from object"}]}`, strings.TrimSpace(string(data)))
 }
 
 func TestMergePull(t *testing.T) {
@@ -422,7 +426,7 @@ func TestMetaDiff(t *testing.T) {
 
 func TestMetaDiffNoFile(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "", r.URL.Query().Get("file"))
+		assert.Empty(t, r.URL.Query().Get("file"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"files":[]}`))
 	}))

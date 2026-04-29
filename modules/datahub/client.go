@@ -6,7 +6,6 @@ package datahub
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"forgejo.org/modules/json"
 	"forgejo.org/modules/setting"
 )
 
@@ -31,14 +31,25 @@ type manifestPage struct {
 	Entries []manifestEntry `json:"entries"`
 }
 
+type rawJSON []byte
+
+func (raw *rawJSON) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*raw = nil
+		return nil
+	}
+	*raw = append((*raw)[:0], data...)
+	return nil
+}
+
 type manifestEntry struct {
-	RowHash string          `json:"row_hash"`
-	Row     json.RawMessage `json:"row"`
-	Content json.RawMessage `json:"content"`
-	JSON    json.RawMessage `json:"json"`
-	Data    json.RawMessage `json:"data"`
-	RawJSON json.RawMessage `json:"raw_json"`
-	Raw     json.RawMessage `json:"raw"`
+	RowHash string  `json:"row_hash"`
+	Row     rawJSON `json:"row"`
+	Content rawJSON `json:"content"`
+	JSON    rawJSON `json:"json"`
+	Data    rawJSON `json:"data"`
+	RawJSON rawJSON `json:"raw_json"`
+	Raw     rawJSON `json:"raw"`
 }
 
 var (
@@ -96,7 +107,7 @@ func escapePath(path string) string {
 }
 
 func (c *Client) CreateRepo(ctx context.Context, repoName string) error {
-	payload := []byte(fmt.Sprintf(`{"name":%q}`, repoName))
+	payload := fmt.Appendf(nil, `{"name":%q}`, repoName)
 	_, status, err := c.do(ctx, http.MethodPost, "/api/v1/repos", payload)
 	if err != nil {
 		return err
@@ -299,11 +310,10 @@ func (c *Client) exportJSONLFromManifest(ctx context.Context, repoName, commitHa
 				return nil, 0, fmt.Errorf("manifest entry at offset %d has no row content", offset)
 			}
 
-			var compacted bytes.Buffer
-			if err := json.Compact(&compacted, raw); err != nil {
-				return nil, 0, fmt.Errorf("compact row at offset %d: %w", offset, err)
+			if !json.Valid(raw) {
+				return nil, 0, fmt.Errorf("invalid row JSON at offset %d", offset)
 			}
-			output.Write(compacted.Bytes())
+			output.Write(bytes.TrimSpace(raw))
 			output.WriteByte('\n')
 		}
 
@@ -319,8 +329,8 @@ func (c *Client) exportJSONLFromManifest(ctx context.Context, repoName, commitHa
 	return output.Bytes(), http.StatusOK, nil
 }
 
-func (entry manifestEntry) inlineRow() json.RawMessage {
-	for _, raw := range []json.RawMessage{entry.Row, entry.Content, entry.JSON, entry.Data, entry.RawJSON, entry.Raw} {
+func (entry manifestEntry) inlineRow() []byte {
+	for _, raw := range []rawJSON{entry.Row, entry.Content, entry.JSON, entry.Data, entry.RawJSON, entry.Raw} {
 		if len(raw) > 0 && string(raw) != "null" {
 			return raw
 		}
