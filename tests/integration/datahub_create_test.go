@@ -69,11 +69,11 @@ func mockDatahubCoreCreate(t *testing.T, expectedRepo string) *datahubCoreCreate
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(fmt.Sprintf(`[{"name":"heads/master","target_hash":%q},{"name":"heads/main","target_hash":%q}]`, datahubTestMainCommit, datahubTestMainCommit)))
+			_, _ = w.Write(fmt.Appendf(nil, `[{"name":"heads/master","target_hash":%q},{"name":"heads/main","target_hash":%q}]`, datahubTestMainCommit, datahubTestMainCommit))
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/repos/"+expectedRepo+"/refs/heads/"):
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"name":%q,"target_hash":%q}`, strings.TrimPrefix(r.URL.Path, "/api/v1/repos/"+expectedRepo+"/refs/"), datahubTestMainCommit)))
+			_, _ = w.Write(fmt.Appendf(nil, `{"name":%q,"target_hash":%q}`, strings.TrimPrefix(r.URL.Path, "/api/v1/repos/"+expectedRepo+"/refs/"), datahubTestMainCommit))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/log":
 			ref := r.URL.Query().Get("ref")
 			assert.Contains(t, []string{"heads/master", "heads/main", "heads/feature/foo"}, ref)
@@ -84,7 +84,7 @@ func mockDatahubCoreCreate(t *testing.T, expectedRepo string) *datahubCoreCreate
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"commits":[],"ref":%q}`, ref)))
+			_, _ = w.Write(fmt.Appendf(nil, `{"commits":[],"ref":%q}`, ref))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/stats/"+datahubTestMainCommit:
 			recorder.mu.Lock()
 			recorder.statsRead = true
