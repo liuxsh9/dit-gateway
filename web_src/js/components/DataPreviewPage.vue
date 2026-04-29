@@ -290,7 +290,9 @@ export default {
       return `${this.repoPath}/data/preview/${encodeURIComponent(this.resolvedCommitHash || this.commitHash)}/${path.split('/').map(encodeURIComponent).join('/')}`;
     },
     compareTreeNames(a, b) {
-      return String(a || '').localeCompare(String(b || ''));
+      const left = String(a || '').replace(/\/+$/, '');
+      const right = String(b || '').replace(/\/+$/, '');
+      return left.localeCompare(right);
     },
     normalizePath(path) {
       return String(path || '').replace(/^\/+/, '');

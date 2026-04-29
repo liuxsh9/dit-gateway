@@ -361,6 +361,38 @@ test('orders preview tree rows like the Data browser with folders first and loca
   ]);
 });
 
+test('orders prefix-matched preview folders with the shorter base name first', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'stress-large', obj_type: 'tree'},
+          {name: 'stress', obj_type: 'tree'},
+        ],
+      };
+    }
+    if (path === '/stats/abcdef1234567890') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'abcdef1234567890',
+      filePath: '',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress-large'));
+
+  expect(wrapper.findAll('.datahub-tree-row').map((row) => row.text())).toEqual([
+    'stress',
+    'stress-large',
+  ]);
+});
+
 test('restores manually expanded preview folders after navigation remounts the page', async () => {
   window.sessionStorage.setItem(
     'datahub-preview-tree:alice/dataset:abcdef1234567890',
