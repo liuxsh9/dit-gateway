@@ -27,22 +27,29 @@
 		{{if and .IsSigned .HideNavbarLinks}}
 			{{/* No links */}}
 		{{else if .IsSigned}}
-			{{if not .UnitIssuesGlobalDisabled}}
-				<a class="item{{if .PageIsIssues}} active{{end}}" {{if .PageIsIssues}}aria-current="page" {{end}}href="{{AppSubUrl}}/issues">{{ctx.Locale.Tr "issues"}}</a>
+			<a class="item{{if .PageIsExploreRepositories}} active{{end}}" {{if .PageIsExploreRepositories}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "explore.repos"}}</a>
+			<a class="item{{if .PageIsExploreUsers}} active{{end}}" {{if .PageIsExploreUsers}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/users">{{ctx.Locale.Tr "explore.users"}}</a>
+			<a class="item{{if .PageIsExploreOrganizations}} active{{end}}" {{if .PageIsExploreOrganizations}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/organizations">{{ctx.Locale.Tr "explore.organizations"}}</a>
+			<a class="item" target="_blank" rel="noopener noreferrer" href="https://forgejo.org/docs/latest/">{{ctx.Locale.Tr "help"}}</a>
+			{{if .IsAdmin}}
+				<a class="item{{if .PageIsAdmin}} active{{end}}" {{if .PageIsAdmin}}aria-current="page" {{end}}href="{{AppSubUrl}}/admin">{{ctx.Locale.Tr "settings"}}</a>
 			{{end}}
-			{{if not .UnitPullsGlobalDisabled}}
-				<a class="item{{if .PageIsPulls}} active{{end}}" {{if .PageIsPulls}}aria-current="page" {{end}}href="{{AppSubUrl}}/pulls">{{ctx.Locale.Tr "pull_requests"}}</a>
-			{{end}}
-			{{if not (and .UnitIssuesGlobalDisabled .UnitPullsGlobalDisabled)}}
-				{{if .ShowMilestonesDashboardPage}}
-					<a class="item{{if .PageIsMilestonesDashboard}} active{{end}}" {{if .PageIsMilestonesDashboard}}aria-current="page" {{end}}href="{{AppSubUrl}}/milestones">{{ctx.Locale.Tr "milestones"}}</a>
-				{{end}}
-			{{end}}
-			<a class="item{{if .PageIsExplore}} active{{end}}" {{if .PageIsExplore}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "explore"}}</a>
 		{{else if .IsLandingPageOrganizations}}
-			<a class="item{{if .PageIsExplore}} active{{end}}" {{if .PageIsExplore}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/organizations">{{ctx.Locale.Tr "explore"}}</a>
+			<a class="item{{if .PageIsExploreRepositories}} active{{end}}" {{if .PageIsExploreRepositories}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "explore.repos"}}</a>
+			{{if not .UsersPageIsDisabled}}
+				<a class="item{{if .PageIsExploreUsers}} active{{end}}" {{if .PageIsExploreUsers}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/users">{{ctx.Locale.Tr "explore.users"}}</a>
+			{{end}}
+			{{if not .OrganizationsPageIsDisabled}}
+				<a class="item{{if .PageIsExploreOrganizations}} active{{end}}" {{if .PageIsExploreOrganizations}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/organizations">{{ctx.Locale.Tr "explore.organizations"}}</a>
+			{{end}}
 		{{else}}
-			<a class="item{{if .PageIsExplore}} active{{end}}" {{if .PageIsExplore}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "explore"}}</a>
+			<a class="item{{if .PageIsExploreRepositories}} active{{end}}" {{if .PageIsExploreRepositories}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "explore.repos"}}</a>
+			{{if not .UsersPageIsDisabled}}
+				<a class="item{{if .PageIsExploreUsers}} active{{end}}" {{if .PageIsExploreUsers}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/users">{{ctx.Locale.Tr "explore.users"}}</a>
+			{{end}}
+			{{if not .OrganizationsPageIsDisabled}}
+				<a class="item{{if .PageIsExploreOrganizations}} active{{end}}" {{if .PageIsExploreOrganizations}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/organizations">{{ctx.Locale.Tr "explore.organizations"}}</a>
+			{{end}}
 		{{end}}
 
 		{{template "custom/extra_links" .}}
