@@ -60,21 +60,57 @@
             {{ isContentExpanded(index) ? 'Collapse content' : 'Show full content' }}
           </button>
 
-          <details v-if="renderContent(message.reasoning_content)" class="datahub-sft-details">
-            <summary>reasoning_content</summary>
-            <pre>{{ renderContent(message.reasoning_content) }}</pre>
-          </details>
-
-          <details v-if="Array.isArray(message.tool_calls) && message.tool_calls.length" class="datahub-sft-details">
-            <summary>tool_calls: {{ summarizeToolCalls(message.tool_calls) }}</summary>
-            <div v-for="(toolCall, toolIndex) in message.tool_calls" :key="toolIndex" class="datahub-sft-tool-call">
-              <div>
-                <strong>{{ toolCall.function?.name || toolCall.name || 'tool' }}</strong>
-                <span v-if="toolCall.id"> · {{ toolCall.id }}</span>
-              </div>
-              <pre>{{ formatJson(toolCall.function?.arguments ?? toolCall.arguments ?? toolCall) }}</pre>
+          <div
+            v-if="renderContent(message.reasoning_content)"
+            class="datahub-sft-field datahub-sft-field-reasoning"
+          >
+            <div class="datahub-sft-field-header">
+              <strong>reasoning_content</strong>
+              <span>{{ fieldSummary(message.reasoning_content) }}</span>
             </div>
-          </details>
+            <pre
+              class="datahub-sft-field-content"
+              :class="{'datahub-sft-field-collapsed': isLongContent(message.reasoning_content) && !isMessageFieldExpanded(index, 'reasoning')}"
+            >{{ renderContent(message.reasoning_content) }}</pre>
+            <button
+              v-if="isLongContent(message.reasoning_content)"
+              type="button"
+              class="ui mini basic button datahub-sft-toggle"
+              @click="toggleMessageField(index, 'reasoning')"
+            >
+              {{ isMessageFieldExpanded(index, 'reasoning') ? 'Collapse reasoning_content' : 'Show full reasoning_content' }}
+            </button>
+          </div>
+
+          <div
+            v-if="Array.isArray(message.tool_calls) && message.tool_calls.length"
+            class="datahub-sft-field datahub-sft-field-tools"
+          >
+            <div class="datahub-sft-field-header">
+              <strong>tool_calls</strong>
+              <span>{{ summarizeToolCalls(message.tool_calls) }}</span>
+            </div>
+            <div
+              class="datahub-sft-field-content datahub-sft-tool-call-list"
+              :class="{'datahub-sft-field-collapsed': isLongToolCalls(message.tool_calls) && !isMessageFieldExpanded(index, 'tool_calls')}"
+            >
+              <div v-for="(toolCall, toolIndex) in message.tool_calls" :key="toolIndex" class="datahub-sft-tool-call">
+                <div class="datahub-sft-tool-call-title">
+                  <strong>{{ toolCall.function?.name || toolCall.name || 'tool' }}</strong>
+                  <span v-if="toolCall.id">{{ toolCall.id }}</span>
+                </div>
+                <pre>{{ formatJson(toolCall.function?.arguments ?? toolCall.arguments ?? toolCall) }}</pre>
+              </div>
+            </div>
+            <button
+              v-if="isLongToolCalls(message.tool_calls)"
+              type="button"
+              class="ui mini basic button datahub-sft-toggle"
+              @click="toggleMessageField(index, 'tool_calls')"
+            >
+              {{ isMessageFieldExpanded(index, 'tool_calls') ? 'Collapse tool_calls' : 'Show full tool_calls' }}
+            </button>
+          </div>
 
           <details v-if="messageExtraKeys(message).length" class="datahub-sft-details">
             <summary>extra fields</summary>
@@ -139,6 +175,7 @@ export default {
   data() {
     return {
       expandedContent: new Set(),
+      expandedMessageFields: new Set(),
     };
   },
   computed: {
@@ -246,6 +283,12 @@ export default {
     summarizeToolCalls(toolCalls) {
       return toolCalls.map((toolCall) => toolCall.function?.name || toolCall.name || toolCall.id || 'tool').join(', ');
     },
+    fieldSummary(value) {
+      const content = this.renderContent(value);
+      const lines = content.split('\n').filter(Boolean).length;
+      if (lines > 1) return `${lines} lines`;
+      return `${content.length.toLocaleString()} chars`;
+    },
     summarizeTools(tools) {
       return tools.map((tool) => tool.function?.name || tool.name || tool.type || 'tool').join(', ');
     },
@@ -272,8 +315,17 @@ export default {
       const content = this.renderContent(value);
       return content.split('\n').length > 5 || content.length > 900;
     },
+    isLongToolCalls(toolCalls) {
+      return this.formatJson(toolCalls).split('\n').length > 8 || this.formatJson(toolCalls).length > 900;
+    },
     isContentExpanded(index) {
       return this.expandedContent.has(index);
+    },
+    messageFieldKey(index, field) {
+      return `${index}:${field}`;
+    },
+    isMessageFieldExpanded(index, field) {
+      return this.expandedMessageFields.has(this.messageFieldKey(index, field));
     },
     toggleContent(index) {
       const next = new Set(this.expandedContent);
@@ -283,6 +335,16 @@ export default {
         next.add(index);
       }
       this.expandedContent = next;
+    },
+    toggleMessageField(index, field) {
+      const key = this.messageFieldKey(index, field);
+      const next = new Set(this.expandedMessageFields);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      this.expandedMessageFields = next;
     },
   },
 };
@@ -422,9 +484,59 @@ export default {
   margin-top: 6px;
 }
 
+.datahub-sft-field,
 .datahub-sft-details,
 .datahub-sft-row-details {
   margin-top: 8px;
+}
+
+.datahub-sft-field {
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  background: var(--color-box-header);
+}
+
+.datahub-sft-field-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-secondary-alpha-40);
+  color: var(--color-text-light-1);
+  font-size: 12px;
+}
+
+.datahub-sft-field-header strong {
+  color: var(--color-text);
+  font-family: var(--fonts-monospace);
+  font-weight: 600;
+}
+
+.datahub-sft-field-reasoning {
+  border-left: 3px solid var(--color-violet, var(--color-primary));
+}
+
+.datahub-sft-field-tools {
+  border-left: 3px solid var(--color-orange, var(--color-warning));
+}
+
+.datahub-sft-field-content {
+  margin: 0;
+  max-height: 420px;
+  padding: 8px 10px;
+  background: var(--color-code-bg);
+  white-space: pre-wrap;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.datahub-sft-field-collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
 }
 
 .datahub-sft-details summary,
@@ -437,6 +549,7 @@ export default {
 .datahub-sft-details pre,
 .datahub-sft-row-details pre {
   margin: 6px 0 0;
+  max-height: 360px;
   padding: 8px 10px;
   border-radius: 6px;
   background: var(--color-code-bg);
@@ -446,7 +559,30 @@ export default {
 }
 
 .datahub-sft-tool-call {
-  margin-top: 8px;
+  padding: 0;
+}
+
+.datahub-sft-tool-call + .datahub-sft-tool-call {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-secondary-alpha-40);
+}
+
+.datahub-sft-tool-call-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.datahub-sft-tool-call-title span {
+  color: var(--color-text-light-2);
+  font-family: var(--fonts-monospace);
+  font-size: 12px;
+}
+
+.datahub-sft-tool-call pre {
+  margin: 0;
 }
 
 .datahub-sft-row-details {

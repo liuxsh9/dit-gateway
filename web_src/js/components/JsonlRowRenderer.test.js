@@ -59,6 +59,58 @@ test('renders ML2 content parts and collapsible structured fields', () => {
   expect(wrapper.text()).toContain('row fields: difficulty');
 });
 
+test('surfaces reasoning content and tool calls as reviewable message fields', () => {
+  const longReasoning = [
+    'I need to inspect the repository layout before editing.',
+    'Then I will identify the failing component.',
+    'After that I will write a focused test.',
+    'Next I will make the smallest UI change.',
+    'Finally I will verify the preview page.',
+    'This extra line should be collapsed behind a field toggle.',
+  ].join('\n');
+  const wrapper = mount(JsonlRowRenderer, {
+    props: {
+      rowNumber: 9,
+      row: {
+        version: '2.0.0',
+        meta_info: {
+          teacher: 'glm-5-thinking',
+          query_source: 'demo',
+          response_generate_time: '2026-04-28',
+          response_update_time: '2026-04-28',
+          owner: 'data',
+          language: 'en',
+          category: 'agent',
+          rounds: 1,
+        },
+        messages: [
+          {
+            role: 'assistant',
+            content: 'I will inspect the repository.',
+            reasoning_content: longReasoning,
+            tool_calls: [
+              {
+                id: 'call_editor',
+                type: 'function',
+                function: {name: 'str_replace_editor', arguments: '{"command":"view","path":"/workspace/app"}'},
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  expect(wrapper.find('details.datahub-sft-details').exists()).toBe(false);
+  expect(wrapper.find('.datahub-sft-field-reasoning').text()).toContain('reasoning_content');
+  expect(wrapper.find('.datahub-sft-field-reasoning').text()).toContain('I need to inspect the repository layout');
+  expect(wrapper.find('.datahub-sft-field-tools').text()).toContain('tool_calls');
+  expect(wrapper.find('.datahub-sft-field-tools').text()).toContain('str_replace_editor');
+  expect(wrapper.find('.datahub-sft-field-tools').text()).toContain('call_editor');
+  expect(wrapper.find('.datahub-sft-field-collapsed').exists()).toBe(true);
+  expect(wrapper.text()).toContain('Show full reasoning_content');
+});
+
 test('summarizes message counts by role', () => {
   const wrapper = mount(JsonlRowRenderer, {
     props: {
