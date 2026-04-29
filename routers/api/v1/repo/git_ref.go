@@ -75,6 +75,11 @@ func GetGitRefs(ctx *context.APIContext) {
 }
 
 func getGitRefsInternal(ctx *context.APIContext, filter string) {
+	if ctx.Repo.Repository.IsDataRepo {
+		ctx.Error(http.StatusConflict, "DataRepoGitRefs", "data repositories do not expose Git refs; use the /datahub/refs endpoint instead")
+		return
+	}
+
 	refs, lastMethodName, err := utils.GetGitRefs(ctx, filter)
 	if err != nil {
 		ctx.Error(http.StatusInternalServerError, lastMethodName, err)

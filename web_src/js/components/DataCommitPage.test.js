@@ -29,7 +29,7 @@ test('shows a dit commit header and renders diff against its first parent', asyn
   });
 
   const wrapper = mount(DataCommitPage, {
-    props: {owner: 'alice', repo: 'dataset', commitHash: 'abcdef1234567890'},
+    props: {owner: 'alice', repo: 'dataset', commitHash: 'abcdef1234567890', defaultBranch: 'trunk'},
     global: {stubs: {DataDiffView: diffStub}},
   });
 
@@ -39,7 +39,7 @@ test('shows a dit commit header and renders diff against its first parent', asyn
   expect(wrapper.text()).toContain('abcdef1');
   expect(wrapper.text()).toContain('alice');
   expect(wrapper.text()).toContain('Diff parent1234567890..abcdef1234567890');
-  expect(wrapper.find('a[href="/alice/dataset/data/commits/main"]').exists()).toBe(true);
+  expect(wrapper.find('a[href="/alice/dataset/data/commits/trunk"]').exists()).toBe(true);
 });
 
 test('renders root commit state without requesting a parent diff', async () => {
@@ -66,4 +66,3 @@ test('renders root commit state without requesting a parent diff', async () => {
   expect(wrapper.text()).toContain('This is the first DIT commit');
   expect(wrapper.find('.data-diff-stub').exists()).toBe(false);
 });
-

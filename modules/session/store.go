@@ -9,12 +9,8 @@ import (
 	"code.forgejo.org/go-chi/session"
 )
 
-// Store represents a session store
-type Store interface {
-	Get(any) any
-	Set(any, any) error
-	Delete(any) error
-}
+// Store represents a session store.
+type Store = session.Store
 
 // RegenerateSession regenerates the underlying session and returns the new store
 func RegenerateSession(resp http.ResponseWriter, req *http.Request) (Store, error) {

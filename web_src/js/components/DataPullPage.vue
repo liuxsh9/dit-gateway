@@ -36,29 +36,6 @@
       <div class="ui negative message">{{ error }}</div>
     </div>
     <template v-else-if="pull">
-      <div class="datahub-pr-summary-bar">
-        <div class="datahub-pr-summary-item">
-          <span class="datahub-pr-summary-label">Review state</span>
-          <strong>{{ reviewStateText }}</strong>
-        </div>
-        <div class="datahub-pr-summary-item">
-          <span class="datahub-pr-summary-label">Mergeability</span>
-          <strong>{{ mergeabilityText }}</strong>
-        </div>
-        <div class="datahub-pr-summary-item">
-          <span class="datahub-pr-summary-label">Checks</span>
-          <strong>{{ checksSummaryText }}</strong>
-        </div>
-        <div class="datahub-pr-summary-item">
-          <span class="datahub-pr-summary-label">Rows</span>
-          <strong>
-            <span class="datahub-stat-add">+{{ formatCount(pull.stats_added || 0) }}</span>
-            <span class="datahub-stat-remove">-{{ formatCount(pull.stats_removed || 0) }}</span>
-            <span class="datahub-stat-refresh">~{{ formatCount(pull.stats_refreshed || 0) }}</span>
-          </strong>
-        </div>
-      </div>
-
       <nav class="datahub-pr-tabs" aria-label="Pull request sections">
         <button
           v-for="tabItem in tabs"
@@ -147,7 +124,7 @@
                 </article>
               </div>
 
-              <div class="datahub-conversation-composer">
+              <div v-if="canWriteConversation" class="datahub-conversation-composer">
                 <form class="datahub-comment-form" @submit.prevent="submitComment">
                   <label for="datahub-pr-comment">Comment</label>
                   <textarea
@@ -166,7 +143,6 @@
                 <form class="datahub-review-form" @submit.prevent="submitReview">
                   <label for="datahub-pr-review">Review</label>
                   <select v-model="reviewDecision" :disabled="submittingConversation">
-                    <option value="commented">Comment only</option>
                     <option value="approved">Approve</option>
                     <option value="changes_requested">Request changes</option>
                   </select>
@@ -184,6 +160,9 @@
                     </button>
                   </div>
                 </form>
+              </div>
+              <div v-else class="ui message datahub-conversation-locked">
+                {{ conversationLockedText }}
               </div>
 
               <div class="datahub-merge-box" :class="mergeBoxClass">
@@ -241,7 +220,7 @@
               <section class="datahub-sidebar-section">
                 <div class="datahub-sidebar-heading-row">
                   <h3>Repository governance</h3>
-                  <a v-if="governanceLinks.settings" :href="governanceLinks.settings">Settings</a>
+                  <a v-if="showGovernanceAdminLinks && governanceLinks.settings" :href="governanceLinks.settings">Settings</a>
                 </div>
                 <dl class="datahub-governance-list">
                   <div class="datahub-governance-row">
@@ -282,10 +261,10 @@
                   </div>
                 </dl>
                 <div class="datahub-governance-links">
-                  <a v-if="governanceLinks.collaboration" class="ui tiny basic button" :href="governanceLinks.collaboration">
+                  <a v-if="showGovernanceAdminLinks && governanceLinks.collaboration" class="ui tiny basic button" :href="governanceLinks.collaboration">
                     Manage access
                   </a>
-                  <a v-if="governanceLinks.branches" class="ui tiny basic button" :href="governanceLinks.branches">
+                  <a v-if="showGovernanceAdminLinks && governanceLinks.branches" class="ui tiny basic button" :href="governanceLinks.branches">
                     Branch rules
                   </a>
                 </div>
@@ -346,7 +325,7 @@
               <h3>Files changed</h3>
               <p>
                 Review row-level dataset changes before merging
-                <span class="datahub-hash">{{ shortHash(pull.target_commit) }}..{{ shortHash(pull.source_commit) }}</span>.
+                <span class="datahub-hash">{{ shortHash(diffBaseCommit) }}..{{ shortHash(diffHeadCommit) }}</span>.
               </p>
             </div>
           </div>
@@ -354,11 +333,12 @@
             v-if="hasDiffCommits"
             :owner="owner"
             :repo="repo"
-            :old-commit="pull.target_commit"
-            :new-commit="pull.source_commit"
+            :old-commit="diffBaseCommit"
+            :new-commit="diffHeadCommit"
             :review-mode="true"
             :pull-id="pullNumber(pull)"
             :current-user="currentReviewerName"
+            :can-comment="canWriteConversation"
             @summary-loaded="recordDiffSummary"
             @comment-created="recordInlineComment"
           />
@@ -391,7 +371,7 @@ export default {
       governance: null,
       newCommentBody: '',
       newReviewBody: '',
-      reviewDecision: 'commented',
+      reviewDecision: 'approved',
       submittingConversation: false,
       conversationError: null,
       merging: false,
@@ -414,7 +394,13 @@ export default {
       return this.pull?.title || 'Untitled data pull request';
     },
     hasDiffCommits() {
-      return Boolean(this.pull?.target_commit && this.pull?.source_commit);
+      return Boolean(this.diffBaseCommit && this.diffHeadCommit);
+    },
+    diffBaseCommit() {
+      return this.pull?.base_commit || this.pull?.target_commit || '';
+    },
+    diffHeadCommit() {
+      return this.pull?.source_commit || '';
     },
     normalizedStatus() {
       return this.pull?.status || 'open';
@@ -493,15 +479,6 @@ export default {
       }
       return 'No approvals yet';
     },
-    reviewStateText() {
-      if (this.approvedReviewsCount) return this.approvalText;
-      if (this.pull?.is_mergeable === false) return 'Needs resolution';
-      return 'Review required';
-    },
-    mergeabilityText() {
-      if (this.pull?.is_mergeable === false) return 'Needs resolution';
-      return 'Mergeable';
-    },
     conflictText() {
       if (this.pull?.is_mergeable === false) return 'This branch has conflicts that must be resolved.';
       return 'This branch has no conflicts with the base branch.';
@@ -534,10 +511,21 @@ export default {
     isSignedInForGovernance() {
       return this.currentUserGovernance.is_authenticated === true;
     },
+    canWriteConversation() {
+      const permissions = this.governance?.repository?.permissions || {};
+      return this.isSignedInForGovernance && (permissions.push === true || permissions.admin === true);
+    },
+    conversationLockedText() {
+      if (!this.isSignedInForGovernance) return 'Sign in to comment or review this data pull request.';
+      return 'Write access is required to comment or review this data pull request.';
+    },
+    showGovernanceAdminLinks() {
+      return this.governance?.repository?.permissions?.admin === true;
+    },
     mergeBlockers() {
       const blockers = [];
+      if (this.normalizedStatus !== 'open') return blockers;
       if (!this.isSignedInForGovernance) blockers.push('Sign in to merge this data pull request.');
-      if (this.normalizedStatus !== 'open') blockers.push('Only open pull requests can be merged.');
       if (this.pull?.is_mergeable === false) blockers.push('Resolve conflicts before merging.');
       if (!this.canCurrentUserMerge) blockers.push('You do not have permission to merge into this branch.');
       if (this.failedChecksCount) blockers.push(this.checksSummaryText);
@@ -574,7 +562,7 @@ export default {
       return 'All available merge gates are clear for this data pull request.';
     },
     mergeButtonEnabled() {
-      return this.mergeBlockers.length === 0 && !this.merging;
+      return this.normalizedStatus === 'open' && this.mergeBlockers.length === 0 && !this.merging;
     },
     mergeBoxClass() {
       if (this.mergeBlockers.length) return 'is-blocked';
@@ -729,11 +717,20 @@ export default {
       try {
         const review = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/reviews`, {
           method: 'POST',
-          body: JSON.stringify({status: this.reviewDecision, body}),
+          body: JSON.stringify({status: this.reviewDecision}),
         });
-        this.reviews = [...this.normalizedReviews, review];
+        let timelineReview = review;
+        if (body) {
+          const comment = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({author: this.currentReviewerName, body}),
+          });
+          this.comments = [...this.normalizedComments, comment];
+          timelineReview = {...review, body};
+        }
+        this.reviews = [...this.normalizedReviews, timelineReview];
         this.newReviewBody = '';
-        this.reviewDecision = 'commented';
+        this.reviewDecision = 'approved';
       } catch (e) {
         this.conversationError = e.message;
       } finally {
@@ -747,7 +744,10 @@ export default {
       try {
         await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/merge`, {
           method: 'POST',
-          body: JSON.stringify({merge_style: this.governance?.repository?.default_merge_style || 'squash'}),
+          body: JSON.stringify({
+            message: this.mergeCommitMessage(),
+            author: this.currentReviewerName,
+          }),
         });
         await this.refreshPull();
       } catch (e) {
@@ -773,6 +773,9 @@ export default {
     },
     pullNumber(pull) {
       return pull.pull_request_id || pull.id || this.pullId;
+    },
+    mergeCommitMessage() {
+      return `Merge pull request #${this.pullNumber(this.pull)} from ${this.sourceBranch}`;
     },
     sourceRef(pull) {
       return pull?.source_ref || pull?.source_branch || '';
@@ -976,32 +979,6 @@ export default {
   border-radius: 6px;
   color: var(--color-accent);
   padding: 2px 6px;
-}
-
-.datahub-pr-summary-bar {
-  border: 1px solid var(--color-secondary);
-  border-radius: 6px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-}
-
-.datahub-pr-summary-item {
-  background: var(--color-box-body);
-  border-right: 1px solid var(--color-secondary);
-  display: grid;
-  gap: 3px;
-  min-height: 58px;
-  padding: 10px 14px;
-}
-
-.datahub-pr-summary-item:last-child {
-  border-right: 0;
-}
-
-.datahub-pr-summary-label {
-  color: var(--color-text-light-2);
-  font-size: 12px;
 }
 
 .datahub-stat-add,
@@ -1424,8 +1401,6 @@ export default {
   padding-top: 12px;
 }
 
-.datahub-pull-page.is-files-tab .datahub-pr-header,
-.datahub-pull-page.is-files-tab .datahub-pr-summary-bar,
 .datahub-pull-page.is-files-tab .datahub-pr-tabs {
   margin-left: auto;
   margin-right: auto;
@@ -1477,19 +1452,6 @@ export default {
 
   .datahub-pr-title {
     font-size: 22px;
-  }
-
-  .datahub-pr-summary-bar {
-    grid-template-columns: 1fr;
-  }
-
-  .datahub-pr-summary-item {
-    border-right: 0;
-    border-bottom: 1px solid var(--color-secondary);
-  }
-
-  .datahub-pr-summary-item:last-child {
-    border-bottom: 0;
   }
 
   .datahub-timeline-item {

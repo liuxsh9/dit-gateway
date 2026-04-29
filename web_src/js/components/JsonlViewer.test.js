@@ -55,6 +55,36 @@ test('loads paged manifest entries and row objects from core API', async () => {
   expect(wrapper.text()).toContain('Explain LFU');
 });
 
+test('shows visible loading context while preview rows are loading', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return new Promise(() => {});
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+      singleRowMode: true,
+    },
+  });
+
+  await vi.waitFor(() => expect(datahubFetch).toHaveBeenCalledWith(
+    'alice',
+    'dataset',
+    '/manifest/commit123/train.jsonl?offset=0&limit=50',
+  ));
+
+  expect(wrapper.text()).toContain('Loading rows');
+  expect(wrapper.text()).toContain('Fetching the first 50 JSONL rows.');
+
+  wrapper.unmount();
+});
+
 test('renders inline manifest rows without fetching placeholder row hashes', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/eval.jsonl?offset=0&limit=50') {
@@ -244,6 +274,113 @@ test('supports single-row review with quick row switching', async () => {
 
   expect(wrapper.text()).toContain('second answer');
   expect(wrapper.text()).not.toContain('第一行回答');
+});
+
+test('resets selected row preview scroll when switching rows', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {
+        total: 2,
+        entries: [
+          {row_hash: 'row1'},
+          {row_hash: 'row2'},
+        ],
+      };
+    }
+    if (path === '/objects/rows/row1') {
+      return {
+        version: '2.0.0',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'first row',
+            reasoning_content: 'first reasoning '.repeat(300),
+          },
+        ],
+      };
+    }
+    if (path === '/objects/rows/row2') {
+      return {
+        version: '2.0.0',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'second row',
+            reasoning_content: 'second reasoning '.repeat(300),
+          },
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+      singleRowMode: true,
+    },
+    attachTo: document.body,
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first row'));
+
+  let selectedRow = wrapper.find('.datahub-selected-row').element;
+  let nestedField = wrapper.find('.datahub-sft-field-content').element;
+  selectedRow.scrollTop = 240;
+  nestedField.scrollTop = 180;
+
+  await wrapper.findAll('.datahub-row-index-item')[1].trigger('click');
+  await wrapper.vm.$nextTick();
+  await vi.waitFor(() => expect(wrapper.text()).toContain('second row'));
+
+  selectedRow = wrapper.find('.datahub-selected-row').element;
+  nestedField = wrapper.find('.datahub-sft-field-content').element;
+  expect(selectedRow.scrollTop).toBe(0);
+  expect(nestedField.scrollTop).toBe(0);
+
+  wrapper.unmount();
+});
+
+test('keeps single-row pagination inside the row review workspace', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {
+        total: 120,
+        entries: [
+          {
+            row_hash: 'row1',
+            content: {
+              version: '2.0.0',
+              messages: [
+                {role: 'user', content: 'first page row'},
+                {role: 'assistant', content: 'answer'},
+              ],
+            },
+          },
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first page row'));
+
+  const review = wrapper.find('.datahub-row-review');
+  expect(review.find('.datahub-row-index-list').exists()).toBe(true);
+  expect(review.find('.datahub-row-pagination').exists()).toBe(true);
+  expect(wrapper.find('.datahub-row-index > .datahub-row-pagination').exists()).toBe(true);
+  expect(wrapper.findAll('.ui.bottom.attached.segment')).toHaveLength(0);
 });
 
 test('jumps directly to a row by loading the containing manifest page', async () => {

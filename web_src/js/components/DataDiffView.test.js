@@ -108,6 +108,180 @@ test('renders github-like files changed controls and reviewed progress in review
   expect(wrapper.text()).toContain('Viewed 1 of 2 files');
 });
 
+test('reviews changed rows with a preview-style row index instead of rendering every row at once', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 2, rows_removed: 0, rows_refreshed: 0},
+        files: [
+          {
+            path: 'train.jsonl',
+            added: 2,
+            removed: 0,
+            refreshed: 0,
+            added_rows: [
+              {
+                row_hash: 'rowhash1',
+                position: 0,
+                content: {messages: [{role: 'user', content: 'first changed row'}]},
+              },
+              {
+                row_hash: 'rowhash2',
+                position: 1,
+                content: {messages: [{role: 'user', content: 'second changed row'}]},
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {owner: 'alice', repo: 'dataset', oldCommit: 'old123', newCommit: 'new456'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first changed row'));
+
+  expect(wrapper.find('.datahub-row-index').exists()).toBe(true);
+  expect(wrapper.findAll('.datahub-row-index-item')).toHaveLength(2);
+  expect(wrapper.findAll('.datahub-sft-row-card')).toHaveLength(1);
+  expect(wrapper.text()).toContain('Row 1');
+  expect(wrapper.text()).toContain('Row 2');
+  expect(wrapper.text()).not.toContain('second changed row');
+
+  await wrapper.findAll('.datahub-row-index-item')[1].trigger('click');
+
+  expect(wrapper.findAll('.datahub-sft-row-card')).toHaveLength(1);
+  expect(wrapper.text()).toContain('second changed row');
+  expect(wrapper.text()).not.toContain('first changed row');
+  const issueUrl = new URL(wrapper.find('a.datahub-row-issue-link').attributes('href'), 'http://localhost');
+  expect(issueUrl.searchParams.get('body')).toContain('row_hash: rowhash2');
+  expect(issueUrl.searchParams.get('body')).toContain('row: 2');
+  expect(issueUrl.searchParams.get('body')).not.toContain('row_hash: rowhash1');
+});
+
+test('resets pull request row preview scroll when switching rows', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 2, rows_removed: 0, rows_refreshed: 0},
+        files: [
+          {
+            path: 'train.jsonl',
+            added: 2,
+            removed: 0,
+            refreshed: 0,
+            added_rows: [
+              {
+                row_hash: 'rowhash1',
+                position: 0,
+                content: {messages: [{role: 'user', content: 'first changed row'}]},
+              },
+              {
+                row_hash: 'rowhash2',
+                position: 1,
+                content: {messages: [{role: 'user', content: 'second changed row'}]},
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {owner: 'alice', repo: 'dataset', oldCommit: 'old123', newCommit: 'new456'},
+    attachTo: document.body,
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first changed row'));
+
+  const selectedRow = wrapper.find('.datahub-selected-row').element;
+  const nestedContent = wrapper.find('.datahub-sft-content').element;
+  selectedRow.scrollTop = 240;
+  nestedContent.scrollTop = 180;
+
+  await wrapper.findAll('.datahub-row-index-item')[1].trigger('click');
+  await wrapper.vm.$nextTick();
+
+  expect(selectedRow.scrollTop).toBe(0);
+  expect(nestedContent.scrollTop).toBe(0);
+
+  wrapper.unmount();
+});
+
+test('pages through changed rows in pull request preview', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 120, rows_removed: 0, rows_refreshed: 0},
+        files: [
+          {
+            path: 'train.jsonl',
+            added: 120,
+            removed: 0,
+            refreshed: 0,
+            total_changes: 120,
+            has_more: true,
+            added_rows: [
+              {
+                row_hash: 'rowhash1',
+                position: 0,
+                content: {messages: [{role: 'user', content: 'page one row'}]},
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/diff/old123/new456?file=train.jsonl&offset=50&limit=50') {
+      return {
+        summary: {files_changed: 1, rows_added: 120, rows_removed: 0, rows_refreshed: 0},
+        files: [
+          {
+            path: 'train.jsonl',
+            added: 120,
+            removed: 0,
+            refreshed: 0,
+            total_changes: 120,
+            has_more: true,
+            added_rows: [
+              {
+                row_hash: 'rowhash51',
+                position: 50,
+                content: {messages: [{role: 'user', content: 'page two row'}]},
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {owner: 'alice', repo: 'dataset', oldCommit: 'old123', newCommit: 'new456'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('page one row'));
+
+  expect(wrapper.text()).toContain('Page 1 / 3');
+  expect(wrapper.text()).toContain('Rows changed (120)');
+  expect(wrapper.find('.datahub-row-index > .datahub-row-pagination').exists()).toBe(true);
+  expect(wrapper.find('.datahub-row-review + .datahub-row-pagination').exists()).toBe(false);
+
+  await wrapper.findAll('.datahub-row-page-button').find((button) => button.text() === 'Next').trigger('click');
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('page two row'));
+  expect(wrapper.text()).toContain('Page 2 / 3');
+  expect(wrapper.text()).not.toContain('page one row');
+});
+
 test('offers a prefilled issue link for a changed data row', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/diff/old123/new456') {
@@ -217,6 +391,51 @@ test('submits a pull request row comment with file and row context', async () =>
       field_path: 'row:5',
     }),
   });
+});
+
+test('hides pull request inline comment controls when comments are not allowed', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 1, rows_removed: 0, rows_refreshed: 0},
+        files: [
+          {
+            path: 'multi_turn/fast/chunk_000.jsonl',
+            added: 1,
+            removed: 0,
+            refreshed: 0,
+            added_rows: [
+              {
+                row_hash: 'rowhash1234567890',
+                position: 4,
+                content: {messages: [{role: 'user', content: 'needs review'}]},
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      oldCommit: 'old123',
+      newCommit: 'new456',
+      reviewMode: true,
+      pullId: '7',
+      canComment: false,
+    },
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('needs review'));
+
+  expect(wrapper.text()).toContain('Viewed 0 of 1 files');
+  expect(wrapper.find('.datahub-row-comment-button').exists()).toBe(false);
+  expect(wrapper.find('a.datahub-row-issue-link').exists()).toBe(true);
 });
 
 test('renders refreshed ML2 rows as before and after conversation cards', async () => {

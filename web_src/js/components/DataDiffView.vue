@@ -95,6 +95,7 @@
             </div>
             <div class="datahub-file-review-actions" v-if="reviewMode">
               <button
+                v-if="canComment"
                 type="button"
                 class="datahub-row-comment-button"
                 @click="toggleCommentForm(fileCommentContext())"
@@ -130,205 +131,192 @@
             No row-level content is available for this file.
           </div>
 
-          <div v-if="addedRows.length" class="datahub-diff-section">
-            <h4>Added ({{ addedRows.length }})</h4>
-            <div class="datahub-diff-row-list positive">
-              <div
-                v-for="(row, index) in addedRows"
-                :key="row.row_hash || index"
-                class="datahub-row-review-item"
-              >
-                <div class="datahub-row-actions">
-                  <span>{{ rowContextLabel(row, index, 'added') }}</span>
-                  <span class="datahub-row-action-buttons">
-                    <button
-                      v-if="reviewMode"
-                      type="button"
-                      class="datahub-row-comment-button"
-                      @click="toggleCommentForm(rowCommentContext(row, index, 'added'))"
-                    >
-                      Comment
-                    </button>
-                    <a class="datahub-row-issue-link" :href="issueLinkForRow(row, index, 'added')">
-                      Open issue
-                    </a>
-                  </span>
-                </div>
-                <form
-                  v-if="isCommentFormOpen(rowCommentContext(row, index, 'added'))"
-                  class="datahub-inline-comment-form"
-                  @submit.prevent="submitInlineComment(rowCommentContext(row, index, 'added'))"
-                >
-                  <textarea
-                    v-model="inlineCommentBody"
-                    class="datahub-inline-comment-textarea"
-                    placeholder="Leave a row-level review comment"
-                  ></textarea>
-                  <div class="datahub-inline-comment-actions">
-                    <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
-                    <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
-                    <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(row, index, 'added'))">
-                      Add comment
-                    </button>
-                  </div>
-                </form>
-                <JsonlRowRenderer
-                  :row="rowContent(row)"
-                  :row-number="row.position != null ? row.position + 1 : index + 1"
-                  collapse-whitespace
-                />
-              </div>
+          <div v-if="reviewRows.length" class="datahub-diff-section">
+            <div class="datahub-row-section-heading">
+              <h4>Rows changed ({{ activeFileTotalChanges }})</h4>
+              <span v-if="activeFileTotalPages > 1">showing {{ activeFilePageStart }}-{{ activeFilePageEnd }}</span>
             </div>
-          </div>
+            <div class="datahub-row-review datahub-diff-row-review">
+              <aside class="datahub-row-index" aria-label="Changed rows">
+                <div class="datahub-row-index-list">
+                  <button
+                    v-for="(entry, index) in reviewRows"
+                    :key="entry.key"
+                    type="button"
+                    class="datahub-row-index-item"
+                    :class="[entry.variant, {active: index === selectedReviewRowIndex}]"
+                    @click="selectReviewRow(index)"
+                  >
+                    <span>
+                      {{ entry.title }}
+                      <small class="datahub-row-change-badge">{{ entry.badge }}</small>
+                    </span>
+                    <small>{{ entry.summary }}</small>
+                  </button>
+                </div>
+                <div class="datahub-row-pagination" v-if="activeFileTotalPages > 1">
+                  <button
+                    type="button"
+                    class="datahub-row-page-button"
+                    :disabled="activeFilePage <= 1 || loadingRows"
+                    @click="goRowPage(activeFilePage - 1)"
+                  >
+                    Prev
+                  </button>
+                  <span>Page {{ activeFilePage }} / {{ activeFileTotalPages }}</span>
+                  <button
+                    type="button"
+                    class="datahub-row-page-button"
+                    :disabled="activeFilePage >= activeFileTotalPages || loadingRows"
+                    @click="goRowPage(activeFilePage + 1)"
+                  >
+                    Next
+                  </button>
+                </div>
+              </aside>
 
-          <div v-if="removedRows.length" class="datahub-diff-section">
-            <h4>Removed ({{ removedRows.length }})</h4>
-            <div class="datahub-diff-row-list negative">
-              <div
-                v-for="(row, index) in removedRows"
-                :key="row.row_hash || index"
-                class="datahub-row-review-item"
-              >
-                <div class="datahub-row-actions">
-                  <span>{{ rowContextLabel(row, index, 'removed') }}</span>
-                  <span class="datahub-row-action-buttons">
-                    <button
-                      v-if="reviewMode"
-                      type="button"
-                      class="datahub-row-comment-button"
-                      @click="toggleCommentForm(rowCommentContext(row, index, 'removed'))"
-                    >
-                      Comment
-                    </button>
-                    <a class="datahub-row-issue-link" :href="issueLinkForRow(row, index, 'removed')">
-                      Open issue
-                    </a>
-                  </span>
-                </div>
-                <form
-                  v-if="isCommentFormOpen(rowCommentContext(row, index, 'removed'))"
-                  class="datahub-inline-comment-form"
-                  @submit.prevent="submitInlineComment(rowCommentContext(row, index, 'removed'))"
+              <section class="datahub-selected-row" v-if="selectedReviewRow" ref="selectedRowPreview">
+                <div
+                  v-if="selectedReviewRow.kind === 'single'"
+                  class="datahub-row-review-item"
                 >
-                  <textarea
-                    v-model="inlineCommentBody"
-                    class="datahub-inline-comment-textarea"
-                    placeholder="Leave a row-level review comment"
-                  ></textarea>
-                  <div class="datahub-inline-comment-actions">
-                    <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
-                    <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
-                    <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(row, index, 'removed'))">
-                      Add comment
-                    </button>
+                  <div class="datahub-row-actions datahub-selected-row-actions">
+                    <span>{{ rowContextLabel(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType) }}</span>
+                    <span class="datahub-row-action-buttons">
+                      <button
+                        v-if="reviewMode && canComment"
+                        type="button"
+                        class="datahub-row-comment-button"
+                        @click="toggleCommentForm(rowCommentContext(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType))"
+                      >
+                        Comment
+                      </button>
+                      <a class="datahub-row-issue-link" :href="issueLinkForRow(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType)">
+                        Open issue
+                      </a>
+                    </span>
                   </div>
-                </form>
-                <JsonlRowRenderer
-                  :row="rowContent(row)"
-                  :row-number="row.position != null ? row.position + 1 : index + 1"
-                  collapse-whitespace
-                />
-              </div>
-            </div>
-          </div>
+                  <form
+                    v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType))"
+                    class="datahub-inline-comment-form"
+                    @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType))"
+                  >
+                    <textarea
+                      v-model="inlineCommentBody"
+                      class="datahub-inline-comment-textarea"
+                      placeholder="Leave a row-level review comment"
+                    ></textarea>
+                    <div class="datahub-inline-comment-actions">
+                      <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
+                      <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
+                      <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType))">
+                        Add comment
+                      </button>
+                    </div>
+                  </form>
+                  <JsonlRowRenderer
+                    :row="rowContent(selectedReviewRow.row)"
+                    :row-number="rowPosition(selectedReviewRow.row, selectedReviewRow.sourceIndex)"
+                    collapse-whitespace
+                  />
+                </div>
 
-          <div v-if="refreshedRows.length" class="datahub-diff-section">
-            <h4>Refreshed ({{ refreshedRows.length }})</h4>
-            <div
-              v-for="(row, index) in refreshedRows"
-              :key="row.new_row_hash || index"
-              class="datahub-diff-refresh-pair"
-            >
-              <div class="datahub-diff-refresh-side negative">
-                <div class="datahub-diff-side-label">Before</div>
-                <div class="datahub-row-actions">
-                  <span>{{ rowContextLabel({row_hash: row.old_row_hash}, index, 'before refresh') }}</span>
-                  <span class="datahub-row-action-buttons">
-                    <button
-                      v-if="reviewMode"
-                      type="button"
-                      class="datahub-row-comment-button"
-                      @click="toggleCommentForm(rowCommentContext({content: row.old_content, row_hash: row.old_row_hash}, index, 'before refresh'))"
-                    >
-                      Comment
-                    </button>
-                    <a
-                      class="datahub-row-issue-link"
-                      :href="issueLinkForRow({content: row.old_content, row_hash: row.old_row_hash}, index, 'before refresh')"
-                    >
-                      Open issue
-                    </a>
-                  </span>
-                </div>
-                <form
-                  v-if="isCommentFormOpen(rowCommentContext({content: row.old_content, row_hash: row.old_row_hash}, index, 'before refresh'))"
-                  class="datahub-inline-comment-form"
-                  @submit.prevent="submitInlineComment(rowCommentContext({content: row.old_content, row_hash: row.old_row_hash}, index, 'before refresh'))"
+                <div
+                  v-else
+                  class="datahub-diff-refresh-pair datahub-row-review-item"
                 >
-                  <textarea
-                    v-model="inlineCommentBody"
-                    class="datahub-inline-comment-textarea"
-                    placeholder="Leave a row-level review comment"
-                  ></textarea>
-                  <div class="datahub-inline-comment-actions">
-                    <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
-                    <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
-                    <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext({content: row.old_content, row_hash: row.old_row_hash}, index, 'before refresh'))">
-                      Add comment
-                    </button>
+                  <div class="datahub-diff-refresh-side negative">
+                    <div class="datahub-diff-side-label">Before</div>
+                    <div class="datahub-row-actions">
+                      <span>{{ rowContextLabel(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh') }}</span>
+                      <span class="datahub-row-action-buttons">
+                        <button
+                          v-if="reviewMode && canComment"
+                          type="button"
+                          class="datahub-row-comment-button"
+                          @click="toggleCommentForm(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                        >
+                          Comment
+                        </button>
+                        <a
+                          class="datahub-row-issue-link"
+                          :href="issueLinkForRow(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh')"
+                        >
+                          Open issue
+                        </a>
+                      </span>
+                    </div>
+                    <form
+                      v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                      class="datahub-inline-comment-form"
+                      @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))"
+                    >
+                      <textarea
+                        v-model="inlineCommentBody"
+                        class="datahub-inline-comment-textarea"
+                        placeholder="Leave a row-level review comment"
+                      ></textarea>
+                      <div class="datahub-inline-comment-actions">
+                        <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
+                        <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
+                        <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh'))">
+                          Add comment
+                        </button>
+                      </div>
+                    </form>
+                    <JsonlRowRenderer
+                      :row="rowContent(selectedReviewRow.beforeRow)"
+                      :row-number="rowPosition(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex)"
+                      collapse-whitespace
+                    />
                   </div>
-                </form>
-                <JsonlRowRenderer
-                  :row="rowContent({content: row.old_content, row_hash: row.old_row_hash})"
-                  :row-number="index + 1"
-                  collapse-whitespace
-                />
-              </div>
-              <div class="datahub-diff-refresh-side positive">
-                <div class="datahub-diff-side-label">After</div>
-                <div class="datahub-row-actions">
-                  <span>{{ rowContextLabel({row_hash: row.new_row_hash}, index, 'after refresh') }}</span>
-                  <span class="datahub-row-action-buttons">
-                    <button
-                      v-if="reviewMode"
-                      type="button"
-                      class="datahub-row-comment-button"
-                      @click="toggleCommentForm(rowCommentContext({content: row.new_content, row_hash: row.new_row_hash}, index, 'after refresh'))"
+                  <div class="datahub-diff-refresh-side positive">
+                    <div class="datahub-diff-side-label">After</div>
+                    <div class="datahub-row-actions">
+                      <span>{{ rowContextLabel(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh') }}</span>
+                      <span class="datahub-row-action-buttons">
+                        <button
+                          v-if="reviewMode && canComment"
+                          type="button"
+                          class="datahub-row-comment-button"
+                          @click="toggleCommentForm(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
+                        >
+                          Comment
+                        </button>
+                        <a
+                          class="datahub-row-issue-link"
+                          :href="issueLinkForRow(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh')"
+                        >
+                          Open issue
+                        </a>
+                      </span>
+                    </div>
+                    <form
+                      v-if="isCommentFormOpen(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
+                      class="datahub-inline-comment-form"
+                      @submit.prevent="submitInlineComment(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))"
                     >
-                      Comment
-                    </button>
-                    <a
-                      class="datahub-row-issue-link"
-                      :href="issueLinkForRow({content: row.new_content, row_hash: row.new_row_hash}, index, 'after refresh')"
-                    >
-                      Open issue
-                    </a>
-                  </span>
+                      <textarea
+                        v-model="inlineCommentBody"
+                        class="datahub-inline-comment-textarea"
+                        placeholder="Leave a row-level review comment"
+                      ></textarea>
+                      <div class="datahub-inline-comment-actions">
+                        <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
+                        <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
+                        <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh'))">
+                          Add comment
+                        </button>
+                      </div>
+                    </form>
+                    <JsonlRowRenderer
+                      :row="rowContent(selectedReviewRow.afterRow)"
+                      :row-number="rowPosition(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex)"
+                      collapse-whitespace
+                    />
+                  </div>
                 </div>
-                <form
-                  v-if="isCommentFormOpen(rowCommentContext({content: row.new_content, row_hash: row.new_row_hash}, index, 'after refresh'))"
-                  class="datahub-inline-comment-form"
-                  @submit.prevent="submitInlineComment(rowCommentContext({content: row.new_content, row_hash: row.new_row_hash}, index, 'after refresh'))"
-                >
-                  <textarea
-                    v-model="inlineCommentBody"
-                    class="datahub-inline-comment-textarea"
-                    placeholder="Leave a row-level review comment"
-                  ></textarea>
-                  <div class="datahub-inline-comment-actions">
-                    <span v-if="commentError" class="datahub-inline-comment-error">{{ commentError }}</span>
-                    <button type="button" class="ui small basic button" @click="closeCommentForm">Cancel</button>
-                    <button type="submit" class="ui small primary button" :disabled="submittingCommentKey === commentKey(rowCommentContext({content: row.new_content, row_hash: row.new_row_hash}, index, 'after refresh'))">
-                      Add comment
-                    </button>
-                  </div>
-                </form>
-                <JsonlRowRenderer
-                  :row="rowContent({content: row.new_content, row_hash: row.new_row_hash})"
-                  :row-number="index + 1"
-                  collapse-whitespace
-                />
-              </div>
+              </section>
             </div>
           </div>
         </div>
@@ -345,6 +333,8 @@
 import {datahubFetch} from '../utils/datahub-api.js';
 import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
+const ROW_PAGE_SIZE = 50;
+
 export default {
   components: {JsonlRowRenderer},
   emits: ['summary-loaded', 'comment-created'],
@@ -358,6 +348,10 @@ export default {
       type: String,
       default: '',
     },
+    canComment: {
+      type: Boolean,
+      default: true,
+    },
     reviewMode: {
       type: Boolean,
       default: false,
@@ -369,11 +363,14 @@ export default {
       activeFile: null,
       activeChanges: null,
       loading: false,
+      loadingRows: false,
       metaDiff: null,
       summary: null,
       viewedFiles: {},
+      rowPages: {},
       hideViewed: false,
       whitespaceMode: 'show',
+      selectedReviewRowKey: null,
       openCommentKey: null,
       inlineCommentBody: '',
       submittingCommentKey: null,
@@ -417,6 +414,41 @@ export default {
       if (this.activeFileData?.refreshed_rows) return this.activeFileData.refreshed_rows;
       return (this.activeChanges || []).filter((c) => c.type === 'refreshed');
     },
+    reviewRows() {
+      return [
+        ...this.addedRows.map((row, index) => this.singleReviewRow(row, index, 'added', 'positive', 'Added')),
+        ...this.removedRows.map((row, index) => this.singleReviewRow(row, index, 'removed', 'negative', 'Removed')),
+        ...this.refreshedRows.map((row, index) => this.refreshedReviewRow(row, index)),
+      ];
+    },
+    activeFileTotalChanges() {
+      const file = this.activeFileData;
+      if (!file) return this.reviewRows.length;
+      return file.total_changes || (file.added || 0) + (file.removed || 0) + (file.refreshed || 0) || this.reviewRows.length;
+    },
+    activeFilePage() {
+      if (!this.activeFile) return 1;
+      return this.rowPages[this.activeFile] || 1;
+    },
+    activeFileTotalPages() {
+      return Math.max(1, Math.ceil(this.activeFileTotalChanges / ROW_PAGE_SIZE));
+    },
+    activeFilePageStart() {
+      if (!this.activeFileTotalChanges) return 0;
+      return (this.activeFilePage - 1) * ROW_PAGE_SIZE + 1;
+    },
+    activeFilePageEnd() {
+      return Math.min(this.activeFilePage * ROW_PAGE_SIZE, this.activeFileTotalChanges);
+    },
+    selectedReviewRowIndex() {
+      if (!this.reviewRows.length) return -1;
+      const index = this.reviewRows.findIndex((row) => row.key === this.selectedReviewRowKey);
+      return index >= 0 ? index : 0;
+    },
+    selectedReviewRow() {
+      if (this.selectedReviewRowIndex < 0) return null;
+      return this.reviewRows[this.selectedReviewRowIndex] || null;
+    },
     hasNoRows() {
       return !this.addedRows.length && !this.removedRows.length && !this.refreshedRows.length;
     },
@@ -455,6 +487,12 @@ export default {
     activeFile(newPath) {
       const file = this.files.find((f) => f.path === newPath);
       this.activeChanges = file?.changes || [];
+      this.selectedReviewRowKey = null;
+      this.closeCommentForm();
+      this.resetSelectedRowScroll();
+    },
+    selectedReviewRowKey() {
+      this.resetSelectedRowScroll();
     },
     hideViewed() {
       this.ensureVisibleActiveFile();
@@ -463,6 +501,71 @@ export default {
   methods: {
     selectFile(path) {
       this.activeFile = path;
+    },
+    selectReviewRow(index) {
+      this.selectedReviewRowKey = this.reviewRows[index]?.key || null;
+      this.closeCommentForm();
+    },
+    async resetSelectedRowScroll() {
+      await this.$nextTick();
+      const preview = this.$refs.selectedRowPreview;
+      if (preview) {
+        preview.scrollTop = 0;
+        for (const child of preview.querySelectorAll('*')) {
+          if (child.scrollTop) child.scrollTop = 0;
+        }
+      }
+    },
+    async goRowPage(page) {
+      if (!this.activeFile || page < 1 || page > this.activeFileTotalPages || page === this.activeFilePage) return;
+      this.loadingRows = true;
+      try {
+        const offset = (page - 1) * ROW_PAGE_SIZE;
+        const path = `/diff/${this.oldCommit}/${this.newCommit}?file=${this.encodePath(this.activeFile)}&offset=${offset}&limit=${ROW_PAGE_SIZE}`;
+        const diff = await datahubFetch(this.owner, this.repo, path);
+        const pageFile = (diff.files || []).find((file) => file.path === this.activeFile) || diff.files?.[0];
+        if (pageFile) {
+          this.files = this.files.map((file) => file.path === this.activeFile ? {...file, ...pageFile} : file);
+          this.activeChanges = pageFile.changes || [];
+          this.rowPages = {
+            ...this.rowPages,
+            [this.activeFile]: page,
+          };
+          this.selectedReviewRowKey = null;
+          this.closeCommentForm();
+        }
+      } finally {
+        this.loadingRows = false;
+      }
+    },
+    singleReviewRow(row, index, changeType, variant, badge) {
+      return {
+        kind: 'single',
+        key: `${changeType}:${this.rowHash(row) || index}`,
+        row,
+        sourceIndex: index,
+        changeType,
+        variant,
+        badge,
+        title: `Row ${this.rowPosition(row, index)}`,
+        summary: this.rowSummary(this.rowContent(row)),
+      };
+    },
+    refreshedReviewRow(row, index) {
+      const beforeRow = {content: row.old_content, row_hash: row.old_row_hash, position: row.position};
+      const afterRow = {content: row.new_content, row_hash: row.new_row_hash, position: row.position};
+      return {
+        kind: 'refresh',
+        key: `refreshed:${row.old_row_hash || index}:${row.new_row_hash || index}`,
+        beforeRow,
+        afterRow,
+        sourceIndex: index,
+        changeType: 'refreshed',
+        variant: 'refreshed',
+        badge: 'Refreshed',
+        title: `Row ${this.rowPosition(afterRow, index)}`,
+        summary: this.rowSummary(this.rowContent(afterRow)),
+      };
     },
     isViewed(path) {
       return Boolean(this.viewedFiles[path]);
@@ -496,12 +599,24 @@ export default {
       return row.row_hash || row.new_row_hash || row.old_row_hash || this.rowContent(row).__datahubRowHash || '';
     },
     rowPosition(row, index) {
-      return row.position != null ? row.position + 1 : index + 1;
+      return row.position !== null && row.position !== undefined ? row.position + 1 : index + 1;
     },
     rowContextLabel(row, index, changeType) {
       const hash = this.rowHash(row);
       const shortHash = hash ? ` ${hash.slice(0, 10)}` : '';
       return `${changeType} row ${this.rowPosition(row, index)}${shortHash}`;
+    },
+    rowSummary(row) {
+      if (!row) return 'empty';
+      if (Array.isArray(row.messages)) {
+        const roles = row.messages.map((message) => message.role || 'message').join(' -> ');
+        return roles || 'messages';
+      }
+      const keys = Object.keys(row).filter((key) => !key.startsWith('__')).slice(0, 4);
+      return keys.join(', ') || 'json';
+    },
+    encodePath(path) {
+      return String(path || '').split('/').map(encodeURIComponent).join('/');
     },
     fileCommentContext() {
       return {
@@ -547,6 +662,10 @@ export default {
     },
     async submitInlineComment(context) {
       const body = this.inlineCommentBody.trim();
+      if (!this.canComment) {
+        this.commentError = 'Sign in with write access to comment on this data pull request.';
+        return;
+      }
       if (!body || !this.pullId) return;
       const key = this.commentKey(context);
       this.submittingCommentKey = key;
@@ -863,7 +982,64 @@ export default {
 .datahub-diff-section h4 {
   font-size: 14px;
   letter-spacing: 0;
-  margin: 0 0 10px;
+  margin: 0;
+}
+
+.datahub-row-section-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.datahub-row-section-heading span {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+}
+
+.datahub-row-pagination {
+  align-items: center;
+  background: var(--color-box-header);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding: 8px 10px;
+}
+
+.datahub-row-pagination span {
+  color: var(--color-text-light);
+  font-size: 12px;
+  min-width: 78px;
+  text-align: center;
+}
+
+.datahub-row-page-button {
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 26px;
+  min-width: 58px;
+  padding: 0 10px;
+}
+
+.datahub-row-page-button:hover:not(:disabled) {
+  background: var(--color-active);
+}
+
+.datahub-row-page-button:disabled {
+  color: var(--color-text-light-2);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .datahub-diff-row-list {
@@ -882,6 +1058,95 @@ export default {
 .datahub-diff-row-list.negative {
   background: var(--color-diff-removed-row-bg, #ffeef0);
   border-left-color: var(--color-red);
+}
+
+.datahub-diff-row-review {
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  height: min(760px, calc(100vh - 260px));
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.datahub-diff-row-review .datahub-row-index {
+  background: var(--color-box-header);
+  border-right: 1px solid var(--color-secondary);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.datahub-diff-row-review .datahub-row-index-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.datahub-diff-row-review .datahub-row-index-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  display: block;
+  margin: 0 0 4px;
+  padding: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.datahub-diff-row-review .datahub-row-index-item.active {
+  background: var(--color-active);
+  border-color: var(--color-primary-light-4);
+}
+
+.datahub-diff-row-review .datahub-row-index-item.positive {
+  box-shadow: inset 3px 0 0 var(--color-green);
+}
+
+.datahub-diff-row-review .datahub-row-index-item.negative {
+  box-shadow: inset 3px 0 0 var(--color-red);
+}
+
+.datahub-diff-row-review .datahub-row-index-item.refreshed {
+  box-shadow: inset 3px 0 0 var(--color-yellow);
+}
+
+.datahub-diff-row-review .datahub-row-index-item span {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  font-weight: 600;
+  justify-content: space-between;
+}
+
+.datahub-diff-row-review .datahub-row-index-item small {
+  color: var(--color-text-light-2);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datahub-row-change-badge {
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 999px;
+  color: var(--color-text-light-2);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 0 6px;
+}
+
+.datahub-diff-row-review .datahub-selected-row {
+  background: var(--color-body);
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
 }
 
 .datahub-row-review-item {
@@ -1028,8 +1293,16 @@ export default {
 
 @media (max-width: 767px) {
   .datahub-diff-summary,
-  .datahub-diff-refresh-pair {
+  .datahub-diff-refresh-pair,
+  .datahub-diff-row-review {
+    height: auto;
     grid-template-columns: 1fr;
+  }
+
+  .datahub-diff-row-review .datahub-row-index {
+    border-bottom: 1px solid var(--color-secondary);
+    border-right: 0;
+    max-height: 220px;
   }
 
   .datahub-diff-stat {

@@ -6,6 +6,28 @@
 // This file must be imported before any lazy-loading is being attempted.
 __webpack_public_path__ = `${window.config?.assetUrlPrefix ?? '/assets'}/`;
 
+export function appendAssetVersionToAssetUrl(url, assetVersionEncoded) {
+  if (!url || !assetVersionEncoded || url.includes('?v=') || url.includes('&v=')) return url;
+
+  const [withoutHash, hash = ''] = url.split('#', 2);
+  const separator = withoutHash.includes('?') ? '&' : '?';
+  return `${withoutHash}${separator}v=${assetVersionEncoded}${hash ? `#${hash}` : ''}`;
+}
+
+export function initWebpackChunkCacheBusting(runtime, assetVersionEncoded) {
+  if (!runtime || !assetVersionEncoded) return;
+
+  for (const key of ['u', 'miniCssF']) {
+    const getAssetUrl = runtime[key];
+    if (typeof getAssetUrl !== 'function' || getAssetUrl._withAssetVersion) continue;
+
+    runtime[key] = (...args) => appendAssetVersionToAssetUrl(getAssetUrl(...args), assetVersionEncoded);
+    runtime[key]._withAssetVersion = true;
+  }
+}
+
+initWebpackChunkCacheBusting(typeof __webpack_require__ === 'undefined' ? undefined : __webpack_require__, window.config?.assetVersionEncoded);
+
 // Ignore external and some known internal errors that we are unable to currently fix.
 function shouldIgnoreError(err) {
   const assetBaseUrl = String(new URL(__webpack_public_path__, window.location.origin));

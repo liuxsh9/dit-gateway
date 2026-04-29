@@ -8,6 +8,7 @@ import (
 
 	"forgejo.org/modules/base"
 	"forgejo.org/modules/setting"
+	"forgejo.org/modules/util"
 	"forgejo.org/services/context"
 )
 
@@ -38,6 +39,14 @@ func DataHubCommits(ctx *context.Context) {
 	ctx.Data["PageIsCommits"] = true
 	ctx.Data["DataHubBranch"] = ctx.Params("*")
 	ctx.HTML(http.StatusOK, tplDataHubCommits)
+}
+
+func DataHubCommitsDefault(ctx *context.Context) {
+	if !requireDataHubRepo(ctx) {
+		return
+	}
+
+	ctx.Redirect(ctx.Repo.RepoLink+"/data/commits/"+util.PathEscapeSegments(ctx.Repo.Repository.DefaultBranch), http.StatusSeeOther)
 }
 
 func DataHubCommit(ctx *context.Context) {

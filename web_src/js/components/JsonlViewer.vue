@@ -79,7 +79,13 @@
     </div>
 
     <div v-if="loading" class="ui attached segment">
-      <div class="ui active centered inline loader"></div>
+      <div class="datahub-viewer-loading">
+        <div class="ui active inline loader"></div>
+        <div>
+          <strong>Loading rows</strong>
+          <p>Fetching the first 50 JSONL rows.</p>
+        </div>
+      </div>
     </div>
     <div v-else-if="error" class="ui attached segment">
       <div class="ui negative message">{{ error }}</div>
@@ -90,22 +96,43 @@
 
     <div v-else-if="singleRowMode" class="datahub-row-review">
       <aside class="datahub-row-index" aria-label="JSONL rows">
-        <button
-          v-for="(row, idx) in rows"
-          :key="row.__datahubRowHash || idx"
-          type="button"
-          class="datahub-row-index-item"
-          :class="{active: idx === selectedRowOffset, 'has-open-issue': rowIssues(row).length}"
-          @click="selectedRowOffset = idx"
-        >
-          <span>
-            Row {{ startIndex + idx + 1 }}
-            <span v-if="rowIssues(row).length" class="ui mini red label datahub-row-issue-count">{{ rowIssues(row).length }}</span>
-          </span>
-          <small>{{ rowSummary(row) }}</small>
-        </button>
+        <div class="datahub-row-index-list">
+          <button
+            v-for="(row, idx) in rows"
+            :key="row.__datahubRowHash || idx"
+            type="button"
+            class="datahub-row-index-item"
+            :class="{active: idx === selectedRowOffset, 'has-open-issue': rowIssues(row).length}"
+            @click="selectRowOffset(idx)"
+          >
+            <span>
+              Row {{ startIndex + idx + 1 }}
+              <span v-if="rowIssues(row).length" class="ui mini red label datahub-row-issue-count">{{ rowIssues(row).length }}</span>
+            </span>
+            <small>{{ rowSummary(row) }}</small>
+          </button>
+        </div>
+        <div class="datahub-row-pagination" v-if="totalPages > 1">
+          <button
+            type="button"
+            class="datahub-row-page-button"
+            :disabled="currentPage <= 1"
+            @click="goPage(currentPage - 1)"
+          >
+            Prev
+          </button>
+          <span>Page {{ currentPage }} / {{ totalPages }}</span>
+          <button
+            type="button"
+            class="datahub-row-page-button"
+            :disabled="currentPage >= totalPages"
+            @click="goPage(currentPage + 1)"
+          >
+            Next
+          </button>
+        </div>
       </aside>
-      <section class="datahub-selected-row">
+      <section class="datahub-selected-row" ref="selectedRowPreview">
         <div class="datahub-selected-row-actions">
           <div>
             <strong>Row {{ selectedRowNumber }}</strong>
@@ -177,7 +204,7 @@
     </div>
 
     <!-- Pagination -->
-    <div class="ui bottom attached segment" v-if="totalPages > 1">
+    <div class="ui bottom attached segment" v-if="totalPages > 1 && !singleRowMode">
       <div class="ui pagination menu">
         <a class="item" :class="{disabled: currentPage <= 1}" @click="goPage(currentPage - 1)">Prev</a>
         <div class="item">Page {{ currentPage }} / {{ totalPages }}</div>
@@ -267,6 +294,10 @@ export default {
           containerHeight: 600,
         });
       }
+      this.resetSelectedRowScroll();
+    },
+    selectedRowOffset() {
+      this.resetSelectedRowScroll();
     },
   },
   async mounted() {
@@ -382,6 +413,20 @@ export default {
       }
       this.selectedRowOffset = rowIndex - offset;
       this.rowJumpValue = String(rowIndex + 1);
+    },
+    async selectRowOffset(offset) {
+      this.selectedRowOffset = offset;
+      await this.resetSelectedRowScroll();
+    },
+    async resetSelectedRowScroll() {
+      await this.$nextTick();
+      const preview = this.$refs.selectedRowPreview;
+      if (preview) {
+        preview.scrollTop = 0;
+        for (const child of preview.querySelectorAll('*')) {
+          if (child.scrollTop) child.scrollTop = 0;
+        }
+      }
     },
     async searchRows() {
       const query = this.searchQuery.trim();
@@ -600,6 +645,22 @@ export default {
   border-top: 0;
 }
 
+.datahub-viewer-loading {
+  align-items: center;
+  color: var(--color-text-light-2);
+  display: flex;
+  gap: 12px;
+  min-height: 96px;
+}
+
+.datahub-viewer-loading strong {
+  color: var(--color-text);
+}
+
+.datahub-viewer-loading p {
+  margin: 2px 0 0;
+}
+
 .datahub-sft-row-list {
   display: grid;
   gap: 12px;
@@ -706,13 +767,22 @@ export default {
   border-top: 0;
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
+  height: min(760px, calc(100vh - 260px));
   min-height: 520px;
+  overflow: hidden;
 }
 
 .datahub-row-index {
   background: var(--color-box-header);
   border-right: 1px solid var(--color-secondary);
-  max-height: 680px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.datahub-row-index-list {
+  min-height: 0;
   overflow: auto;
   padding: 8px;
 }
@@ -791,8 +861,48 @@ export default {
 
 .datahub-selected-row {
   background: var(--color-body);
+  min-height: 0;
   overflow: auto;
   padding: 12px;
+}
+
+.datahub-row-pagination {
+  align-items: center;
+  background: var(--color-box-header);
+  border-top: 1px solid var(--color-secondary);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr;
+  padding: 8px;
+}
+
+.datahub-row-pagination span {
+  color: var(--color-text-light);
+  font-size: 12px;
+  text-align: center;
+}
+
+.datahub-row-page-button {
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 28px;
+  padding: 0 10px;
+}
+
+.datahub-row-page-button:hover:not(:disabled) {
+  background: var(--color-active);
+}
+
+.datahub-row-page-button:disabled {
+  color: var(--color-text-light-2);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .datahub-selected-row-raw {
@@ -857,13 +967,14 @@ export default {
   }
 
   .datahub-row-review {
+    height: auto;
     grid-template-columns: 1fr;
   }
 
   .datahub-row-index {
     border-right: 0;
     border-bottom: 1px solid var(--color-secondary);
-    max-height: 220px;
+    max-height: 320px;
   }
 }
 </style>

@@ -87,3 +87,20 @@ func TestNewIssueValidateProject(t *testing.T) {
 		})
 	}
 }
+
+func TestNewIssueForDataRepoWithoutGitRepo(t *testing.T) {
+	unittest.PrepareTestEnv(t)
+
+	ctx, resp := contexttest.MockContext(t, "/user2/repo1/issues/new")
+	contexttest.LoadUser(t, ctx, 2)
+	contexttest.LoadRepo(t, ctx, 1)
+
+	ctx.Repo.Repository.IsDataRepo = true
+	ctx.Repo.Repository.IsEmpty = true
+	ctx.Repo.Repository.DefaultBranch = "main"
+
+	assert.NotPanics(t, func() {
+		NewIssue(ctx)
+	})
+	assert.Equal(t, 200, resp.Code)
+}

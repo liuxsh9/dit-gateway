@@ -84,6 +84,7 @@ import (
 	"forgejo.org/routers/api/v1/repo"
 	"forgejo.org/routers/api/v1/settings"
 	"forgejo.org/routers/api/v1/user"
+	"forgejo.org/routers/common"
 	"forgejo.org/services/actions"
 	"forgejo.org/services/auth"
 	"forgejo.org/services/context"
@@ -93,6 +94,7 @@ import (
 	_ "forgejo.org/routers/api/v1/swagger" // for swagger generation
 
 	"code.forgejo.org/go-chi/binding"
+	"code.forgejo.org/go-chi/session"
 	ap "github.com/go-ap/activitypub"
 )
 
@@ -380,6 +382,47 @@ func reqToken() func(ctx *context.APIContext) {
 			return
 		}
 		ctx.Error(http.StatusUnauthorized, "reqToken", "token is required")
+	}
+}
+
+func datahubSessionAuth() func(http.Handler) http.Handler {
+	authMethod := auth.NewGroup(&auth.Session{})
+	crossOriginProtection := http.NewCrossOriginProtection()
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			ctx := context.GetAPIContext(req)
+			if ctx.IsSigned {
+				next.ServeHTTP(resp, req)
+				return
+			}
+
+			if err := crossOriginProtection.Check(req); err != nil {
+				http.Error(resp, err.Error(), http.StatusForbidden)
+				return
+			}
+
+			ar, err := common.AuthShared(ctx.Base, session.GetSession(req), authMethod)
+			if err != nil {
+				ctx.Error(http.StatusUnauthorized, "DatahubSessionAuth", err)
+				return
+			}
+			if ar.Doer != nil {
+				ctx.Doer = ar.Doer
+				ctx.IsSigned = true
+				ctx.IsBasicAuth = ar.IsBasicAuth
+				if ctx.Repo.Repository != nil {
+					permission, err := access_model.GetUserRepoPermissionWithReducer(ctx, ctx.Repo.Repository, ctx.Doer, ctx.Reducer)
+					if err != nil {
+						ctx.Error(http.StatusInternalServerError, "GetUserRepoPermissionWithReducer", err)
+						return
+					}
+					ctx.Repo.Permission = permission
+				}
+			}
+
+			next.ServeHTTP(resp, req)
+		})
 	}
 }
 
@@ -1424,7 +1467,9 @@ func Routes() *web.Route {
 				m.Group("/datahub", func() {
 					m.Get("/refs", repo.DatahubListRefs)
 					m.Get("/refs/{ref_type}/{name}", repo.DatahubGetRef)
+					m.Get("/refs/{ref_type}/*", repo.DatahubGetRef)
 					m.Post("/refs/{ref_type}/{name}", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubUpdateRef)
+					m.Post("/refs/{ref_type}/*", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubUpdateRef)
 					m.Get("/objects/{obj_type}/{hash}", repo.DatahubGetObject)
 					m.Post("/objects/batch", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubPushObjects)
 					m.Post("/objects/batch-exists", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubBatchExists)
@@ -1434,6 +1479,7 @@ func Routes() *web.Route {
 					m.Get("/diff/{old}/{new}", repo.DatahubGetDiff)
 					m.Get("/log", repo.DatahubGetLog)
 					m.Get("/log/{ref}", repo.DatahubGetLog)
+					m.Get("/log/*", repo.DatahubGetLog)
 					m.Get("/pulls", repo.DatahubListPulls)
 					m.Post("/pulls", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubCreatePull)
 					m.Get("/pulls/{id}", repo.DatahubGetPull)
@@ -1447,6 +1493,7 @@ func Routes() *web.Route {
 					m.Get("/meta/diff/{old}/{new}", repo.DatahubMetaDiff)
 					m.Get("/meta/{commit}/*", repo.DatahubMetaGet)
 					m.Get("/stats/{commit}", repo.DatahubGetStats)
+					m.Get("/stats/*", repo.DatahubGetStats)
 					m.Post("/search", repo.DatahubSearch)
 					m.Post("/validate", repo.DatahubValidate)
 					m.Post("/checks", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubReportCheck)
@@ -1454,7 +1501,8 @@ func Routes() *web.Route {
 					m.Get("/blame/{commit}/*", repo.DatahubGetBlame)
 					m.Post("/gc", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubRunGC)
 					m.Get("/dedup/{commit}", repo.DatahubGetDedup)
-				})
+					m.Get("/dedup/*", repo.DatahubGetDedup)
+				}, datahubSessionAuth())
 			}, repoAssignment(), checkTokenPublicOnly())
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryRepository))
 

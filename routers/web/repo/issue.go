@@ -883,6 +883,10 @@ func RetrieveRepoMetas(ctx *context.Context, repo *repo_model.Repository, isPull
 
 // Tries to load and set an issue template. The first return value indicates if a template was loaded.
 func setTemplateIfExists(ctx *context.Context, ctxDataKey string, possibleFiles []string) (bool, map[string]error) {
+	if ctx.Repo.GitRepo == nil {
+		return false, nil
+	}
+
 	commit, err := ctx.Repo.GitRepo.GetBranchCommit(ctx.Repo.Repository.DefaultBranch)
 	if err != nil {
 		return false, nil

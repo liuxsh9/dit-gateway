@@ -56,6 +56,10 @@ export default {
     owner: String,
     repo: String,
     commitHash: String,
+    defaultBranch: {
+      type: String,
+      default: 'main',
+    },
   },
   data() {
     return {
@@ -69,7 +73,7 @@ export default {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
     },
     commitsPath() {
-      return `${this.repoPath}/data/commits/main`;
+      return `${this.repoPath}/data/commits/${encodeURIComponent(this.defaultBranch || 'main')}`;
     },
     commitMessage() {
       return this.commit?.message || 'No commit message';
@@ -98,7 +102,7 @@ export default {
       if (!value) return 'unknown time';
       const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
       if (Number.isNaN(date.getTime())) return String(value);
-      return date.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+      return `${date.toISOString().replace('T', ' ').slice(0, 16)} UTC`;
     },
   },
 };
@@ -162,4 +166,3 @@ export default {
   }
 }
 </style>
-

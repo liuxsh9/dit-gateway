@@ -9,11 +9,11 @@ vi.mock('../utils/datahub-api.js', () => ({
 
 const diffStub = {
   name: 'DataDiffView',
-  props: ['owner', 'repo', 'oldCommit', 'newCommit', 'reviewMode', 'pullId', 'currentUser'],
+  props: ['owner', 'repo', 'oldCommit', 'newCommit', 'reviewMode', 'pullId', 'currentUser', 'canComment'],
   emits: ['comment-created'],
   template: `
     <div class="data-diff-stub">
-      Diff {{ oldCommit }}..{{ newCommit }} {{ reviewMode ? "review" : "" }}
+      Diff {{ oldCommit }}..{{ newCommit }} {{ reviewMode ? "review" : "" }} {{ canComment ? "can-comment" : "read-only" }}
       <button
         type="button"
         class="emit-row-comment"
@@ -72,7 +72,7 @@ test('loads a github-like pull request conversation with timeline, checks, commi
     }
     if (path === '/pulls/7/reviews' && options.method === 'POST') {
       const body = JSON.parse(options.body);
-      return {id: 4, reviewer: 'carol', status: body.status, body: body.body};
+      return {id: 4, reviewer: 'carol', status: body.status};
     }
     if (path === '/pulls/7/reviews') {
       return [{id: 2, status: 'approved', created_at: '2026-04-28T10:30:00Z'}];
@@ -142,7 +142,6 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   expect(wrapper.text()).toContain('DIT pull request');
   expect(wrapper.text()).toContain('#7');
   expect(wrapper.text()).toContain('Open');
-  expect(wrapper.text()).toContain('Mergeable');
   expect(wrapper.text()).toContain('carol wants to merge safety-refresh into main');
   expect(wrapper.text()).toContain('Conversation 1');
   expect(wrapper.text()).toContain('Commits 1');
@@ -175,6 +174,7 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   expect(wrapper.text()).toContain('erin, frank');
   expect(wrapper.find('a[href="/alice/dataset/settings/collaboration"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/settings/branches"]').exists()).toBe(true);
+  expect(wrapper.find('.datahub-pr-summary-bar').exists()).toBe(false);
   expect(wrapper.find('.datahub-pull-page').classes()).not.toContain('is-files-tab');
 
   const filesTab = wrapper.findAll('.datahub-pr-tab').find((tab) => tab.text().includes('Files changed'));
@@ -200,13 +200,20 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   await vi.waitFor(() => expect(wrapper.text()).toContain('Approved for merge.'));
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/reviews', {
     method: 'POST',
-    body: JSON.stringify({status: 'approved', body: 'Approved for merge.'}),
+    body: JSON.stringify({status: 'approved'}),
+  });
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments', {
+    method: 'POST',
+    body: JSON.stringify({author: 'carol', body: 'Approved for merge.'}),
   });
 
   await wrapper.find('.datahub-merge-button').trigger('click');
   await vi.waitFor(() => expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/merge', {
     method: 'POST',
-    body: JSON.stringify({merge_style: 'squash'}),
+    body: JSON.stringify({
+      message: 'Merge pull request #7 from safety-refresh',
+      author: 'carol',
+    }),
   }));
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7');
 });
@@ -251,7 +258,111 @@ test('disables merge for anonymous users even when the pull is otherwise mergeab
   await vi.waitFor(() => expect(wrapper.text()).toContain('Ready import'));
 
   expect(wrapper.text()).toContain('Sign in to merge this data pull request.');
+  expect(wrapper.text()).toContain('Sign in to comment or review this data pull request.');
+  expect(wrapper.find('.datahub-comment-form').exists()).toBe(false);
+  expect(wrapper.find('.datahub-review-form').exists()).toBe(false);
+  await wrapper.findAll('.datahub-pr-tab').find((tab) => tab.text().includes('Files changed')).trigger('click');
+  expect(wrapper.text()).toContain('read-only');
   expect(wrapper.find('.datahub-merge-button').attributes('disabled')).toBeDefined();
+});
+
+test('hides governance settings links for non-admin users', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls/11') {
+      return {
+        id: 11,
+        title: 'Writable review',
+        status: 'open',
+        source_branch: 'ready/import',
+        target_branch: 'main',
+        source_commit: 'sourcecommit',
+        target_commit: 'targetcommit',
+        is_mergeable: true,
+      };
+    }
+    if (['/pulls/11/comments', '/pulls/11/reviews'].includes(path)) return [];
+    if (path === '/checks/sourcecommit') return {checks: []};
+    if (path === '/governance?target_branch=main') {
+      return {
+        repository: {
+          permissions: {pull: true, push: true, admin: false},
+          allow_merge_commits: true,
+          default_merge_style: 'merge',
+        },
+        current_user: {is_authenticated: true, can_merge: true, target_branch: 'main', login: 'writer'},
+        reviewers: [],
+        branch_protections: [],
+        links: {
+          settings: '/alice/dataset/settings',
+          collaboration: '/alice/dataset/settings/collaboration',
+          branches: '/alice/dataset/settings/branches',
+        },
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullPage, {
+    props: {owner: 'alice', repo: 'dataset', pullId: '11'},
+    global: {stubs: {DataDiffView: diffStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Writable review'));
+
+  expect(wrapper.find('.datahub-comment-form').exists()).toBe(true);
+  expect(wrapper.find('a[href="/alice/dataset/settings"]').exists()).toBe(false);
+  expect(wrapper.find('a[href="/alice/dataset/settings/collaboration"]').exists()).toBe(false);
+  expect(wrapper.find('a[href="/alice/dataset/settings/branches"]').exists()).toBe(false);
+});
+
+test('does not show permission blockers after a pull request is merged', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls/12') {
+      return {
+        id: 12,
+        title: 'Already merged',
+        status: 'merged',
+        source_branch: 'ready/import',
+        target_branch: 'main',
+        source_commit: 'sourcecommit',
+        base_commit: 'basecommit',
+        target_commit: 'sourcecommit',
+        is_mergeable: true,
+      };
+    }
+    if (['/pulls/12/comments', '/pulls/12/reviews'].includes(path)) return [];
+    if (path === '/checks/sourcecommit') return {checks: []};
+    if (path === '/governance?target_branch=main') {
+      return {
+        repository: {
+          permissions: {pull: true, push: false, admin: false},
+          allow_merge_commits: true,
+          default_merge_style: 'merge',
+        },
+        current_user: {is_authenticated: true, can_merge: false, target_branch: 'main'},
+        reviewers: [],
+        branch_protections: [],
+        links: {},
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullPage, {
+    props: {owner: 'alice', repo: 'dataset', pullId: '12'},
+    global: {stubs: {DataDiffView: diffStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Already merged'));
+
+  expect(wrapper.text()).toContain('Pull request merged');
+  expect(wrapper.text()).toContain('The data changes from this pull request have already been merged.');
+  expect(wrapper.text()).toContain('basecom..sourcec');
+  await wrapper.findAll('.datahub-pr-tab').find((tab) => tab.text().includes('Files changed')).trigger('click');
+  expect(wrapper.text()).toContain('Diff basecommit..sourcecommit');
+  expect(wrapper.find('.datahub-merge-button').attributes('disabled')).toBeDefined();
+  expect(wrapper.text()).not.toContain('You do not have permission to merge into this branch.');
+  expect(wrapper.text()).not.toContain('Only open pull requests can be merged.');
 });
 
 test('disables merge when branch protection gates are not satisfied', async () => {

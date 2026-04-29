@@ -45,6 +45,7 @@ export function initDatahubCommitPage() {
       owner: el.dataset.owner,
       repo: el.dataset.repo,
       commitHash: el.dataset.commit,
+      defaultBranch: el.dataset.defaultBranch,
     }).mount(el);
   });
 }

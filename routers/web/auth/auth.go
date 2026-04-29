@@ -878,10 +878,11 @@ func ActivateEmail(ctx *context.Context) {
 }
 
 func updateSession(ctx *context.Context, deletes []string, updates map[string]any) error {
-	if _, err := session.RegenerateSession(ctx.Resp, ctx.Req); err != nil {
+	sess, err := session.RegenerateSession(ctx.Resp, ctx.Req)
+	if err != nil {
 		return fmt.Errorf("regenerate session: %w", err)
 	}
-	sess := ctx.Session
+	ctx.Session = sess
 	sessID := sess.ID()
 	for _, k := range deletes {
 		if err := sess.Delete(k); err != nil {
