@@ -80,7 +80,7 @@
         <svg viewBox="0 0 16 16" aria-hidden="true" class="datahub-pr-empty-icon">
           <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.12v5.26a2.25 2.25 0 1 1-1.5 0V5.37a2.25 2.25 0 0 1-1.5-2.12Zm2.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.75-8.75a2.25 2.25 0 1 0-3 2.12v5.38a.75.75 0 0 0 1.5 0V5.37a2.25 2.25 0 0 0 1.5-2.12Zm-2.25-.75a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5Z"></path>
         </svg>
-        <h3>There aren't any {{ selectedStatus }} pull requests.</h3>
+        <h3>There aren't any {{ selectedStatusDescription }} pull requests.</h3>
         <p>Use Data to review dataset files, then open a pull request when a DIT change is ready.</p>
       </div>
       <template v-else>
@@ -150,6 +150,7 @@ export default {
         sort: 'updated-desc',
       },
       filters: [
+        {value: 'all', label: 'All'},
         {value: 'open', label: 'Open'},
         {value: 'closed', label: 'Closed'},
         {value: 'merged', label: 'Merged'},
@@ -166,7 +167,7 @@ export default {
     visiblePulls() {
       const query = this.searchText();
       const sort = this.queryQualifierValue('sort') || this.selectedFilters.sort;
-      return (this.pullsByStatus[this.selectedStatus] || []).filter((pull) => {
+      return this.selectedPulls().filter((pull) => {
         if (!query) return true;
         return [
           pull.title,
@@ -179,6 +180,9 @@ export default {
     },
     allPulls() {
       return Object.values(this.pullsByStatus).flat();
+    },
+    selectedStatusDescription() {
+      return this.selectedStatus === 'all' ? 'matching' : this.selectedStatus;
     },
     tableFilters() {
       return [
@@ -211,11 +215,12 @@ export default {
     selectStatus(status) {
       if (this.selectedStatus === status) return;
       this.selectedStatus = status;
-      this.query = `is:pr is:${status}`;
+      this.query = status === 'all' ? 'is:pr' : `is:pr is:${status}`;
     },
     syncStatusFromQuery() {
       const status = this.query.match(/\bis:(open|closed|merged)\b/i)?.[1]?.toLowerCase();
       if (status && status !== this.selectedStatus) this.selectedStatus = status;
+      if (!status) this.selectedStatus = 'all';
       this.selectedFilters = {
         ...this.selectedFilters,
         author: this.queryQualifierValue('author'),
@@ -239,7 +244,7 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const entries = await Promise.all(this.filters.map(async ({value}) => {
+        const entries = await Promise.all(this.statusFilters().map(async ({value}) => {
           const result = await datahubFetch(this.owner, this.repo, `/pulls?status=${encodeURIComponent(value)}`);
           return [value, this.normalizePulls(result, value)];
         }));
@@ -254,6 +259,12 @@ export default {
     normalizePulls(result, status) {
       const pulls = Array.isArray(result) ? result : result?.pulls || result?.pull_requests || [];
       return pulls.map((pull) => ({...pull, status: pull.status || status}));
+    },
+    statusFilters() {
+      return this.filters.filter(({value}) => value !== 'all');
+    },
+    selectedPulls() {
+      return this.selectedStatus === 'all' ? this.allPulls : (this.pullsByStatus[this.selectedStatus] || []);
     },
     pullId(pull) {
       return pull.pull_request_id || pull.id;
@@ -274,6 +285,7 @@ export default {
       return (refName || '').replace(/^heads\//, '') || 'unknown';
     },
     statusCount(status) {
+      if (status === 'all') return this.formatCount(this.allPulls.length);
       return this.formatCount(this.pullsByStatus[status]?.length || 0);
     },
     statusVerb(pull) {

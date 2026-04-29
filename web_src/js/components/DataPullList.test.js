@@ -188,6 +188,34 @@ test('switches pull request statuses without refetching', async () => {
   expect(datahubFetch).toHaveBeenCalledTimes(3);
 });
 
+test('shows all pull requests when status filtering is cleared', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls?status=open') {
+      return [{id: 1, title: 'Open review', status: 'open', source_ref: 'heads/a', target_ref: 'heads/main'}];
+    }
+    if (path === '/pulls?status=closed') {
+      return [{id: 3, title: 'Closed review', status: 'closed', source_ref: 'heads/c', target_ref: 'heads/main'}];
+    }
+    if (path === '/pulls?status=merged') {
+      return [{id: 2, title: 'Merged review', status: 'merged', source_ref: 'heads/b', target_ref: 'heads/main'}];
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullList, {
+    props: {owner: 'alice', repo: 'dataset'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Open review'));
+  await wrapper.find('input[aria-label="Search pull requests"]').setValue('is:pr');
+
+  expect(wrapper.text()).toContain('Open review');
+  expect(wrapper.text()).toContain('Closed review');
+  expect(wrapper.text()).toContain('Merged review');
+  expect(wrapper.find('input[aria-label="Search pull requests"]').element.value).toBe('is:pr');
+  expect(datahubFetch).toHaveBeenCalledTimes(3);
+});
+
 test('filters pull requests by search text after qualifiers', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/pulls?status=open') {
