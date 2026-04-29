@@ -11,7 +11,8 @@ export async function datahubFetch(owner, repo, path, options = {}) {
     const text = await resp.text();
     throw new Error(`Datahub API ${resp.status}: ${text}`);
   }
-  return resp.json();
+  const text = await resp.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export async function datahubFetchRaw(owner, repo, path, options = {}) {

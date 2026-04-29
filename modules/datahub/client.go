@@ -18,6 +18,8 @@ import (
 	"forgejo.org/modules/setting"
 )
 
+const defaultDiffRowLimit = 50
+
 type Client struct {
 	baseURL      string
 	serviceToken string
@@ -124,11 +126,11 @@ func (c *Client) ListRefs(ctx context.Context, repoName string) ([]byte, int, er
 }
 
 func (c *Client) GetRef(ctx context.Context, repoName, refType, name string) ([]byte, int, error) {
-	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/refs/"+refType+"/"+name, nil)
+	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/refs/"+url.PathEscape(refType)+"/"+escapePath(name), nil)
 }
 
 func (c *Client) UpdateRef(ctx context.Context, repoName, refType, name string, body []byte) ([]byte, int, error) {
-	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/refs/"+refType+"/"+name, body)
+	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/refs/"+url.PathEscape(refType)+"/"+escapePath(name), body)
 }
 
 func (c *Client) GetObject(ctx context.Context, repoName, objType, hash string) ([]byte, int, error) {
@@ -155,12 +157,26 @@ func (c *Client) GetTree(ctx context.Context, repoName, hash, treePath string) (
 	return c.do(ctx, http.MethodGet, path, nil)
 }
 
-func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash string) ([]byte, int, error) {
-	body := []byte(fmt.Sprintf(
-		`{"old_commit":%q,"new_commit":%q,"include_rows":true,"limit":100}`,
-		oldHash,
-		newHash,
-	))
+func (c *Client) GetDiff(ctx context.Context, repoName, oldHash, newHash, filePath, offset, limit string) ([]byte, int, error) {
+	payload := map[string]any{
+		"old_commit":   oldHash,
+		"new_commit":   newHash,
+		"include_rows": true,
+		"limit":        defaultDiffRowLimit,
+	}
+	if filePath != "" {
+		payload["path"] = filePath
+	}
+	if parsedOffset, err := strconv.Atoi(offset); err == nil && parsedOffset > 0 {
+		payload["offset"] = parsedOffset
+	}
+	if parsedLimit, err := strconv.Atoi(limit); err == nil && parsedLimit > 0 {
+		payload["limit"] = parsedLimit
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("encode diff request: %w", err)
+	}
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/diff", body)
 }
 
@@ -332,10 +348,17 @@ func (c *Client) MetaDiff(ctx context.Context, repoName, oldCommit, newCommit, f
 	return c.do(ctx, http.MethodGet, path, nil)
 }
 
-func (c *Client) GetStats(ctx context.Context, repoName, commitHash, pathFilter string) ([]byte, int, error) {
+func (c *Client) GetStats(ctx context.Context, repoName, commitHash, pathFilter, includeSize string) ([]byte, int, error) {
 	path := "/api/v1/repos/" + repoName + "/stats/" + commitHash
+	query := url.Values{}
 	if pathFilter != "" {
-		path += "?path=" + url.QueryEscape(pathFilter)
+		query.Set("path", pathFilter)
+	}
+	if includeSize != "" {
+		query.Set("include_size", includeSize)
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 	return c.do(ctx, http.MethodGet, path, nil)
 }

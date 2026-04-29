@@ -78,6 +78,19 @@ func TestGetRef(t *testing.T) {
 	assert.Contains(t, string(data), "abc123")
 }
 
+func TestGetRefEscapesSlashBranchNamesBySegment(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/refs/heads/feature/foo", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"target_hash":"abc123"}`))
+	}))
+	data, status, err := client.GetRef(context.Background(), "myrepo", "heads", "feature/foo")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "abc123")
+}
+
 func TestUpdateRef(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
@@ -164,6 +177,21 @@ func TestGetNestedTree(t *testing.T) {
 	assert.Contains(t, string(data), "entries")
 }
 
+func TestGetStatsPassesPathAndIncludeSize(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/stats/abc123", r.URL.Path)
+		assert.Equal(t, "eval/tool", r.URL.Query().Get("path"))
+		assert.Equal(t, "false", r.URL.Query().Get("include_size"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"files":[]}`))
+	}))
+	data, status, err := client.GetStats(context.Background(), "myrepo", "abc123", "eval/tool", "false")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "files")
+}
+
 func TestGetDiff(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
@@ -176,7 +204,29 @@ func TestGetDiff(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"files":[]}`))
 	}))
-	data, status, err := client.GetDiff(context.Background(), "myrepo", "old123", "new456")
+	data, status, err := client.GetDiff(context.Background(), "myrepo", "old123", "new456", "", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, string(data), "files")
+}
+
+func TestGetDiffPassesRowPaginationOptions(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/v1/repos/myrepo/diff", r.URL.Path)
+		body, _ := io.ReadAll(r.Body)
+		assert.JSONEq(t, `{
+			"old_commit":"old123",
+			"new_commit":"new456",
+			"include_rows":true,
+			"limit":50,
+			"path":"train/chunk_000.jsonl",
+			"offset":100
+		}`, string(body))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"files":[]}`))
+	}))
+	data, status, err := client.GetDiff(context.Background(), "myrepo", "old123", "new456", "train/chunk_000.jsonl", "100", "50")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Contains(t, string(data), "files")

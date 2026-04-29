@@ -59,6 +59,43 @@ test('renders ML2 content parts and collapsible structured fields', () => {
   expect(wrapper.text()).toContain('row fields: difficulty');
 });
 
+test('summarizes message counts by role', () => {
+  const wrapper = mount(JsonlRowRenderer, {
+    props: {
+      rowNumber: 5,
+      row: {
+        version: '2.0.0',
+        meta_info: {
+          teacher: 'glm-5-thinking',
+          query_source: 'demo',
+          response_generate_time: '2026-04-28',
+          response_update_time: '2026-04-28',
+          owner: 'data',
+          language: 'en',
+          category: 'tool',
+          rounds: 2,
+        },
+        messages: [
+          {role: 'system', content: 'Follow the policy.'},
+          {role: 'developer', content: 'Use compact output.'},
+          {role: 'user', content: 'Question'},
+          {role: 'assistant', content: 'Answer', tool_calls: [{id: 'call_1', function: {name: 'search', arguments: '{}'}}]},
+          {role: 'tool', tool_call_id: 'call_1', content: '{"ok":true}'},
+          {role: 'assistant', content: 'Final answer'},
+        ],
+      },
+    },
+  });
+
+  const counts = wrapper.find('.datahub-sft-row-counts').text();
+  expect(counts).toContain('6 messages');
+  expect(counts).toContain('system 1');
+  expect(counts).toContain('user 1');
+  expect(counts).toContain('assistant 2');
+  expect(counts).toContain('tool 1');
+  expect(counts).toContain('developer 1');
+});
+
 test('surfaces ML2 schema warnings and collapses long message content', () => {
   const longContent = ['line 1', 'line 2', 'line 3', 'line 4', 'line 5', 'line 6'].join('\n');
   const wrapper = mount(JsonlRowRenderer, {

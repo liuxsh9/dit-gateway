@@ -12,6 +12,9 @@
       <div class="datahub-sft-row-counts">
         <span v-if="schemaWarnings.length" class="ui tiny yellow label">{{ schemaWarnings.length }} warnings</span>
         <span class="ui tiny label">{{ messages.length }} messages</span>
+        <span v-for="roleCount in messageRoleCounts" :key="roleCount.role" class="ui tiny label">
+          {{ roleCount.role }} {{ roleCount.count }}
+        </span>
         <span v-if="tools.length" class="ui tiny label">{{ tools.length }} tools</span>
       </div>
     </header>
@@ -116,6 +119,8 @@ const ROW_KEYS = new Set([
   'meta_info',
 ]);
 
+const MESSAGE_ROLE_ORDER = ['system', 'user', 'assistant', 'tool', 'developer'];
+
 export default {
   props: {
     row: {
@@ -142,6 +147,17 @@ export default {
     },
     tools() {
       return Array.isArray(this.row.tools) ? this.row.tools : [];
+    },
+    messageRoleCounts() {
+      const counts = new Map(MESSAGE_ROLE_ORDER.map((role) => [role, 0]));
+      for (const message of this.messages) {
+        if (counts.has(message?.role)) {
+          counts.set(message.role, counts.get(message.role) + 1);
+        }
+      }
+      return MESSAGE_ROLE_ORDER
+        .map((role) => ({role, count: counts.get(role)}))
+        .filter((roleCount) => roleCount.count > 0);
     },
     rowHash() {
       return this.row.__datahubRowHash || '';

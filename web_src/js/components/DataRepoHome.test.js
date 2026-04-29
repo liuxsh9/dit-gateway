@@ -173,6 +173,63 @@ test('hydrates row counts from manifest totals when sidecar metrics are missing'
   expect(wrapper.vm.directoryEntries[0].row_count).toBe(1);
 });
 
+test('does not fetch sidecar summaries when stats already include row counts', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {
+            name: 'ml2.jsonl',
+            obj_type: 'manifest',
+            obj_hash: 'manifest123',
+            sidecar_hash: null,
+          },
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {
+            path: 'ml2.jsonl',
+            row_count: 2,
+            char_count: null,
+            size_bytes: 4096,
+            token_estimate: null,
+            lang_distribution: null,
+            has_sidecar: false,
+          },
+        ],
+        totals: {
+          file_count: 1,
+          row_count: 2,
+          size_bytes: 4096,
+          lang_distribution: {},
+        },
+      };
+    }
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('ml2.jsonl'));
+  await vi.waitFor(() => expect(wrapper.vm.stats.fileCount).toBe(1));
+
+  expect(wrapper.vm.directoryEntries[0].row_count).toBe(2);
+  expect(wrapper.text()).toContain('4.0 KB');
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/meta/commit123/ml2.jsonl/summary');
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/manifest/commit123/ml2.jsonl?offset=0&limit=1');
+
+  wrapper.unmount();
+});
+
 test('shows latest commit and missing metadata inline with affected files', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
@@ -291,10 +348,10 @@ test('renders a GitHub-like Data file browser without duplicate side rails', asy
   expect(wrapper.text()).not.toContain('Preview');
   expect(wrapper.text()).not.toContain('Blame');
 
-  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'train').trigger('click');
-  expect(wrapper.text()).toContain('dataset/train');
-  expect(wrapper.find('.datahub-parent-row').exists()).toBe(true);
-  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train/general.jsonl"]').exists()).toBe(true);
+  const trainLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'train');
+  expect(trainLink.attributes('href')).toBe('/alice/dataset/data/preview/commit123/train');
+  expect(wrapper.find('.datahub-path-bar').exists()).toBe(false);
+  expect(wrapper.find('.datahub-parent-row').exists()).toBe(false);
 });
 
 test('uses distinct tree affordances for folders and files in the Data browser', async () => {
@@ -423,6 +480,7 @@ test('uses a GitHub-like compact Data toolbar and commit strip', async () => {
   expect(wrapper.find('.datahub-file-browser-tools').text()).toContain('2 Commits');
   expect(wrapper.find('.datahub-commit-count').classes()).not.toContain('button');
   expect(wrapper.find('.datahub-pr-workflow').classes()).toContain('datahub-card-panel');
+  expect(wrapper.find('.datahub-pr-workflow').attributes('id')).toBe('change-workflow');
   expect(wrapper.find('.datahub-file-row-folder').text()).not.toContain('eval/');
   expect(wrapper.find('.datahub-file-row-folder').text()).toContain('refresh data rows');
   expect(wrapper.find('.datahub-file-row-file').text()).toContain('clean rejected samples');
@@ -459,11 +517,10 @@ test('renders mobile-readable file row metrics without relying on table columns'
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
-  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'eval').trigger('click');
-  expect(wrapper.find('.datahub-path-bar').text()).toContain('dataset/eval');
-  expect(wrapper.find('.datahub-parent-row').text()).toContain('Parent directory');
-  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'tool').trigger('click');
-  expect(wrapper.find('.datahub-path-bar').text()).toContain('dataset/eval/tool');
+  const evalLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'eval');
+  expect(evalLink.attributes('href')).toBe('/alice/dataset/data/preview/commit123/eval');
+  expect(wrapper.find('.datahub-path-bar').exists()).toBe(false);
+  expect(wrapper.find('.datahub-parent-row').exists()).toBe(false);
 
   const mobileMetrics = wrapper.find('.datahub-file-mobile-metrics');
   expect(mobileMetrics.exists()).toBe(true);
@@ -511,21 +568,9 @@ test('uses stats file paths to expose nested JSONL files when the root tree only
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
-  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'eval').trigger('click');
-  expect(wrapper.find('.datahub-parent-row').exists()).toBe(true);
-  expect(wrapper.text()).toContain('tool');
-  expect(wrapper.text()).not.toContain('weather.jsonl');
-
-  await wrapper.findAll('.datahub-file-link').find((link) => link.text() === 'tool').trigger('click');
-  expect(wrapper.text()).toContain('weather.jsonl');
-  expect(wrapper.text()).toContain('702 B');
-  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/eval/tool/weather.jsonl"]').exists()).toBe(true);
-
-  const parentButton = wrapper.find('.datahub-parent-row .datahub-folder-button');
-  expect(parentButton.attributes('aria-label')).toBe('Open parent directory');
-  await parentButton.trigger('click');
-  expect(wrapper.find('.datahub-path-bar').text()).toContain('dataset/eval');
-  expect(wrapper.text()).toContain('tool');
+  const evalLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'eval');
+  expect(evalLink.attributes('href')).toBe('/alice/dataset/data/preview/commit123/eval');
+  expect(wrapper.find('.datahub-parent-row').exists()).toBe(false);
   expect(wrapper.text()).not.toContain('weather.jsonl');
 });
 
@@ -551,7 +596,7 @@ test('shows dit workflow commands for dataset collaboration', async () => {
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('Use this dataset'));
 
-  expect(wrapper.text()).toContain('dit clone http://localhost:3000/alice/sft-data');
+  expect(wrapper.text()).toContain('dit clone http://localhost:3000/alice/sft-data/datahub');
   expect(wrapper.text()).toContain('dit checkout -b update/sft-batch');
   expect(wrapper.text()).toContain('dit push --remote origin --branch update/sft-batch');
   expect(wrapper.text()).toContain('curl -X POST http://localhost:3000/api/v1/repos/alice/sft-data/datahub/pulls');
@@ -684,7 +729,9 @@ test('opens an inline data diff preview from the pull request queue', async () =
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('Refresh safety SFT split'));
 
-  await wrapper.findAll('button').find((button) => button.text() === 'Open review').trigger('click');
+  expect(wrapper.find('a[href="/alice/dataset/data/pulls/7"]').exists()).toBe(true);
+
+  await wrapper.findAll('button').find((button) => button.text() === 'Preview changes').trigger('click');
 
   expect(wrapper.text()).toContain('Review data changes');
   expect(wrapper.text()).toContain('Refresh safety SFT split');
@@ -777,6 +824,466 @@ test('shows an empty state when a new data repo has no refs yet', async () => {
   expect(wrapper.text()).toContain('Push JSONL data with dit to create the first dataset branch');
 });
 
+test('keeps a visible loading state while the root data page hydrates', async () => {
+  let resolveRefs;
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') {
+      return new Promise((resolve) => {
+        resolveRefs = () => resolve([]);
+      });
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  expect(wrapper.text()).toContain('Loading dataset');
+  expect(wrapper.text()).toContain('Preparing files, branches, and metadata');
+
+  await wrapper.vm.$nextTick();
+  resolveRefs();
+  await vi.waitFor(() => expect(wrapper.text()).toContain('No branches have been published yet'));
+});
+
+test('does not keep the whole data page blank when the refs request stalls', async () => {
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return new Promise(() => {});
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await wrapper.vm.$nextTick();
+  await wrapper.vm.$nextTick();
+
+  expect(wrapper.text()).not.toContain('Loading dataset');
+  expect(wrapper.text()).toContain('Loading repository metadata');
+});
+
+test('renders the root tree while file statistics are still loading', async () => {
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'stress-large', obj_type: 'tree', obj_hash: 'tree123'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123') return new Promise(() => {});
+    if (path === '/checks/commit123') return Promise.resolve({checks: []});
+    if (path === '/log?ref=heads/main&limit=5') return Promise.resolve({commits: []});
+    if (path === '/pulls?status=open') return Promise.resolve([]);
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress-large'));
+
+  expect(wrapper.text()).not.toContain('Loading dataset');
+  expect(wrapper.text()).toContain('Loading file statistics');
+  expect(wrapper.find('.datahub-file-browser-tools .datahub-stats-status').text()).toContain('Loading file statistics');
+  expect(wrapper.findAll('.datahub-explorer > .datahub-inline-message').map((message) => message.text())).not.toContain(
+    'Loading file statistics. The repository tree is ready and row counts will fill in as metadata arrives.',
+  );
+  expect(wrapper.find('.datahub-file-row-folder').text()).toContain('stress-large');
+});
+
+test('uses folder names as direct preview links while file statistics are still loading', async () => {
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'stress', obj_type: 'tree', obj_hash: 'stress-tree'},
+          {name: 'stress-large', obj_type: 'tree', obj_hash: 'stress-large-tree'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123') return new Promise(() => {});
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress-large'));
+
+  const folderLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'stress');
+  expect(folderLink.attributes('href')).toBe('/alice/large-dataset/data/preview/commit123/stress');
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'large-dataset', '/tree/commit123/stress');
+  expect(wrapper.text()).toContain('Loading file statistics');
+
+  wrapper.unmount();
+});
+
+test('loads activity and pull requests while file statistics are still loading', async () => {
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'stress', obj_type: 'tree', obj_hash: 'stress-tree'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123') return new Promise(() => {});
+    if (path === '/checks/commit123') return Promise.resolve({checks: []});
+    if (path === '/log?ref=heads/main&limit=5') {
+      return Promise.resolve({
+        commits: [
+          {
+            commit_hash: 'abcdef123456',
+            message: 'add stress data',
+            author: 'alice',
+            timestamp: 1760000000,
+          },
+        ],
+      });
+    }
+    if (path === '/pulls?status=open') {
+      return Promise.resolve({
+        pull_requests: [
+          {
+            pull_request_id: 12,
+            title: 'Refresh stress data',
+            author: 'bob',
+            source_ref: 'heads/update/stress',
+            target_ref: 'heads/main',
+            target_commit: 'base123',
+            source_commit: 'head456',
+            is_mergeable: true,
+            stats_added: 5,
+            stats_removed: 1,
+            stats_refreshed: 2,
+          },
+        ],
+      });
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress'));
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Refresh stress data'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('add stress data'));
+  expect(wrapper.text()).toContain('Loading file statistics');
+  expect(wrapper.text()).not.toContain('No open data reviews');
+  expect(wrapper.text()).not.toContain('No commits are available for this branch yet');
+
+  wrapper.unmount();
+});
+
+test('shows activity before file provenance finishes loading', async () => {
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'train.jsonl', obj_type: 'manifest', obj_hash: 'manifest123'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123') return new Promise(() => {});
+    if (path === '/checks/commit123') return Promise.resolve({checks: []});
+    if (path === '/log?ref=heads/main&limit=5') {
+      return Promise.resolve({
+        commits: [
+          {
+            commit_hash: 'abcdef123456',
+            message: 'add visible data',
+            author: 'alice',
+            timestamp: 1760000000,
+          },
+          {
+            commit_hash: 'fedcba123456',
+            message: 'older data',
+            author: 'bob',
+            timestamp: 1750000000,
+          },
+        ],
+      });
+    }
+    if (path === '/pulls?status=open') {
+      return Promise.resolve({
+        pull_requests: [
+          {
+            pull_request_id: 12,
+            title: 'Visible review',
+            source_ref: 'heads/update',
+            target_ref: 'heads/main',
+            target_commit: 'base123',
+            source_commit: 'head456',
+            is_mergeable: true,
+          },
+        ],
+      });
+    }
+    if (path === '/tree/fedcba123456') return new Promise(() => {});
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('add visible data'));
+  expect(wrapper.text()).toContain('Visible review');
+  expect(wrapper.text()).not.toContain('No open data reviews');
+  expect(wrapper.text()).not.toContain('No commits are available for this branch yet');
+  expect(wrapper.text()).toContain('Loading file statistics');
+
+  wrapper.unmount();
+});
+
+test('shows folder last commit from activity while file statistics are still loading', async () => {
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'stress', obj_type: 'tree', obj_hash: 'stress-tree'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123') return new Promise(() => {});
+    if (path === '/checks/commit123') return Promise.resolve({checks: []});
+    if (path === '/log?ref=heads/main&limit=5') {
+      return Promise.resolve({
+        commits: [
+          {
+            commit_hash: 'abcdef123456',
+            message: 'add stress data',
+            author: 'alice',
+            timestamp: 1760000000,
+          },
+        ],
+      });
+    }
+    if (path === '/pulls?status=open') return Promise.resolve([]);
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('add stress data'));
+
+  expect(wrapper.find('.datahub-file-row-folder').text()).toContain('add stress data');
+  expect(wrapper.text()).toContain('Loading file statistics');
+  expect(wrapper.find('.datahub-file-row-folder').text()).not.toContain('Commit —');
+
+  wrapper.unmount();
+});
+
+test('hydrates visible folder row and size metrics before full repository stats finish', async () => {
+  let resolveStressStats;
+  let resolveStressSizeStats;
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'stress', obj_type: 'tree', obj_hash: 'stress-tree'},
+          {name: 'stress-large', obj_type: 'tree', obj_hash: 'stress-large-tree'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123') return new Promise(() => {});
+    if (path === '/stats/commit123?path=stress&include_size=false') {
+      return new Promise((resolve) => {
+        resolveStressStats = () => resolve({
+          files: [
+            {
+              path: 'stress/train.jsonl',
+              row_count: 2,
+              char_count: 128,
+              size_bytes: null,
+              token_estimate: 42,
+              lang_distribution: {en: 2},
+              has_sidecar: true,
+            },
+          ],
+          totals: {file_count: 1, row_count: 2, char_count: 128, size_bytes: null, token_estimate: 42, lang_distribution: {en: 2}},
+        });
+      });
+    }
+    if (path === '/stats/commit123?path=stress') {
+      return new Promise((resolve) => {
+        resolveStressSizeStats = () => resolve({
+          files: [
+            {
+              path: 'stress/train.jsonl',
+              row_count: 2,
+              char_count: 128,
+              size_bytes: 2048,
+              token_estimate: 42,
+              lang_distribution: {en: 2},
+              has_sidecar: true,
+            },
+          ],
+          totals: {file_count: 1, row_count: 2, char_count: 128, size_bytes: 2048, token_estimate: 42, lang_distribution: {en: 2}},
+        });
+      });
+    }
+    if (path === '/stats/commit123?path=stress-large&include_size=false') {
+      return Promise.resolve({
+        files: [],
+        totals: {file_count: 0, row_count: 0, size_bytes: null, lang_distribution: {}},
+      });
+    }
+    if (path === '/stats/commit123?path=stress-large') {
+      return Promise.resolve({
+        files: [],
+        totals: {file_count: 0, row_count: 0, size_bytes: 0, lang_distribution: {}},
+      });
+    }
+    if (path === '/checks/commit123') return Promise.resolve({checks: []});
+    if (path === '/log?ref=heads/main&limit=5') return Promise.resolve({commits: []});
+    if (path === '/pulls?status=open') return Promise.resolve([]);
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress-large'));
+
+  const stressEntry = () => wrapper.vm.directoryEntries.find((entry) => entry.displayName === 'stress');
+  expect(stressEntry().row_count).toBeNull();
+  expect(wrapper.vm.entrySize(stressEntry())).toBeNull();
+  expect(wrapper.text()).toContain('Loading file statistics');
+
+  resolveStressStats();
+  await vi.waitFor(() => expect(stressEntry().row_count).toBe(2));
+
+  expect(wrapper.vm.entrySize(stressEntry())).toBeNull();
+  resolveStressSizeStats();
+  await vi.waitFor(() => expect(wrapper.vm.entrySize(stressEntry())).toBe(2048));
+  expect(wrapper.vm.stats.fileCount).toBe(0);
+  expect(wrapper.find('.datahub-file-row-folder').text()).toContain('2.0 KB');
+  expect(wrapper.text()).toContain('Loading file statistics');
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'large-dataset', '/stats/commit123?path=stress&include_size=false');
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'large-dataset', '/stats/commit123?path=stress');
+
+  wrapper.unmount();
+});
+
+test('defers full repository stats until visible row and size metrics load', async () => {
+  let resolveStressStats;
+  let resolveStressLargeStats;
+  let resolveStressSizeStats;
+  let resolveStressLargeSizeStats;
+  datahubFetch.mockImplementation((owner, repo, path) => {
+    if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
+    if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
+    if (path === '/tree/commit123') {
+      return Promise.resolve({
+        entries: [
+          {name: 'stress', obj_type: 'tree', obj_hash: 'stress-tree'},
+          {name: 'stress-large', obj_type: 'tree', obj_hash: 'stress-large-tree'},
+        ],
+      });
+    }
+    if (path === '/stats/commit123?path=stress&include_size=false') {
+      return new Promise((resolve) => {
+        resolveStressStats = () => resolve({
+          files: [{path: 'stress/train.jsonl', row_count: 2, size_bytes: null, has_sidecar: false}],
+          totals: {file_count: 1, row_count: 2, size_bytes: null},
+        });
+      });
+    }
+    if (path === '/stats/commit123?path=stress-large&include_size=false') {
+      return new Promise((resolve) => {
+        resolveStressLargeStats = () => resolve({
+          files: [{path: 'stress-large/train.jsonl', row_count: 3, size_bytes: null, has_sidecar: false}],
+          totals: {file_count: 1, row_count: 3, size_bytes: null},
+        });
+      });
+    }
+    if (path === '/stats/commit123?path=stress') {
+      return new Promise((resolve) => {
+        resolveStressSizeStats = () => resolve({
+          files: [{path: 'stress/train.jsonl', row_count: 2, size_bytes: 2048, has_sidecar: false}],
+          totals: {file_count: 1, row_count: 2, size_bytes: 2048},
+        });
+      });
+    }
+    if (path === '/stats/commit123?path=stress-large') {
+      return new Promise((resolve) => {
+        resolveStressLargeSizeStats = () => resolve({
+          files: [{path: 'stress-large/train.jsonl', row_count: 3, size_bytes: 4096, has_sidecar: false}],
+          totals: {file_count: 1, row_count: 3, size_bytes: 4096},
+        });
+      });
+    }
+    if (path === '/stats/commit123') {
+      return Promise.resolve({
+        files: [],
+        totals: {file_count: 0, row_count: 0, size_bytes: 0},
+      });
+    }
+    if (path === '/checks/commit123') return Promise.resolve({checks: []});
+    if (path === '/log?ref=heads/main&limit=5') return Promise.resolve({commits: []});
+    if (path === '/pulls?status=open') return Promise.resolve([]);
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'large-dataset', defaultBranch: 'main'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress-large'));
+
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'large-dataset', '/stats/commit123');
+
+  resolveStressStats();
+  resolveStressLargeStats();
+  await vi.waitFor(() => expect(datahubFetch).toHaveBeenCalledWith('alice', 'large-dataset', '/stats/commit123?path=stress'));
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'large-dataset', '/stats/commit123');
+
+  resolveStressSizeStats();
+  resolveStressLargeSizeStats();
+  await vi.waitFor(() => expect(datahubFetch).toHaveBeenCalledWith('alice', 'large-dataset', '/stats/commit123'));
+
+  wrapper.unmount();
+});
+
+test('shows API errors before the no-branches empty state', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') throw new Error('Datahub API 502: Bad Gateway');
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Datahub API 502: Bad Gateway'));
+
+  expect(wrapper.text()).not.toContain('No branches have been published yet');
+});
+
 test('uses file names as direct preview links for manifest files', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
@@ -856,4 +1363,46 @@ test('keeps missing metadata compute actions next to the file name', async () =>
   expect(actionCell.text()).toContain('Compute');
   expect(actionCell.text()).not.toContain('Preview');
   expect(actionCell.text()).not.toContain('Blame');
+});
+
+test('uses balanced desktop file table columns so metrics are not squeezed', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
+    if (path === '/refs/heads/main') return {target_hash: 'commit123'};
+    if (path === '/tree/commit123') {
+      return {
+        entries: [
+          {name: 'stress', obj_type: 'tree', obj_hash: 'tree1'},
+        ],
+      };
+    }
+    if (path === '/stats/commit123') {
+      return {
+        files: [
+          {path: 'stress/train.jsonl', row_count: 15116, size_bytes: 295000000, lang_distribution: {}, has_sidecar: true},
+        ],
+        totals: {file_count: 1, row_count: 15116, char_count: 0, token_estimate: 0, lang_distribution: {}},
+      };
+    }
+    if (path === '/checks/commit123') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('stress'));
+
+  const colStyles = Object.fromEntries(
+    wrapper.findAll('.datahub-file-table col').map((col) => [col.classes()[0], col.attributes('style') || '']),
+  );
+
+  expect(colStyles['datahub-file-col-name']).toContain('width: 42%');
+  expect(colStyles['datahub-file-col-commit']).toContain('width: 24%');
+  expect(colStyles['datahub-file-col-updated']).toContain('width: 10%');
+  expect(colStyles['datahub-file-col-count']).toContain('width: 8%');
+  expect(colStyles['datahub-file-col-size']).toContain('width: 8%');
+  expect(colStyles['datahub-file-col-lang']).toContain('width: 8%');
 });

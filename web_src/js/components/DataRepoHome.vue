@@ -1,13 +1,10 @@
 <template>
   <div class="ui segments datahub-home">
-    <div class="ui segment" v-if="loading">
+    <div class="ui segment datahub-loading-state" v-if="loading">
       <div class="ui active centered inline loader"></div>
-    </div>
-
-    <div class="ui segment" v-else-if="!currentBranch">
-      <div class="ui message datahub-empty-state">
-        <div class="header">No branches have been published yet</div>
-        <p>Push JSONL data with dit to create the first dataset branch, then this page will show files, rows, tokens, and validation status.</p>
+      <div class="datahub-loading-copy">
+        <strong>Loading dataset</strong>
+        <span>Preparing files, branches, and metadata.</span>
       </div>
     </div>
 
@@ -17,13 +14,31 @@
       </div>
     </div>
 
+    <div class="ui segment" v-else-if="!currentBranch">
+      <div v-if="refsLoading" class="ui message datahub-empty-state">
+        <div class="header">Loading repository metadata</div>
+        <p>Preparing branches and dataset files.</p>
+      </div>
+      <div v-else class="ui message datahub-empty-state">
+        <div class="header">No branches have been published yet</div>
+        <p>Push JSONL data with dit to create the first dataset branch, then this page will show files, rows, tokens, and validation status.</p>
+      </div>
+    </div>
+
+    <div class="ui segment" v-else-if="!tree">
+      <div class="ui message datahub-empty-state">
+        <div class="header">Loading repository metadata</div>
+        <p>Preparing dataset files.</p>
+      </div>
+    </div>
+
     <template v-else-if="tree">
       <div class="ui segment datahub-explorer">
         <div class="datahub-repo-controls">
           <div class="datahub-branch-meta">
             <div class="field datahub-branch-picker">
               <span class="datahub-branch-button-icon" aria-hidden="true">
-                <SvgIcon name="octicon-git-branch" :size="16" />
+                <SvgIcon name="octicon-git-branch" :size="16"/>
               </span>
               <select aria-label="Branch" class="ui dropdown" v-model="currentBranch" @change="onBranchChange">
                 <option v-for="ref in refs" :key="ref.name" :value="ref.name">
@@ -31,15 +46,15 @@
                 </option>
               </select>
               <span class="datahub-branch-button-chevron" aria-hidden="true">
-                <SvgIcon name="octicon-chevron-down" :size="16" />
+                <SvgIcon name="octicon-chevron-down" :size="16"/>
               </span>
             </div>
             <span class="datahub-meta-pill">
-              <SvgIcon name="octicon-git-branch" :size="16" />
+              <SvgIcon name="octicon-git-branch" :size="16"/>
               {{ branchCountText }}
             </span>
             <span class="datahub-meta-pill">
-              <SvgIcon name="octicon-tag" :size="16" />
+              <SvgIcon name="octicon-tag" :size="16"/>
               0 Tags
             </span>
           </div>
@@ -57,7 +72,6 @@
 
         <div v-if="metaComputeError" class="ui small negative message datahub-inline-message">{{ metaComputeError }}</div>
         <div v-if="activityError" class="ui small negative message datahub-inline-message">{{ activityError }}</div>
-
         <div class="datahub-file-browser">
           <div class="datahub-file-browser-tools">
             <div class="datahub-latest-commit">
@@ -75,6 +89,17 @@
                 </a>
                 <span class="datahub-overview-detail">{{ formatTimestamp(latestCommit.timestamp) }}</span>
               </template>
+              <template v-else-if="activityLoading">
+                <span class="datahub-commit-message">
+                  <i class="spinner loading icon"></i> Loading repository activity
+                </span>
+                <span v-if="checksStatus" class="datahub-inline-ci" :class="`is-${checksStatus}`">
+                  <i :class="checksStatusIcon"></i> {{ checksStatusText }}
+                </span>
+                <span v-else-if="checksLoading" class="datahub-inline-ci">
+                  <i class="spinner loading icon"></i>
+                </span>
+              </template>
               <template v-else>
                 <span class="datahub-commit-message">No commits are available for this branch yet.</span>
                 <span v-if="checksStatus" class="datahub-inline-ci" :class="`is-${checksStatus}`">
@@ -84,6 +109,16 @@
                   <i class="spinner loading icon"></i>
                 </span>
               </template>
+            </div>
+            <div
+              class="datahub-stats-status"
+              :class="{'is-active': statsLoading}"
+              aria-live="polite"
+            >
+              <span v-if="statsLoading">
+                <i class="spinner loading icon"></i>
+                Loading file statistics
+              </span>
             </div>
             <a class="datahub-commit-count" :href="commitsHref">
               {{ commitCountText }}
@@ -102,7 +137,13 @@
             </template>
           </div>
 
-          <div v-if="manifestEntries.length === 0" class="ui message datahub-table-message">
+          <div v-if="currentFolderLoading" class="ui message datahub-table-message">
+            Loading folder contents.
+          </div>
+          <div v-else-if="currentFolderError" class="ui warning message datahub-table-message">
+            {{ currentFolderError }}
+          </div>
+          <div v-else-if="directoryEntries.length === 0 && !statsLoading" class="ui message datahub-table-message">
             This data repository has no JSONL manifests on the selected branch yet.
           </div>
           <div v-else-if="filteredDirectoryEntries.length === 0" class="ui message datahub-table-message">
@@ -111,12 +152,12 @@
           <div v-else class="datahub-file-table-wrap">
             <table class="ui very basic table datahub-file-table">
               <colgroup>
-                <col class="datahub-file-col-name">
-                <col class="datahub-file-col-commit">
-                <col class="datahub-file-col-updated">
-                <col class="datahub-file-col-count">
-                <col class="datahub-file-col-size">
-                <col class="datahub-file-col-lang">
+                <col class="datahub-file-col-name" style="width: 42%">
+                <col class="datahub-file-col-commit" style="width: 24%">
+                <col class="datahub-file-col-updated" style="width: 10%">
+                <col class="datahub-file-col-count" style="width: 8%">
+                <col class="datahub-file-col-size" style="width: 8%">
+                <col class="datahub-file-col-lang" style="width: 8%">
               </colgroup>
               <thead>
                 <tr>
@@ -142,7 +183,7 @@
                     >
                       <span class="datahub-tree-chevron is-parent" aria-hidden="true"></span>
                       <span class="datahub-tree-entry-icon datahub-tree-folder-icon" aria-hidden="true">
-                        <SvgIcon name="octicon-file-directory-fill" :size="16" />
+                        <SvgIcon name="octicon-file-directory-fill" :size="16"/>
                       </span>
                       <span class="datahub-file-link">..</span>
                     </button>
@@ -181,13 +222,12 @@
                           :size="16"
                         />
                       </span>
-                      <button
+                      <a
                         v-if="entry.type === 'tree'"
-                        type="button"
-                        class="datahub-file-link datahub-folder-name-button"
-                        :aria-label="`Open folder ${entry.displayName}`"
-                        @click="openFolder(entry.path)"
-                      >{{ entry.displayName }}</button>
+                        class="datahub-file-link datahub-folder-name-link"
+                        :aria-label="`Review folder ${entry.displayName}`"
+                        :href="previewHref(entry.path)"
+                      >{{ entry.displayName }}</a>
                       <a
                         v-else
                         class="datahub-file-link"
@@ -229,7 +269,7 @@
         </div>
       </div>
 
-      <div class="ui segment datahub-card-panel datahub-pr-workflow">
+      <div id="change-workflow" class="ui segment datahub-card-panel datahub-pr-workflow">
         <div class="datahub-section-header datahub-compact-header">
           <div>
             <div class="datahub-overview-label">Change workflow</div>
@@ -240,14 +280,17 @@
             <i class="spinner loading icon"></i> Loading
           </span>
         </div>
-        <div v-if="openPulls.length === 0" class="datahub-empty-inline">
+        <div v-if="activityLoading && openPulls.length === 0" class="datahub-empty-inline">
+          <i class="spinner loading icon"></i> Loading data reviews.
+        </div>
+        <div v-else-if="openPulls.length === 0" class="datahub-empty-inline">
           No open data reviews. Push a branch and open a review with the command below to preview row-level SFT changes before merge.
         </div>
         <div v-else class="datahub-pr-list">
           <div v-for="pull in openPulls" :key="pull.pull_request_id || pull.id" class="datahub-pr-card">
             <div class="datahub-pr-card-header">
               <div>
-                <div class="datahub-pr-title">#{{ pull.pull_request_id }} {{ pull.title || 'Untitled data review' }}</div>
+                <a class="datahub-pr-title" :href="pullHref(pull)">#{{ pull.pull_request_id || pull.id }} {{ pull.title || 'Untitled data review' }}</a>
                 <div class="datahub-overview-detail">
                   {{ pull.author || 'unknown author' }} · {{ branchName(pull.source_ref) }} → {{ branchName(pull.target_ref) }}
                 </div>
@@ -264,13 +307,16 @@
             <div class="datahub-overview-detail" v-if="pull.updated_at">
               Updated {{ formatTimestamp(pull.updated_at) }}
             </div>
-            <button
-              class="ui mini primary button datahub-review-button"
-              :disabled="!pull.target_commit || !pull.source_commit"
-              @click="previewPull(pull)"
-            >
-              Open review
-            </button>
+            <div class="datahub-pr-actions">
+              <a class="ui mini basic button" :href="pullHref(pull)">Open pull request</a>
+              <button
+                class="ui mini primary button datahub-review-button"
+                :disabled="!pull.target_commit || !pull.source_commit"
+                @click="previewPull(pull)"
+              >
+                Preview changes
+              </button>
+            </div>
           </div>
         </div>
         <details class="datahub-command-details">
@@ -343,7 +389,10 @@
           </div>
           <a class="ui mini basic button datahub-view-all-link" :href="commitsHref">View all commits</a>
         </div>
-        <div v-if="recentCommits.length === 0" class="datahub-empty-inline">
+        <div v-if="activityLoading && recentCommits.length === 0" class="datahub-empty-inline">
+          <i class="spinner loading icon"></i> Loading recent commits.
+        </div>
+        <div v-else-if="recentCommits.length === 0" class="datahub-empty-inline">
           No commits are available for this branch yet.
         </div>
         <div v-else class="datahub-commit-list">
@@ -420,6 +469,8 @@ export default {
       openPulls: [],
       activityLoading: false,
       activityError: null,
+      statsLoading: false,
+      refsLoading: false,
       activeReview: null,
       reviewInfo: {
         query_source: '',
@@ -429,6 +480,11 @@ export default {
         notes: '',
       },
       metaComputeError: null,
+      loadedFolderTrees: {},
+      loadingFolderTrees: {},
+      folderTreeErrors: {},
+      loadedStatsPaths: {},
+      loadingStatsPaths: {},
       languageEstimateHelp: 'Heuristic estimate from DIT sidecar metadata: longest JSON string per row, then script-based language guess.',
       sizeEstimateHelp: 'File size in bytes from DIT repository metadata.',
     };
@@ -436,7 +492,7 @@ export default {
   computed: {
     checksStatus() {
       if (!this.checksData || this.checksData.checks.length === 0) return null;
-      const statuses = this.checksData.checks.map(c => c.status);
+      const statuses = this.checksData.checks.map((c) => c.status);
       if (statuses.includes('fail')) return 'fail';
       if (statuses.includes('pending')) return 'pending';
       return 'pass';
@@ -444,14 +500,14 @@ export default {
     checksStatusClass() {
       return {
         'green': this.checksStatus === 'pass',
-        'red':   this.checksStatus === 'fail',
-        'grey':  this.checksStatus === 'pending',
+        'red': this.checksStatus === 'fail',
+        'grey': this.checksStatus === 'pending',
       };
     },
     checksStatusIcon() {
       return {
-        'pass':    'check icon',
-        'fail':    'times icon',
+        'pass': 'check icon',
+        'fail': 'times icon',
         'pending': 'clock icon',
       }[this.checksStatus] || '';
     },
@@ -473,32 +529,48 @@ export default {
       const current = this.normalizePath(this.currentPath);
       const folders = new Map();
       const files = [];
-      for (const entry of this.manifestEntries) {
+      const sourceEntries = (this.tree?.entries || []).filter((entry) => ['manifest', 'tree'].includes(entry.type));
+      for (const entry of sourceEntries) {
         const path = this.normalizePath(entry.name || entry.path);
         if (!path.startsWith(current)) continue;
         const rest = path.slice(current.length);
         if (!rest) continue;
-        const parts = rest.split('/');
-        if (parts.length > 1) {
+        const parts = rest.replace(/\/$/, '').split('/');
+        if (entry.type === 'tree') {
           const folderName = parts[0];
           const folderPath = `${current}${folderName}/`;
           const existing = folders.get(folderPath) || {
             type: 'tree',
             path: folderPath,
             displayName: folderName,
-            row_count: 0,
-            char_count: 0,
-            token_estimate: 0,
+            row_count: null,
+            char_count: null,
+            token_estimate: null,
             lang_distribution: {},
             size: null,
           };
-          existing.row_count += entry.row_count || 0;
-          existing.char_count += entry.char_count || 0;
+          existing.hash ||= entry.hash;
+          folders.set(folderPath, existing);
+        } else if (parts.length > 1) {
+          const folderName = parts[0];
+          const folderPath = `${current}${folderName}/`;
+          const existing = folders.get(folderPath) || {
+            type: 'tree',
+            path: folderPath,
+            displayName: folderName,
+            row_count: null,
+            char_count: null,
+            token_estimate: null,
+            lang_distribution: {},
+            size: null,
+          };
+          existing.row_count = this.addNullableMetric(existing.row_count, entry.row_count);
+          existing.char_count = this.addNullableMetric(existing.char_count, entry.char_count);
           const entryBytes = this.entrySize(entry);
           if (entryBytes !== null && entryBytes !== undefined) {
             existing.size = (existing.size || 0) + entryBytes;
           }
-          existing.token_estimate += entry.token_estimate || 0;
+          existing.token_estimate = this.addNullableMetric(existing.token_estimate, entry.token_estimate);
           existing.lang_distribution = this.mergeLangDistribution(existing.lang_distribution, entry.lang_distribution);
           folders.set(folderPath, existing);
         } else {
@@ -521,6 +593,15 @@ export default {
         entry.displayName.toLowerCase().includes(query) || entry.path.toLowerCase().includes(query)
       ));
     },
+    currentFolderKey() {
+      return this.normalizeDirectoryKey(this.currentPath);
+    },
+    currentFolderLoading() {
+      return Boolean(this.currentFolderKey && this.loadingFolderTrees[this.currentFolderKey] && this.directoryEntries.length === 0);
+    },
+    currentFolderError() {
+      return this.currentFolderKey ? this.folderTreeErrors[this.currentFolderKey] || '' : '';
+    },
     pathCrumbs() {
       const parts = this.normalizePath(this.currentPath).replace(/\/$/, '').split('/').filter(Boolean);
       return parts.map((name, index) => ({
@@ -535,13 +616,16 @@ export default {
     },
     repoUrl() {
       const origin = window.location?.origin || 'http://localhost';
-      return `${origin}/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
+      return `${origin}/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub`;
     },
     repoPath() {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
     },
     commitsHref() {
       return `${this.repoPath}/data/commits/${encodeURIComponent(this.branchName(this.currentBranch) || this.defaultBranch || 'main')}`;
+    },
+    pullHref() {
+      return (pull) => `${this.repoPath}/data/pulls/${encodeURIComponent(pull.pull_request_id || pull.id)}`;
     },
     cloneCommand() {
       return `dit clone ${this.repoUrl}`;
@@ -595,6 +679,9 @@ export default {
     },
   },
   async mounted() {
+    this.refsLoading = true;
+    await this.$nextTick();
+    this.loading = false;
     try {
       const refsData = await datahubFetch(this.owner, this.repo, '/refs');
       this.refs = refsData.filter((r) => r.name.startsWith('heads/'));
@@ -603,6 +690,7 @@ export default {
     } catch (e) {
       this.error = e.message;
     } finally {
+      this.refsLoading = false;
       this.loading = false;
     }
   },
@@ -633,18 +721,32 @@ export default {
       this.activeReview = null;
       this.activityError = null;
       this.metaComputeError = null;
-      const [tree, repoStats] = await Promise.all([
-        datahubFetch(this.owner, this.repo, `/tree/${commitHash}`),
-        this.fetchStats(commitHash),
-      ]);
-      this.repoStats = repoStats;
+      this.loadedFolderTrees = {};
+      this.loadingFolderTrees = {};
+      this.folderTreeErrors = {};
+      this.loadedStatsPaths = {};
+      this.loadingStatsPaths = {};
+      this.statsLoading = true;
+      const tree = await datahubFetch(this.owner, this.repo, `/tree/${commitHash}`);
+      await this.applyTreeData(tree, null, commitHash);
+      this.loadChecks();
+      this.loadActivity();
+      this.loadStatsForVisibleFolders(commitHash).finally(() => {
+        this.loadStatsForTree(commitHash, tree);
+      });
+      this.loading = false;
+    },
+    async applyTreeData(tree, repoStats, commitHash, options = {}) {
+      if (this.commitHash !== commitHash) return;
+      const isPartialStats = options.partial === true;
+      if (!isPartialStats) this.repoStats = repoStats;
       const statsByPath = new Map((repoStats?.files || []).map((file) => [file.path, file]));
       const seenPaths = new Set();
       this.tree = {
         ...tree,
         entries: (tree.entries || []).map((entry) => ({
           ...entry,
-          ...(statsByPath.get(entry.name) || {}),
+          ...statsByPath.get(entry.name),
           type: entry.type || entry.obj_type,
           hash: entry.hash || entry.obj_hash,
           path: entry.name,
@@ -653,6 +755,7 @@ export default {
             seenPaths.add(entry.path);
             return true;
           }
+          if (entry.type === 'tree' && (isPartialStats || !repoStats?.files?.length)) return true;
           return false;
         }).concat((repoStats?.files || [])
           .filter((file) => file.path && !seenPaths.has(file.path))
@@ -669,7 +772,15 @@ export default {
       let fileCount = repoStats?.totals?.file_count || 0;
       let charCount = repoStats?.totals?.char_count || 0;
       let tokenEstimate = repoStats?.totals?.token_estimate || 0;
-      const sidecars = {};
+      if (!repoStats) {
+        this.sidecars = {};
+        this.stats = {fileCount, rowCount: totalRows, charCount, tokenEstimate};
+        return;
+      }
+      if (isPartialStats) {
+        return;
+      }
+      const sidecars = isPartialStats ? {...this.sidecars} : {};
       for (const entry of this.tree.entries || []) {
         if (entry.type === 'manifest') {
           if (!repoStats?.totals) {
@@ -677,6 +788,10 @@ export default {
             totalRows += entry.row_count || 0;
             charCount += entry.char_count || 0;
             tokenEstimate += entry.token_estimate || 0;
+          }
+          if (entry.has_sidecar === false && entry.row_count !== null && entry.row_count !== undefined) {
+            sidecars[entry.name] = null;
+            continue;
           }
           try {
             const summary = await datahubFetch(
@@ -711,20 +826,31 @@ export default {
           .reduce((sum, entry) => sum + (entry.row_count || 0), 0);
       }
       this.stats = {fileCount, rowCount: totalRows, charCount, tokenEstimate};
-      await Promise.all([
-        this.loadChecks(),
-        this.loadActivity(),
-      ]);
     },
-    async fetchStats(commitHash) {
+    async loadStatsForTree(commitHash, tree) {
       try {
-        return await datahubFetch(this.owner, this.repo, `/stats/${commitHash}`);
+        const repoStats = await this.fetchStats(commitHash);
+        await this.applyTreeData(tree, repoStats, commitHash);
+      } catch (e) {
+        this.metaComputeError = e.message;
+      } finally {
+        if (this.commitHash === commitHash) this.statsLoading = false;
+      }
+    },
+    async fetchStats(commitHash, pathFilter = '', options = {}) {
+      try {
+        const params = new URLSearchParams();
+        if (pathFilter) params.set('path', pathFilter);
+        if (options.includeSize === false) params.set('include_size', 'false');
+        const query = params.toString();
+        const suffix = query ? `?${query}` : '';
+        return await datahubFetch(this.owner, this.repo, `/stats/${commitHash}${suffix}`);
       } catch {
         return null;
       }
     },
     previewHref(filePath) {
-      return `${this.repoPath}/data/preview/${encodeURIComponent(this.commitHash)}/${filePath.split('/').map(encodeURIComponent).join('/')}`;
+      return `${this.repoPath}/data/preview/${encodeURIComponent(this.commitHash)}/${this.normalizeDirectoryKey(filePath).split('/').map(encodeURIComponent).join('/')}`;
     },
     commitHref(hash) {
       return `${this.repoPath}/data/commit/${encodeURIComponent(hash)}`;
@@ -742,6 +868,12 @@ export default {
     entrySize(entry) {
       if (!entry) return null;
       return entry.size_bytes ?? entry.byte_count ?? entry.size ?? null;
+    },
+    addNullableMetric(current, next) {
+      if (next === null || next === undefined) return current;
+      const value = Number(next);
+      if (!Number.isFinite(value)) return current;
+      return (current === null || current === undefined) ? value : current + value;
     },
     formatSize(bytes) {
       if (bytes === null || bytes === undefined) return '—';
@@ -800,7 +932,7 @@ export default {
         if (!commit) continue;
         if (!newest || this.commitTime(commit) > this.commitTime(newest)) newest = commit;
       }
-      return newest;
+      return newest || this.latestCommit || null;
     },
     commitTime(commit) {
       if (!commit?.timestamp) return 0;
@@ -808,14 +940,14 @@ export default {
       const parsed = Date.parse(commit.timestamp);
       return Number.isNaN(parsed) ? 0 : parsed;
     },
-    async buildFileProvenance(commits) {
+    async buildFileProvenance(commits, commitHash = this.commitHash) {
       if (!Array.isArray(commits) || commits.length === 0) {
-        this.fileProvenance = {};
+        if (this.commitHash === commitHash) this.fileProvenance = {};
         return;
       }
       const currentEntries = this.manifestEntries;
       if (currentEntries.length === 0) {
-        this.fileProvenance = {};
+        if (this.commitHash === commitHash) this.fileProvenance = {};
         return;
       }
       const currentByPath = new Map(currentEntries.map((entry) => [
@@ -827,7 +959,7 @@ export default {
       for (const commit of commits) {
         if (!commit?.commit_hash) continue;
         let tree;
-        if (commit.commit_hash === this.commitHash) {
+        if (commit.commit_hash === commitHash) {
           tree = this.tree;
         } else {
           try {
@@ -854,18 +986,114 @@ export default {
       for (const path of currentByPath.keys()) {
         provenance[path] ||= candidates[path] || this.latestCommit || commits[0] || null;
       }
+      if (this.commitHash !== commitHash) return;
       this.fileProvenance = provenance;
     },
     normalizePath(path) {
       if (!path) return '';
       return String(path).replace(/^\/+/, '');
     },
+    normalizeDirectoryKey(path) {
+      return this.normalizePath(path).replace(/\/+$/, '');
+    },
     encodePath(path) {
       return this.normalizePath(path).split('/').map(encodeURIComponent).join('/');
+    },
+    mergeTreeEntries(entries, additions) {
+      const merged = new Map();
+      for (const entry of [...(entries || []), ...(additions || [])]) {
+        const key = `${entry.type || entry.obj_type}:${this.normalizePath(entry.path || entry.name)}`;
+        merged.set(key, entry);
+      }
+      return Array.from(merged.values());
+    },
+    hasFolderContents(path) {
+      const folderPath = this.normalizeDirectoryKey(path);
+      if (!folderPath) return true;
+      const prefix = `${folderPath}/`;
+      return (this.tree?.entries || []).some((entry) => this.normalizePath(entry.path || entry.name).startsWith(prefix));
+    },
+    visibleTreeFolders() {
+      const current = this.normalizePath(this.currentPath);
+      const folders = new Set();
+      for (const entry of this.tree?.entries || []) {
+        if ((entry.type || entry.obj_type) !== 'tree') continue;
+        const path = this.normalizeDirectoryKey(entry.path || entry.name);
+        if (!path.startsWith(current)) continue;
+        const rest = path.slice(current.length);
+        if (!rest || rest.includes('/')) continue;
+        folders.add(path);
+      }
+      return Array.from(folders);
+    },
+    loadStatsForVisibleFolders(commitHash = this.commitHash) {
+      if (!commitHash) return Promise.resolve();
+      const folderPaths = this.visibleTreeFolders();
+      if (folderPaths.length === 0) return Promise.resolve();
+      return Promise.allSettled(folderPaths.map((folderPath) => this.loadStatsForPath(commitHash, folderPath)));
+    },
+    async loadStatsForPath(commitHash, path) {
+      const statsPath = this.normalizeDirectoryKey(path);
+      if (!statsPath || this.loadedStatsPaths[statsPath] || this.loadingStatsPaths[statsPath]) return;
+      this.loadingStatsPaths = {...this.loadingStatsPaths, [statsPath]: true};
+      try {
+        const fastStats = await this.fetchStats(commitHash, statsPath, {includeSize: false});
+        if (fastStats && this.commitHash === commitHash) {
+          await this.applyTreeData(this.tree || {entries: []}, fastStats, commitHash, {partial: true});
+        }
+        const repoStats = await this.fetchStats(commitHash, statsPath);
+        if (repoStats && this.commitHash === commitHash) {
+          await this.applyTreeData(this.tree || {entries: []}, repoStats, commitHash, {partial: true});
+          this.loadedStatsPaths = {...this.loadedStatsPaths, [statsPath]: true};
+        }
+      } finally {
+        const nextLoading = {...this.loadingStatsPaths};
+        delete nextLoading[statsPath];
+        this.loadingStatsPaths = nextLoading;
+      }
+    },
+    async loadFolderTree(path) {
+      const folderPath = this.normalizeDirectoryKey(path);
+      if (!folderPath || !this.commitHash || this.loadedFolderTrees[folderPath] || this.loadingFolderTrees[folderPath]) return;
+      if (this.hasFolderContents(folderPath)) {
+        this.loadedFolderTrees = {...this.loadedFolderTrees, [folderPath]: true};
+        return;
+      }
+      this.loadingFolderTrees = {...this.loadingFolderTrees, [folderPath]: true};
+      const nextErrors = {...this.folderTreeErrors};
+      delete nextErrors[folderPath];
+      this.folderTreeErrors = nextErrors;
+      try {
+        const tree = await datahubFetch(this.owner, this.repo, `/tree/${this.commitHash}/${this.encodePath(folderPath)}`);
+        const prefix = `${folderPath}/`;
+        const entries = (tree.entries || []).map((entry) => {
+          const childPath = `${prefix}${this.normalizePath(entry.name || entry.path)}`;
+          return {
+            ...entry,
+            type: entry.type || entry.obj_type,
+            hash: entry.hash || entry.obj_hash,
+            name: childPath,
+            path: childPath,
+          };
+        });
+        this.tree = {
+          ...(this.tree || {}),
+          entries: this.mergeTreeEntries(this.tree?.entries || [], entries),
+        };
+        this.loadedFolderTrees = {...this.loadedFolderTrees, [folderPath]: true};
+        this.loadStatsForVisibleFolders(this.commitHash);
+      } catch (e) {
+        this.folderTreeErrors = {...this.folderTreeErrors, [folderPath]: e.message};
+      } finally {
+        const nextLoading = {...this.loadingFolderTrees};
+        delete nextLoading[folderPath];
+        this.loadingFolderTrees = nextLoading;
+      }
     },
     openFolder(path) {
       this.currentPath = this.normalizePath(path);
       this.fileFilter = '';
+      this.loadFolderTree(this.currentPath);
     },
     async computeMeta(entry) {
       this.computingMeta = {...this.computingMeta, [entry.path]: true};
@@ -903,14 +1131,18 @@ export default {
       this.activityLoading = true;
       this.activityError = null;
       try {
-        const [logResult, pullsResult] = await Promise.all([
-          datahubFetch(this.owner, this.repo, `/log?ref=${this.currentBranch}&limit=5`),
-          datahubFetch(this.owner, this.repo, '/pulls?status=open'),
-        ]);
+        const logPromise = datahubFetch(this.owner, this.repo, `/log?ref=${this.currentBranch}&limit=5`);
+        const pullsPromise = datahubFetch(this.owner, this.repo, '/pulls?status=open');
+        const [logResult, pullsResult] = await Promise.all([logPromise, pullsPromise]);
         this.recentCommits = logResult.commits || [];
         this.latestCommit = this.recentCommits[0] || null;
-        await this.buildFileProvenance(this.recentCommits);
         this.openPulls = Array.isArray(pullsResult) ? pullsResult : (pullsResult.pull_requests || pullsResult.pulls || []);
+        const provenanceCommitHash = this.commitHash;
+        this.buildFileProvenance(this.recentCommits, provenanceCommitHash).catch(() => {
+          if (this.commitHash === provenanceCommitHash && this.recentCommits === logResult.commits) {
+            this.fileProvenance = {};
+          }
+        });
       } catch (e) {
         this.recentCommits = [];
         this.openPulls = [];
@@ -946,9 +1178,12 @@ export default {
     formatBlameDate(timestamp) {
       if (!timestamp) return '—';
       const d = new Date(timestamp * 1000);
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad = this.padTimePart;
       return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
              `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+    },
+    padTimePart(n) {
+      return String(n).padStart(2, '0');
     },
     formatTimestamp(value) {
       if (!value) return '—';
@@ -986,6 +1221,28 @@ export default {
   background: transparent !important;
   border: 0;
   box-shadow: none !important;
+}
+
+.datahub-loading-state {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  min-height: 160px;
+  text-align: left;
+}
+
+.datahub-loading-state .loader {
+  margin: 0 !important;
+}
+
+.datahub-loading-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.datahub-loading-copy span {
+  color: var(--color-text-light-2);
 }
 
 .datahub-branch-picker {
@@ -1117,6 +1374,24 @@ export default {
   min-width: 0;
 }
 
+.datahub-stats-status {
+  align-items: center;
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  flex: 0 1 190px;
+  font-size: 12px;
+  justify-content: flex-end;
+  min-height: 20px;
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+.datahub-stats-status span {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
 .datahub-commit-author {
   flex: 0 0 auto;
   font-weight: 600;
@@ -1169,6 +1444,7 @@ export default {
 
 .datahub-pr-workflow {
   padding: 14px 16px !important;
+  scroll-margin-top: 80px;
 }
 
 .datahub-commit-panel {
@@ -1353,6 +1629,7 @@ export default {
 }
 
 .datahub-pr-title {
+  color: var(--color-text);
   font-weight: 600;
 }
 
@@ -1362,8 +1639,14 @@ export default {
   margin: 8px 0;
 }
 
+.datahub-pr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .datahub-review-button {
-  margin-top: 8px !important;
+  margin: 0 !important;
 }
 
 .datahub-commit-preview-button {
@@ -1401,33 +1684,13 @@ export default {
   margin: 0 !important;
 }
 
-.datahub-file-col-name {
-  width: auto;
-}
-
-.datahub-file-col-commit {
-  width: 220px;
-}
-
-.datahub-file-col-updated {
-  width: 98px;
-}
-
-.datahub-file-col-count {
-  width: 56px;
-}
-
-.datahub-file-col-size {
-  width: 76px;
-}
-
-.datahub-file-col-lang {
-  width: 90px;
-}
-
 .datahub-lang-heading,
 .datahub-lang-cell {
   text-align: left !important;
+  white-space: nowrap;
+}
+
+.datahub-file-table .datahub-metric-cell {
   white-space: nowrap;
 }
 

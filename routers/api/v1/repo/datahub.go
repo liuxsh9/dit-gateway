@@ -33,6 +33,15 @@ func proxyToDatahubWithContentType(ctx *context.APIContext, contentType string, 
 	}
 	data, status, err := fn()
 	if err != nil {
+		if statusErr, ok := err.(interface {
+			StatusCode() int
+			Body() []byte
+		}); ok {
+			ctx.Resp.Header().Set("Content-Type", contentType)
+			ctx.Resp.WriteHeader(statusErr.StatusCode())
+			_, _ = ctx.Resp.Write(statusErr.Body())
+			return
+		}
 		ctx.Error(http.StatusBadGateway, "datahub proxy", err)
 		return
 	}
@@ -58,7 +67,7 @@ func DatahubListRefs(ctx *context.APIContext) {
 
 func DatahubGetRef(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), ctx.Params(":name"))
+		return datahub.DefaultClient().GetRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), datahubParam(ctx, ":name", "*"))
 	})
 }
 
@@ -68,7 +77,7 @@ func DatahubUpdateRef(ctx *context.APIContext) {
 		return
 	}
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().UpdateRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), ctx.Params(":name"), body)
+		return datahub.DefaultClient().UpdateRef(ctx, ctx.Repo.Repository.Name, ctx.Params(":ref_type"), datahubParam(ctx, ":name", "*"), body)
 	})
 }
 
@@ -121,15 +130,23 @@ func DatahubGetTree(ctx *context.APIContext) {
 
 func DatahubGetDiff(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetDiff(ctx, ctx.Repo.Repository.Name, ctx.Params(":old"), ctx.Params(":new"))
+		return datahub.DefaultClient().GetDiff(
+			ctx,
+			ctx.Repo.Repository.Name,
+			ctx.Params(":old"),
+			ctx.Params(":new"),
+			ctx.FormString("file"),
+			ctx.FormString("offset"),
+			ctx.FormString("limit"),
+		)
 	})
 }
 
 func DatahubGetLog(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		ref := ctx.FormString("ref")
-		if ref == "" {
-			ref = ctx.Params(":ref")
+		ref, err := datahubRefForCore(ctx, ctx.FormString("ref"), ctx.Params(":ref"), ctx.Params("*"))
+		if err != nil {
+			return nil, 0, err
 		}
 		return datahub.DefaultClient().GetLog(ctx, ctx.Repo.Repository.Name, ref, ctx.FormString("limit"))
 	})
@@ -412,11 +429,16 @@ func DatahubMetaDiff(ctx *context.APIContext) {
 
 func DatahubGetStats(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		commit, err := datahubCommitForCore(ctx, datahubParam(ctx, ":commit", "*"))
+		if err != nil {
+			return nil, 0, err
+		}
 		return datahub.DefaultClient().GetStats(
 			ctx,
 			ctx.Repo.Repository.Name,
-			ctx.Params(":commit"),
+			commit,
 			ctx.FormString("path"),
+			ctx.FormString("include_size"),
 		)
 	})
 }
@@ -481,11 +503,109 @@ func DatahubRunGC(ctx *context.APIContext) {
 
 func DatahubGetDedup(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		commit, err := datahubCommitForCore(ctx, datahubParam(ctx, ":commit", "*"))
+		if err != nil {
+			return nil, 0, err
+		}
 		return datahub.DefaultClient().GetDedup(
 			ctx,
 			ctx.Repo.Repository.Name,
-			ctx.Params(":commit"),
+			commit,
 			ctx.FormString("path"),
 		)
 	})
 }
+
+func datahubParam(ctx *context.APIContext, names ...string) string {
+	for _, name := range names {
+		value := strings.TrimSpace(ctx.Params(name))
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func datahubRefForCore(ctx *context.APIContext, values ...string) (string, error) {
+	for _, ref := range values {
+		ref = strings.TrimSpace(ref)
+		if ref != "" {
+			return datahubNormalizeBranchRef(ref), nil
+		}
+	}
+	return datahubNormalizeBranchRef(ctx.Repo.Repository.DefaultBranch), nil
+}
+
+func datahubNormalizeBranchRef(ref string) string {
+	ref = strings.TrimSpace(ref)
+	ref = strings.TrimPrefix(ref, "refs/heads/")
+	if strings.HasPrefix(ref, "heads/") {
+		return ref
+	}
+	return "heads/" + ref
+}
+
+func datahubCommitForCore(ctx *context.APIContext, refOrCommit string) (string, error) {
+	refOrCommit = strings.TrimSpace(refOrCommit)
+	if datahubIsCommitHash(refOrCommit) {
+		return refOrCommit, nil
+	}
+
+	ref := datahubNormalizeBranchRef(refOrCommit)
+	data, status, err := datahub.DefaultClient().GetRef(ctx, ctx.Repo.Repository.Name, "heads", strings.TrimPrefix(ref, "heads/"))
+	if err != nil {
+		return "", err
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return "", &datahubCoreStatusError{status: status, body: data}
+	}
+
+	var payload struct {
+		TargetHash string `json:"target_hash"`
+		Hash       string `json:"hash"`
+		CommitHash string `json:"commit_hash"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return "", err
+	}
+	for _, hash := range []string{payload.TargetHash, payload.Hash, payload.CommitHash} {
+		if hash != "" {
+			return hash, nil
+		}
+	}
+	return "", &datahubCoreStatusError{status: http.StatusNotFound, body: []byte(`{"detail":"ref has no target hash"}`)}
+}
+
+func datahubIsCommitHash(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+type datahubCoreStatusError struct {
+	status int
+	body   []byte
+}
+
+func (e *datahubCoreStatusError) Error() string {
+	return "datahub core returned status " + http.StatusText(e.status) + ": " + string(e.body)
+}
+
+func (e *datahubCoreStatusError) StatusCode() int {
+	return e.status
+}
+
+func (e *datahubCoreStatusError) Body() []byte {
+	return e.body
+}
+
+var _ interface {
+	StatusCode() int
+	Body() []byte
+} = (*datahubCoreStatusError)(nil)
