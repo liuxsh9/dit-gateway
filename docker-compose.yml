@@ -48,9 +48,7 @@ services:
     restart: unless-stopped
 
   core:
-    build:
-      context: ../datahub
-      dockerfile: Dockerfile
+    image: ${CORE_IMAGE:-ghcr.io/liuxsh9/dit-core:latest}
     expose:
       - "8000"
     environment:

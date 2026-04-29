@@ -1,0 +1,7 @@
+# Copy to docker-compose.override.yml for local development builds.
+# Requires ../datahub to be checked out alongside this repo.
+services:
+  core:
+    build:
+      context: ../datahub
+      dockerfile: Dockerfile
