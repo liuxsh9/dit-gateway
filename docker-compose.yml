@@ -1,10 +1,26 @@
 services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: "${DOMAIN:-localhost}"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    restart: unless-stopped
+
   gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       FORGEJO__database__DB_TYPE: postgres
       FORGEJO__database__HOST: db:5432
@@ -35,8 +51,8 @@ services:
     build:
       context: ../datahub
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       DIT_SERVER_DATABASE_URL: "postgresql+asyncpg://dit:${DIT_DB_PASSWORD:?set DIT_DB_PASSWORD in .env}@db:5432/dit"
       DIT_SERVER_DATA_DIR: "/data/dit"
@@ -72,6 +88,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  caddy-data:
+  caddy-config:
   forgejo-data:
   core-data:
   pg-data:
