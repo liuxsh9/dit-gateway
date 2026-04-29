@@ -39,7 +39,13 @@
             <SvgIcon name="octicon-chevron-left" :size="14"/>
           </button>
         </div>
-        <div v-if="treeLoading" class="ui active centered inline loader datahub-tree-loader"></div>
+        <div v-if="treeLoading" class="datahub-tree-loading">
+          <div class="ui active inline loader datahub-tree-loader"></div>
+          <div>
+            <strong>Loading file list</strong>
+            <span>Resolving files and row counts.</span>
+          </div>
+        </div>
         <div v-else-if="treeError" class="ui tiny negative message">{{ treeError }}</div>
         <nav v-else class="datahub-tree-list" aria-label="Dataset files">
           <template v-for="entry in treeRows" :key="entry.path">
@@ -88,7 +94,17 @@
         </button>
       </aside>
       <main class="datahub-preview-review">
-        <div v-if="!treeLoading && !treeError && !canPreviewFile" class="ui message">
+        <div v-if="treeError && !canPreviewFile" class="ui negative message">
+          {{ treeError }}
+        </div>
+        <div v-else-if="treeLoading && !canPreviewFile" class="ui message datahub-preview-loading-state">
+          <div class="ui active inline loader"></div>
+          <div>
+            <strong>Loading preview</strong>
+            <p>Resolving the first JSONL manifest for this ref.</p>
+          </div>
+        </div>
+        <div v-else-if="!canPreviewFile" class="ui message">
           No JSONL manifest files are available for this ref yet.
         </div>
         <JsonlViewer
@@ -123,7 +139,9 @@ export default {
       tree: null,
       treeLoading: true,
       treeError: null,
+      treeDirectories: {},
       openFolders: new Set(),
+      manuallyClosedFolders: new Set(),
       stats: null,
       filesSidebarCollapsed: false,
       openDataIssueCount: 0,
@@ -134,7 +152,7 @@ export default {
   },
   computed: {
     canPreviewFile() {
-      return Boolean(this.resolvedCommitHash && this.resolvedFilePath);
+      return Boolean(this.resolvedCommitHash && this.isManifestPath(this.resolvedFilePath));
     },
     repoPath() {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
@@ -145,9 +163,13 @@ export default {
     rawPath() {
       return `/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub/export/${encodeURIComponent(this.resolvedCommitHash)}/${this.resolvedFilePath.split('/').map(encodeURIComponent).join('/')}`;
     },
+    treeStateStorageKey() {
+      const commit = this.resolvedCommitHash || this.commitHash || '';
+      return `datahub-preview-tree:${this.owner}/${this.repo}:${commit}`;
+    },
     treeRows() {
-      const manifestPaths = this.manifestPaths.toSorted();
-      const folderPaths = new Set();
+      const manifestPaths = this.manifestPaths.toSorted((a, b) => this.compareTreeNames(a, b));
+      const folderPaths = new Set(this.loadedFolderPaths);
       for (const path of manifestPaths) {
         const parts = path.split('/');
         for (let index = 1; index < parts.length; index++) {
@@ -159,7 +181,7 @@ export default {
       const appendLevel = (prefix, depth) => {
         const folders = Array.from(folderPaths)
           .filter((folder) => folder.startsWith(prefix) && folder.slice(prefix.length).split('/').filter(Boolean).length === 1)
-          .sort();
+          .sort((a, b) => this.compareTreeNames(a.slice(prefix.length), b.slice(prefix.length)));
         for (const folder of folders) {
           rows.push({
             type: 'tree',
@@ -171,7 +193,7 @@ export default {
         }
         const files = manifestPaths
           .filter((path) => path.startsWith(prefix) && !path.slice(prefix.length).includes('/'))
-          .sort();
+          .sort((a, b) => this.compareTreeNames(a.slice(prefix.length), b.slice(prefix.length)));
         for (const path of files) {
           rows.push({
             type: 'manifest',
@@ -184,31 +206,76 @@ export default {
       appendLevel('', 0);
       return rows;
     },
+    loadedTreeEntries() {
+      const entries = [];
+      for (const [directory, directoryEntries] of Object.entries(this.treeDirectories)) {
+        const prefix = this.normalizeDirectoryPath(directory);
+        for (const entry of directoryEntries || []) {
+          const type = entry.type || entry.obj_type;
+          const name = this.normalizePath(entry.name || entry.path);
+          if (!name || !['manifest', 'tree'].includes(type)) continue;
+          entries.push({
+            ...entry,
+            type,
+            path: this.joinPath(prefix, name),
+          });
+        }
+      }
+      return entries;
+    },
+    loadedFolderPaths() {
+      return this.loadedTreeEntries
+        .filter((entry) => entry.type === 'tree')
+        .map((entry) => this.normalizeDirectoryPath(entry.path));
+    },
     manifestPaths() {
       const paths = new Set();
       for (const file of this.stats?.files || []) {
         if (file.path) paths.add(this.normalizePath(file.path));
       }
-      for (const entry of this.tree?.entries || []) {
-        if ((entry.type || entry.obj_type) === 'manifest') {
-          paths.add(this.normalizePath(entry.name || entry.path));
+      for (const entry of this.loadedTreeEntries) {
+        if (entry.type === 'manifest') {
+          paths.add(this.normalizePath(entry.path));
         }
       }
       return Array.from(paths).filter(Boolean);
     },
   },
   async mounted() {
-    this.seedOpenFolders();
+    this.restoreTreeState();
+    this.ensureSelectedPathFoldersOpen();
     try {
       this.resolvedCommitHash = await this.resolveCommitHash();
-      const [tree, stats] = await Promise.all([
-        datahubFetch(this.owner, this.repo, `/tree/${this.resolvedCommitHash}`),
-        this.fetchStats(),
-      ]);
+      const requestedFilePath = this.normalizePath(this.filePath);
+      this.resolvedFilePath = this.isManifestPath(requestedFilePath) ? requestedFilePath : '';
+      this.restoreTreeState();
+      this.ensureSelectedPathFoldersOpen();
+
+      const statsPromise = this.fetchStats();
+      const tree = await datahubFetch(this.owner, this.repo, `/tree/${this.resolvedCommitHash}`);
       this.tree = tree;
+      this.setTreeDirectory('', tree.entries || []);
+      this.treeLoading = false;
+      if (!this.resolvedFilePath) {
+        this.resolvedFilePath = this.resolveFilePath();
+        this.ensureSelectedPathFoldersOpen();
+      }
+      await this.loadSelectedPathDirectories();
+      await this.loadOpenFolderDirectories();
+      this.resolvedFilePath = await this.resolvePreviewFilePath(this.resolvedFilePath || requestedFilePath);
+      this.ensureSelectedPathFoldersOpen();
+      await this.loadSelectedPathDirectories();
+      await this.loadOpenFolderDirectories();
+
+      const stats = await statsPromise;
       this.stats = stats;
-      this.resolvedFilePath = this.resolveFilePath();
-      this.seedOpenFolders();
+      this.ensureSelectedPathFoldersOpen();
+      if (!this.resolvedFilePath) {
+        this.resolvedFilePath = this.resolveFilePath();
+        this.ensureSelectedPathFoldersOpen();
+        await this.loadSelectedPathDirectories();
+        await this.loadOpenFolderDirectories();
+      }
     } catch (e) {
       this.treeError = e.message;
     } finally {
@@ -222,11 +289,57 @@ export default {
     previewHref(path) {
       return `${this.repoPath}/data/preview/${encodeURIComponent(this.resolvedCommitHash || this.commitHash)}/${path.split('/').map(encodeURIComponent).join('/')}`;
     },
+    compareTreeNames(a, b) {
+      return String(a || '').localeCompare(String(b || ''));
+    },
     normalizePath(path) {
       return String(path || '').replace(/^\/+/, '');
     },
+    normalizeDirectoryPath(path) {
+      const clean = this.normalizePath(path).replace(/\/+$/, '');
+      return clean ? `${clean}/` : '';
+    },
+    joinPath(prefix, path) {
+      const cleanPath = this.normalizePath(path);
+      const cleanPrefix = this.normalizeDirectoryPath(prefix);
+      if (!cleanPrefix || cleanPath.startsWith(cleanPrefix)) return cleanPath;
+      return `${cleanPrefix}${cleanPath}`;
+    },
     encodePath(path) {
       return String(path || '').split('/').map(encodeURIComponent).join('/');
+    },
+    setTreeDirectory(path, entries) {
+      const directory = this.normalizeDirectoryPath(path);
+      this.treeDirectories = {
+        ...this.treeDirectories,
+        [directory]: entries,
+      };
+    },
+    async loadTreeDirectory(path) {
+      const directory = this.normalizeDirectoryPath(path);
+      if (!directory || this.treeDirectories[directory]) return;
+      try {
+        const tree = await datahubFetch(
+          this.owner,
+          this.repo,
+          `/tree/${this.resolvedCommitHash}/${this.encodePath(directory.replace(/\/$/, ''))}`,
+        );
+        this.setTreeDirectory(directory, tree.entries || []);
+      } catch {
+        // Keep the sidebar usable with the directories already loaded.
+      }
+    },
+    async loadSelectedPathDirectories() {
+      const path = this.normalizePath(this.resolvedFilePath || this.filePath);
+      const parts = path.split('/').filter(Boolean);
+      const directories = [];
+      for (let index = 1; index < parts.length; index++) {
+        directories.push(parts.slice(0, index).join('/'));
+      }
+      await Promise.all(directories.map((directory) => this.loadTreeDirectory(directory)));
+    },
+    async loadOpenFolderDirectories() {
+      await Promise.all(Array.from(this.openFolders).map((directory) => this.loadTreeDirectory(directory)));
     },
     async fetchStats() {
       try {
@@ -243,25 +356,94 @@ export default {
     },
     resolveFilePath() {
       const normalized = this.normalizePath(this.filePath);
-      if (normalized) return normalized;
-      return this.manifestPaths.toSorted()[0] || '';
+      if (normalized && this.manifestPaths.includes(normalized)) return normalized;
+      return this.manifestPaths.toSorted((a, b) => this.compareTreeNames(a, b))[0] || '';
     },
-    seedOpenFolders() {
-      const parts = this.normalizePath(this.resolvedFilePath || this.filePath).split('/');
-      const open = new Set();
-      for (let index = 1; index < parts.length; index++) {
-        open.add(`${parts.slice(0, index).join('/')}/`);
+    isManifestPath(path) {
+      return /\.jsonl$/i.test(this.normalizePath(path));
+    },
+    async resolvePreviewFilePath(path) {
+      const normalized = this.normalizePath(path);
+      if (!normalized || this.manifestPaths.includes(normalized)) return normalized;
+      const candidates = await this.findManifestPathsUnder(normalized);
+      return candidates[0] || normalized;
+    },
+    async findManifestPathsUnder(path) {
+      const directory = this.normalizeDirectoryPath(path);
+      await this.loadTreeDirectory(directory);
+      const directEntries = (this.treeDirectories[directory] || []).map((entry) => ({
+        ...entry,
+        type: entry.type || entry.obj_type,
+        path: this.joinPath(directory, entry.name || entry.path),
+      }));
+      const directManifests = directEntries
+        .filter((entry) => entry.type === 'manifest')
+        .map((entry) => this.normalizePath(entry.path))
+        .sort((a, b) => this.compareTreeNames(a, b));
+      if (directManifests.length) return directManifests;
+      const folders = directEntries
+        .filter((entry) => entry.type === 'tree')
+        .map((entry) => this.normalizeDirectoryPath(entry.path))
+        .sort((a, b) => this.compareTreeNames(a, b));
+      for (const folder of folders) {
+        const nested = await this.findManifestPathsUnder(folder);
+        if (nested.length) return nested;
       }
-      this.openFolders = open;
+      return [];
+    },
+    selectedPathFolders() {
+      const parts = this.normalizePath(this.resolvedFilePath || this.filePath).split('/');
+      const folders = [];
+      for (let index = 1; index < parts.length; index++) {
+        folders.push(`${parts.slice(0, index).join('/')}/`);
+      }
+      return folders;
+    },
+    ensureSelectedPathFoldersOpen() {
+      const next = new Set(this.openFolders);
+      for (const folder of this.selectedPathFolders()) {
+        if (!this.manuallyClosedFolders.has(folder)) next.add(folder);
+      }
+      this.openFolders = next;
+    },
+    restoreTreeState() {
+      try {
+        const stored = JSON.parse(window.sessionStorage.getItem(this.treeStateStorageKey) || '{}');
+        this.openFolders = new Set((stored.open || []).map((path) => this.normalizeDirectoryPath(path)));
+        this.manuallyClosedFolders = new Set((stored.closed || []).map((path) => this.normalizeDirectoryPath(path)));
+      } catch {
+        this.openFolders = new Set();
+        this.manuallyClosedFolders = new Set();
+      }
+    },
+    persistTreeState() {
+      try {
+        window.sessionStorage.setItem(this.treeStateStorageKey, JSON.stringify({
+          open: Array.from(this.openFolders).toSorted((a, b) => this.compareTreeNames(a, b)),
+          closed: Array.from(this.manuallyClosedFolders).toSorted((a, b) => this.compareTreeNames(a, b)),
+        }));
+      } catch {
+        // sessionStorage can be unavailable in restricted browser contexts.
+      }
     },
     isFolderOpen(path) {
       return this.openFolders.has(path);
     },
     toggleFolder(path) {
+      const directory = this.normalizeDirectoryPath(path);
       const next = new Set(this.openFolders);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
+      const closed = new Set(this.manuallyClosedFolders);
+      if (next.has(directory)) {
+        next.delete(directory);
+        closed.add(directory);
+      } else {
+        next.add(directory);
+        closed.delete(directory);
+        this.loadTreeDirectory(directory);
+      }
       this.openFolders = next;
+      this.manuallyClosedFolders = closed;
+      this.persistTreeState();
     },
     toggleFilesSidebar() {
       this.filesSidebarCollapsed = !this.filesSidebarCollapsed;
@@ -421,8 +603,31 @@ export default {
   z-index: 1;
 }
 
-.datahub-tree-loader {
+.datahub-tree-loading {
+  align-items: center;
+  color: var(--color-text-light-2);
+  display: flex;
+  gap: 12px;
   margin: 16px 0;
+}
+
+.datahub-tree-loading strong,
+.datahub-tree-loading span {
+  display: block;
+}
+
+.datahub-tree-loading strong {
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.datahub-tree-loading span {
+  font-size: 12px;
+}
+
+.datahub-tree-loader {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .datahub-tree-list {
@@ -506,6 +711,16 @@ export default {
 .datahub-preview-review {
   min-width: 0;
   padding: 12px 12px 12px 32px;
+}
+
+.datahub-preview-loading-state {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.datahub-preview-loading-state p {
+  margin: 2px 0 0;
 }
 
 .datahub-preview-workspace.is-sidebar-collapsed .datahub-preview-review {
