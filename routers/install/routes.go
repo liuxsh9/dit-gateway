@@ -27,6 +27,7 @@ func Routes() *web.Route {
 	r.Get("/", Install) // it must be on the root, because the "install.js" use the window.location to replace the "localhost" AppURL
 	r.Post("/", web.Bind(forms.InstallForm{}), SubmitInstall)
 	r.Get("/post-install", InstallDone)
+	r.Get("/api/health", healthcheck.Check)
 	r.Get("/api/healthz", healthcheck.Check)
 	r.NotFound(installNotFound)
 
