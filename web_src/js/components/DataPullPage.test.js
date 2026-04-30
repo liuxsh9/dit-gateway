@@ -1,11 +1,25 @@
 import {mount} from '@vue/test-utils';
-import {expect, test, vi} from 'vitest';
+import {afterEach, beforeEach, expect, test, vi} from 'vitest';
 import DataPullPage from './DataPullPage.vue';
 import {datahubFetch} from '../utils/datahub-api.js';
 
 vi.mock('../utils/datahub-api.js', () => ({
   datahubFetch: vi.fn(),
 }));
+
+const mountedWrappers = [];
+
+beforeEach(() => {
+  datahubFetch.mockReset();
+  window.history.replaceState(null, '', '/');
+});
+
+afterEach(() => {
+  for (const wrapper of mountedWrappers.splice(0)) {
+    wrapper.unmount();
+  }
+  vi.restoreAllMocks();
+});
 
 const diffStub = {
   name: 'DataDiffView',
@@ -30,6 +44,98 @@ const diffStub = {
     </div>
   `,
 };
+
+function mockPullPageData(pullId = '42') {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === `/pulls/${pullId}`) {
+      return {
+        id: Number(pullId),
+        title: 'Addressable tabs',
+        status: 'open',
+        source_branch: 'feature/address-tabs',
+        target_branch: 'main',
+        source_commit: 'sourcecommit',
+        target_commit: 'targetcommit',
+        is_mergeable: true,
+        files_changed: 1,
+      };
+    }
+    if ([`/pulls/${pullId}/comments`, `/pulls/${pullId}/reviews`].includes(path)) return [];
+    if (path === '/checks/sourcecommit') return {checks: []};
+    if (path === '/governance?target_branch=main') {
+      return {
+        repository: {
+          permissions: {pull: true, push: true, admin: false},
+          allow_merge_commits: true,
+          default_merge_style: 'merge',
+        },
+        current_user: {is_authenticated: true, can_merge: true, target_branch: 'main', login: 'writer'},
+        reviewers: [],
+        branch_protections: [],
+        links: {},
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+}
+
+async function mountPullPage(pullId = '42') {
+  const wrapper = mount(DataPullPage, {
+    props: {owner: 'alice', repo: 'dataset', pullId},
+    global: {stubs: {DataDiffView: diffStub}},
+  });
+  mountedWrappers.push(wrapper);
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Addressable tabs'));
+  return wrapper;
+}
+
+test('opens files changed tab from the #files URL hash', async () => {
+  window.history.replaceState(null, '', '/alice/dataset/pulls/42#files');
+  mockPullPageData();
+
+  const wrapper = await mountPullPage();
+
+  expect(wrapper.find('.datahub-pull-page').classes()).toContain('is-files-tab');
+  expect(wrapper.find('.datahub-pr-tab.active').text()).toContain('Files changed');
+});
+
+test('updates the URL hash when switching between files changed and conversation tabs', async () => {
+  window.history.replaceState(null, '', '/alice/dataset/pulls/42');
+  mockPullPageData();
+  const wrapper = await mountPullPage();
+
+  await wrapper.findAll('.datahub-pr-tab').find((tab) => tab.text().includes('Files changed')).trigger('click');
+  expect(window.location.hash).toBe('#files');
+  expect(wrapper.find('.datahub-pull-page').classes()).toContain('is-files-tab');
+
+  await wrapper.findAll('.datahub-pr-tab').find((tab) => tab.text().includes('Conversation')).trigger('click');
+  expect(window.location.hash).toBe('#conversation');
+  expect(wrapper.find('.datahub-pull-page').classes()).not.toContain('is-files-tab');
+});
+
+test('keeps conversation as the default tab for unknown URL hashes', async () => {
+  window.history.replaceState(null, '', '/alice/dataset/pulls/42#wat');
+  mockPullPageData();
+
+  const wrapper = await mountPullPage();
+
+  expect(wrapper.find('.datahub-pull-page').classes()).not.toContain('is-files-tab');
+  expect(wrapper.find('.datahub-pr-tab.active').text()).toContain('Conversation');
+});
+
+test('replaces the URL hash when an inline row comment returns to conversation', async () => {
+  window.history.replaceState(null, '', '/alice/dataset/pulls/42#files');
+  mockPullPageData();
+  const wrapper = await mountPullPage();
+  const pushState = vi.spyOn(window.history, 'pushState');
+  const replaceState = vi.spyOn(window.history, 'replaceState');
+
+  await wrapper.find('.emit-row-comment').trigger('click');
+
+  expect(window.location.hash).toBe('#conversation');
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/alice/dataset/pulls/42#conversation');
+  expect(pushState).not.toHaveBeenCalled();
+});
 
 test('loads a github-like pull request conversation with timeline, checks, commits, and merge box', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path, options = {}) => {

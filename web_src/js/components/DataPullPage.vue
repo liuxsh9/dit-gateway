@@ -43,7 +43,7 @@
           type="button"
           class="datahub-pr-tab"
           :class="{active: activeTab === tabItem.key}"
-          @click="activeTab = tabItem.key"
+          @click="selectTab(tabItem.key)"
         >
           <i :class="tabItem.icon"></i>
           {{ tabItem.label }}
@@ -658,6 +658,8 @@ export default {
     },
   },
   async mounted() {
+    this.activeTab = this.normalizeTabFromHash(window.location.hash);
+    window.addEventListener('hashchange', this.handleHashChange);
     try {
       this.pull = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}`);
       await this.loadSupplementalData();
@@ -667,7 +669,31 @@ export default {
       this.loading = false;
     }
   },
+  beforeUnmount() {
+    window.removeEventListener('hashchange', this.handleHashChange);
+  },
   methods: {
+    normalizeTabFromHash(hash = window.location.hash) {
+      const key = String(hash || '').replace(/^#/, '');
+      return this.tabs.some((tab) => tab.key === key) ? key : 'conversation';
+    },
+    selectTab(tab, options = {}) {
+      const nextTab = this.tabs.some((tabItem) => tabItem.key === tab) ? tab : 'conversation';
+      this.activeTab = nextTab;
+      if (options.updateHash === false) return;
+
+      const nextHash = `#${nextTab}`;
+      if (window.location.hash === nextHash) return;
+      const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+      if (options.replace) {
+        window.history.replaceState(null, '', nextUrl);
+      } else {
+        window.history.pushState(null, '', nextUrl);
+      }
+    },
+    handleHashChange() {
+      this.selectTab(this.normalizeTabFromHash(window.location.hash), {updateHash: false});
+    },
     async loadSupplementalData() {
       const [comments, reviews, checks, governance] = await Promise.all([
         this.fetchOptional(`/pulls/${this.pullId}/comments`, []),
@@ -762,7 +788,7 @@ export default {
     },
     recordInlineComment(comment) {
       this.comments = [...this.normalizedComments, comment];
-      this.activeTab = 'conversation';
+      this.selectTab('conversation', {replace: true});
     },
     commentLocationText(comment) {
       const parts = [];
