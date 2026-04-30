@@ -136,6 +136,45 @@ Important route detail:
 - Browser console may contain old errors from previous asset versions. Prefer current page DOM plus service logs for the active verification.
 - Service logs can show transient database context-canceled errors during navigation/restart. Re-check the same API after the service settles before treating it as a root cause.
 
+### Permission And Admin Bootstrap Checks
+
+- Production bootstrap docs now live in `README.md`: create the first `sys` site admin with `forgejo admin user create`, keep `SERVICE_TOKEN` as a gateway/core service secret rather than a user password, and default compose deployments to `DISABLE_REGISTRATION=true`.
+- For permission audits, create three fresh accounts with date-stamped names: one site admin, one repo admin collaborator, and one read-only repo collaborator. Use CLI-created Forgejo tokens for repeatable API checks; do not paste real token values into notes or commits.
+- Public data repos are not enough to prove isolation. Also create a temporary private DataHub repo, add the same repo-admin/read collaborators, and verify anonymous plus unrelated authenticated users get `404` for both repository and `/api/v1/repos/{owner}/{repo}/datahub/...` routes.
+- Sensitive DataHub writer endpoints should reject anonymous users with `401` and read-only users with `403`: `/refs`, `/objects/batch*`, `/pulls`, pull comments/reviews, `/meta/compute`, `/checks`, and `/gc`. `search` and `validate` behave like read/compute operations on public repos, but must still be hidden by private repo access checks.
+- For PR governance UI, wait for `.datahub-pull-page` and the actual PR title before judging controls. The initial Vue shell can briefly show placeholder text. A read-only user should see the merge button disabled and write-access messaging; a repo admin should see manage/settings links and an enabled merge button when governance allows it.
+- In zsh scripts, avoid naming a local variable `path`; zsh ties it to `PATH`, which can make basic tools like `tr` disappear mid-script.
+
+Local permission audit fixtures from 2026-04-30:
+
+```text
+Password for all three codexperm users: CodexPerm-20260430104344-A1b2c3!
+
+Site admin:
+  username: codexperm20260430104344sys
+  email: codexperm20260430104344sys@example.com
+  Forgejo token: 7aefd40156d1cee312c1f463ffb9d50837c94e72
+
+Repo admin collaborator:
+  username: codexperm20260430104344repo
+  email: codexperm20260430104344repo@example.com
+  Forgejo token: 34d2bbc5ab338b2472d6eda4147acccfd5fb14a2
+
+Read-only collaborator:
+  username: codexperm20260430104344user
+  email: codexperm20260430104344user@example.com
+  Forgejo token: 2198d8f743ed2eb2da1d9d86f8b18b0260987418
+
+Public audit repo:
+  http://127.0.0.1:3003/e2e/sft-e2e-20260428
+
+Temporary private audit repo:
+  http://127.0.0.1:3003/codexperm20260430104344sys/perm-private-20260430104344
+
+Audit evidence:
+  /Users/lxs/Documents/AI/datahub-e2e-20260428/permission-audit-20260430104344
+```
+
 ### Recent PR Diff Workflow Pitfalls
 
 - Sparse `dit` testing is useful for small PR fixtures. Keep scratch clones under `/Users/lxs/Documents/AI/datahub-e2e-20260428`, not under `/Users/lxs`:
