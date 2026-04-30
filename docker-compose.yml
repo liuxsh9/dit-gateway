@@ -1,6 +1,7 @@
 services:
   caddy:
     image: caddy:2
+    profiles: ["tls"]
     ports:
       - "80:80"
       - "443:443"
@@ -19,8 +20,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    expose:
-      - "3000"
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
     environment:
       FORGEJO__database__DB_TYPE: postgres
       FORGEJO__database__HOST: db:5432
