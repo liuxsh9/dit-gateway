@@ -123,6 +123,26 @@ test('keeps conversation as the default tab for unknown URL hashes', async () =>
   expect(wrapper.find('.datahub-pr-tab.active').text()).toContain('Conversation');
 });
 
+test('replaces unknown URL hashes with the default conversation tab', async () => {
+  window.history.replaceState(null, '', '/alice/dataset/pulls/42#wat');
+  mockPullPageData();
+  const replaceState = vi.spyOn(window.history, 'replaceState');
+
+  await mountPullPage();
+
+  expect(window.location.hash).toBe('#conversation');
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/alice/dataset/pulls/42#conversation');
+});
+
+test('does not add a hash when opening a pull request without one', async () => {
+  window.history.replaceState(null, '', '/alice/dataset/pulls/42');
+  mockPullPageData();
+
+  await mountPullPage();
+
+  expect(window.location.hash).toBe('');
+});
+
 test('replaces the URL hash when an inline row comment returns to conversation', async () => {
   window.history.replaceState(null, '', '/alice/dataset/pulls/42#files');
   mockPullPageData();

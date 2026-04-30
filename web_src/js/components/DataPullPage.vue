@@ -658,7 +658,7 @@ export default {
     },
   },
   async mounted() {
-    this.activeTab = this.normalizeTabFromHash(window.location.hash);
+    this.syncTabFromHash();
     window.addEventListener('hashchange', this.handleHashChange);
     try {
       this.pull = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}`);
@@ -677,6 +677,21 @@ export default {
       const key = String(hash || '').replace(/^#/, '');
       return this.tabs.some((tab) => tab.key === key) ? key : 'conversation';
     },
+    isKnownTabHash(hash = window.location.hash) {
+      const key = String(hash || '').replace(/^#/, '');
+      return this.tabs.some((tab) => tab.key === key);
+    },
+    syncTabFromHash(hash = window.location.hash) {
+      if (!hash) {
+        this.activeTab = 'conversation';
+        return;
+      }
+      if (this.isKnownTabHash(hash)) {
+        this.selectTab(this.normalizeTabFromHash(hash), {updateHash: false});
+        return;
+      }
+      this.selectTab('conversation', {replace: true});
+    },
     selectTab(tab, options = {}) {
       const nextTab = this.tabs.some((tabItem) => tabItem.key === tab) ? tab : 'conversation';
       this.activeTab = nextTab;
@@ -692,7 +707,7 @@ export default {
       }
     },
     handleHashChange() {
-      this.selectTab(this.normalizeTabFromHash(window.location.hash), {updateHash: false});
+      this.syncTabFromHash();
     },
     async loadSupplementalData() {
       const [comments, reviews, checks, governance] = await Promise.all([
