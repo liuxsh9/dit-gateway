@@ -379,8 +379,8 @@ export default {
     },
     async loadPage(page) {
       const offset = (page - 1) * PAGE_SIZE;
-      await this.loadOffset(offset);
       this.currentPage = page;
+      await this.loadOffset(offset);
     },
     async loadOffset(offset) {
       const manifest = await datahubFetch(
@@ -410,8 +410,8 @@ export default {
       const page = Math.floor(rowIndex / PAGE_SIZE) + 1;
       const offset = (page - 1) * PAGE_SIZE;
       if (page !== this.currentPage) {
-        await this.loadOffset(offset);
         this.currentPage = page;
+        await this.loadOffset(offset);
       }
       this.selectedRowOffset = rowIndex - offset;
       this.rowJumpValue = String(rowIndex + 1);

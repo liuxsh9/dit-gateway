@@ -423,6 +423,60 @@ test('jumps directly to a row by loading the containing manifest page', async ()
   );
 });
 
+test('updates pagination immediately when jumping to a distant row', async () => {
+  let resolveTargetRow;
+  const targetRow = new Promise((resolve) => {
+    resolveTargetRow = resolve;
+  });
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {total: 120, entries: [{row_hash: 'row1'}]};
+    }
+    if (path === '/objects/rows/row1') {
+      return {messages: [{role: 'user', content: 'first page'}]};
+    }
+    if (path === '/manifest/commit123/train.jsonl?offset=50&limit=50') {
+      return {total: 120, entries: [{row_hash: 'row51'}]};
+    }
+    if (path === '/objects/rows/row51') return {messages: [{role: 'user', content: 'row 51'}]};
+    if (path === '/manifest/commit123/train.jsonl?offset=100&limit=50') {
+      return {total: 120, entries: [{row_hash: 'row101'}, {row_hash: 'row102'}, {row_hash: 'row103'}]};
+    }
+    if (path === '/objects/rows/row101') return {messages: [{role: 'user', content: 'row 101'}]};
+    if (path === '/objects/rows/row102') return {messages: [{role: 'user', content: 'row 102'}]};
+    if (path === '/objects/rows/row103') return targetRow;
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first page'));
+
+  await wrapper.find('.datahub-row-page-button:last-of-type').trigger('click');
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Page 2 / 3'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('row 51'));
+
+  await wrapper.find('[data-testid="datahub-row-jump-input"]').setValue('103');
+  await wrapper.find('[data-testid="datahub-row-jump-form"] button').trigger('click');
+
+  await vi.waitFor(() => expect(datahubFetch).toHaveBeenCalledWith(
+    'alice',
+    'dataset',
+    '/manifest/commit123/train.jsonl?offset=100&limit=50',
+  ));
+  expect(wrapper.text()).toContain('Page 3 / 3');
+
+  resolveTargetRow({messages: [{role: 'user', content: 'target row 103'}]});
+  await vi.waitFor(() => expect(wrapper.text()).toContain('target row 103'));
+});
+
 test('searches the current JSONL file and lets reviewers jump to matching rows', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path, options) => {
     if (path === '/manifest/commit123/eval.jsonl?offset=0&limit=50') {
