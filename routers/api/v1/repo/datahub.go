@@ -376,7 +376,7 @@ func DatahubGovernance(ctx *context.APIContext) {
 	ctx.JSON(http.StatusOK, map[string]any{
 		"repository": map[string]any{
 			"name":                          ctx.Repo.Repository.Name,
-			"permissions":                   ctx.Repo.Permission,
+			"permissions":                   datahubGovernancePermissions(ctx),
 			"allow_merge_commits":           pullConfig.AllowMerge,
 			"allow_squash_merge":            pullConfig.AllowSquash,
 			"allow_rebase":                  pullConfig.AllowRebase,
@@ -406,6 +406,14 @@ func datahubPullRequestsConfig(ctx *context.APIContext, repo *repo_model.Reposit
 		return &repo_model.PullRequestsConfig{}
 	}
 	return unit.PullRequestsConfig()
+}
+
+func datahubGovernancePermissions(ctx *context.APIContext) map[string]bool {
+	return map[string]bool{
+		"pull":  ctx.Repo.CanRead(unit_model.TypeCode),
+		"push":  ctx.Repo.CanWrite(unit_model.TypeCode),
+		"admin": ctx.Repo.Permission.IsAdmin(),
+	}
 }
 
 func datahubGovernanceReviewers(reviewers []*user_model.User) []map[string]string {

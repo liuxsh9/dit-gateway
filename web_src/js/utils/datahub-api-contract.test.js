@@ -246,6 +246,9 @@ describe('governance contract', () => {
       'name',
       'permissions',
     ].sort());
+    expect(Object.keys(data.repository.permissions || {}).sort()).toEqual(['admin', 'pull', 'push'].sort());
+    expect(data.repository.permissions).not.toHaveProperty('AccessMode');
+    expect(data.repository.permissions).not.toHaveProperty('Units');
 
     for (const reviewer of data.reviewers || []) {
       expect(Object.keys(reviewer).sort()).toEqual(['full_name', 'login', 'username'].sort());
