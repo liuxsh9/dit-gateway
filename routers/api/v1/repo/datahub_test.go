@@ -12,7 +12,7 @@ import (
 
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/modules/setting"
-	context_service "forgejo.org/services/context"
+	app_context "forgejo.org/services/context"
 	"forgejo.org/services/contexttest"
 
 	"github.com/stretchr/testify/assert"
@@ -124,7 +124,7 @@ func TestDatahubListPullsRejectsUnknownStatus(t *testing.T) {
 	})
 
 	ctx, resp := contexttest.MockAPIContext(t, "GET /api/v1/repos/owner/repo/pulls?status=bogus")
-	ctx.Repo = &context_service.Repository{
+	ctx.Repo = &app_context.Repository{
 		Repository: &repo_model.Repository{
 			Name:       "repo",
 			IsDataRepo: true,
@@ -145,7 +145,7 @@ func TestDatahubListPullsKeepsNotFoundWhenDatahubDisabled(t *testing.T) {
 	})
 
 	ctx, resp := contexttest.MockAPIContext(t, "GET /api/v1/repos/owner/repo/pulls?status=bogus")
-	ctx.Repo = &context_service.Repository{
+	ctx.Repo = &app_context.Repository{
 		Repository: &repo_model.Repository{
 			Name:       "repo",
 			IsDataRepo: true,
