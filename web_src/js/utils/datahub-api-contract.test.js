@@ -229,4 +229,32 @@ describe('governance contract', () => {
     expect(data.links).toHaveProperty('collaboration');
     expect(data.links).toHaveProperty('branches');
   });
+
+  liveTest('GET /governance returns narrow anonymous-safe reviewer and repository fields', async () => {
+    const resp = await fetch(api('/governance'), {headers: headers()});
+    expect(resp.ok).toBe(true);
+    const data = await resp.json();
+
+    const repoKeys = Object.keys(data.repository || {});
+    expect(repoKeys.sort()).toEqual([
+      'allow_fast_forward_only_merge',
+      'allow_merge_commits',
+      'allow_rebase',
+      'allow_rebase_explicit',
+      'allow_squash_merge',
+      'default_merge_style',
+      'name',
+      'permissions',
+    ].sort());
+
+    for (const reviewer of data.reviewers || []) {
+      expect(Object.keys(reviewer).sort()).toEqual(['full_name', 'login', 'username'].sort());
+      expect(reviewer).not.toHaveProperty('email');
+      expect(reviewer).not.toHaveProperty('last_login');
+      expect(reviewer).not.toHaveProperty('login_name');
+      expect(reviewer).not.toHaveProperty('is_admin');
+      expect(reviewer).not.toHaveProperty('location');
+      expect(reviewer).not.toHaveProperty('website');
+    }
+  });
 });

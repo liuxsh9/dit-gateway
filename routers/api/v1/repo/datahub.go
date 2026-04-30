@@ -14,6 +14,7 @@ import (
 	git_model "forgejo.org/models/git"
 	repo_model "forgejo.org/models/repo"
 	unit_model "forgejo.org/models/unit"
+	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/datahub"
 	"forgejo.org/modules/json"
 	"forgejo.org/modules/setting"
@@ -370,10 +371,20 @@ func DatahubGovernance(ctx *context.APIContext) {
 		canMerge = git_model.IsUserMergeWhitelisted(ctx, protectedBranchRule, doerID, ctx.Repo.Permission)
 	}
 
+	pullConfig := datahubPullRequestsConfig(ctx, ctx.Repo.Repository)
 	repoLink := ctx.Repo.Repository.Link()
 	ctx.JSON(http.StatusOK, map[string]any{
-		"repository":         convert.ToRepo(ctx, ctx.Repo.Repository, ctx.Repo.Permission),
-		"reviewers":          convert.ToUsers(ctx, ctx.Doer, reviewers),
+		"repository": map[string]any{
+			"name":                          ctx.Repo.Repository.Name,
+			"permissions":                   ctx.Repo.Permission,
+			"allow_merge_commits":           pullConfig.AllowMerge,
+			"allow_squash_merge":            pullConfig.AllowSquash,
+			"allow_rebase":                  pullConfig.AllowRebase,
+			"allow_rebase_explicit":         pullConfig.AllowRebaseMerge,
+			"allow_fast_forward_only_merge": pullConfig.AllowFastForwardOnly,
+			"default_merge_style":           pullConfig.GetDefaultMergeStyle(),
+		},
+		"reviewers":          datahubGovernanceReviewers(reviewers),
 		"branch_protections": apiProtections,
 		"current_user": map[string]any{
 			"is_authenticated": ctx.Doer != nil,
@@ -387,6 +398,29 @@ func DatahubGovernance(ctx *context.APIContext) {
 			"new_branch_rule": repoLink + "/settings/branches/edit",
 		},
 	})
+}
+
+func datahubPullRequestsConfig(ctx *context.APIContext, repo *repo_model.Repository) *repo_model.PullRequestsConfig {
+	unit, err := repo.GetUnit(ctx, unit_model.TypePullRequests)
+	if err != nil {
+		return &repo_model.PullRequestsConfig{}
+	}
+	return unit.PullRequestsConfig()
+}
+
+func datahubGovernanceReviewers(reviewers []*user_model.User) []map[string]string {
+	apiReviewers := make([]map[string]string, 0, len(reviewers))
+	for _, reviewer := range reviewers {
+		if reviewer == nil {
+			continue
+		}
+		apiReviewers = append(apiReviewers, map[string]string{
+			"login":     reviewer.Name,
+			"username":  reviewer.Name,
+			"full_name": reviewer.FullName,
+		})
+	}
+	return apiReviewers
 }
 
 func DatahubGetManifest(ctx *context.APIContext) {
