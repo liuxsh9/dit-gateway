@@ -64,7 +64,11 @@ func DataHubPreview(ctx *context.Context) {
 		return
 	}
 
-	ctx.Data["DataHubCommit"] = ctx.Params("commit")
+	ref := ctx.Params("commit")
+	if ref == "" {
+		ref = ctx.Params("ref")
+	}
+	ctx.Data["DataHubCommit"] = ref
 	ctx.Data["DataHubPath"] = ctx.Params("*")
 	ctx.HTML(http.StatusOK, tplDataHubPreview)
 }

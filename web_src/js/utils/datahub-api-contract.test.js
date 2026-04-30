@@ -96,6 +96,13 @@ describe('tree contract', () => {
       expect(entry).toHaveProperty('sidecar_hash');
     }
   });
+
+  liveTest('GET /tree/main resolves the default branch like stats does', async () => {
+    const data = await fetchJSON('/tree/main/');
+    expect(data).toHaveProperty('commit_hash', commitHash);
+    expect(data).toHaveProperty('path');
+    expect(Array.isArray(data.entries)).toBe(true);
+  });
 });
 
 // ── stats ─────────────────────────────────────────────────────────────

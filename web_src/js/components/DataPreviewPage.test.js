@@ -268,6 +268,35 @@ test('resolves a branch-only preview URL to the first manifest file', async () =
   expect(wrapper.findComponent(viewerStub).props('filePath')).toBe('eval/hard.jsonl');
 });
 
+test('resolves a heads-prefixed branch preview URL without dropping the branch name', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/refs/heads/main') return {target_hash: 'abcdef1234567890'};
+    if (path === '/tree/abcdef1234567890') {
+      return {
+        entries: [
+          {name: 'train/sft.jsonl', obj_type: 'manifest'},
+        ],
+      };
+    }
+    if (path === '/stats/abcdef1234567890') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'heads/main',
+      filePath: 'train/sft.jsonl',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Viewer abcdef1234567890 / train/sft.jsonl'));
+
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/refs/heads/main');
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/refs/heads/');
+});
+
 test('shows a useful message when a branch-only preview has no manifest files', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/refs/heads/empty') return {target_hash: 'abcdef1234567890'};

@@ -140,7 +140,11 @@ func DatahubBatchUpload(ctx *context.APIContext) {
 
 func DatahubGetTree(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetTree(ctx, ctx.Repo.Repository.Name, ctx.Params(":hash"), ctx.Params("*"))
+		commit, err := datahubCommitForCore(ctx, ctx.Params(":hash"))
+		if err != nil {
+			return nil, http.StatusBadRequest, err
+		}
+		return datahub.DefaultClient().GetTree(ctx, ctx.Repo.Repository.Name, commit, ctx.Params("*"))
 	})
 }
 
