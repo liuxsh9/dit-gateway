@@ -4,6 +4,8 @@
 package repo
 
 import (
+	std_context "context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -42,12 +44,22 @@ func proxyToDatahubWithContentType(ctx *context.APIContext, contentType string, 
 			_, _ = ctx.Resp.Write(statusErr.Body())
 			return
 		}
+		if isDatahubProxyCancel(ctx.Req.Context(), err) {
+			return
+		}
 		ctx.Error(http.StatusBadGateway, "datahub proxy", err)
 		return
 	}
 	ctx.Resp.Header().Set("Content-Type", contentType)
 	ctx.Resp.WriteHeader(status)
 	_, _ = ctx.Resp.Write(data)
+}
+
+func isDatahubProxyCancel(reqCtx std_context.Context, err error) bool {
+	if errors.Is(err, std_context.Canceled) {
+		return true
+	}
+	return reqCtx != nil && errors.Is(reqCtx.Err(), std_context.Canceled)
 }
 
 func readBody(ctx *context.APIContext) ([]byte, bool) {
