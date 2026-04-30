@@ -432,6 +432,7 @@ export default {
     },
     async searchRows() {
       const query = this.searchQuery.trim();
+      this.rowJumpError = null;
       this.searchError = null;
       this.searchResults = [];
       this.searchTotalScanned = 0;

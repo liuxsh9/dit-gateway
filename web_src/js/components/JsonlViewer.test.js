@@ -531,6 +531,54 @@ test('hides the normal row index while search results are visible', async () => 
   expect(wrapper.find('.datahub-row-index').exists()).toBe(false);
 });
 
+test('clears stale row jump validation when searching', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/eval.jsonl?offset=0&limit=50') {
+      return {
+        total: 2,
+        entries: [
+          {row_hash: 'row1', content: {messages: [{role: 'user', content: 'first row'}]}},
+          {row_hash: 'row2', content: {messages: [{role: 'user', content: 'second row'}]}},
+        ],
+      };
+    }
+    if (path === '/search') {
+      return {
+        matches: [
+          {
+            file: 'eval.jsonl',
+            row_index: 1,
+            highlight: 'second',
+            content: {messages: [{role: 'user', content: 'second row'}]},
+          },
+        ],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'eval.jsonl',
+      singleRowMode: true,
+    },
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('first row'));
+
+  await wrapper.find('[data-testid="datahub-row-jump-input"]').setValue('999');
+  await wrapper.find('[data-testid="datahub-row-jump-form"] button').trigger('click');
+  expect(wrapper.text()).toContain('Enter a row number between 1 and 2.');
+
+  await wrapper.find('[data-testid="datahub-row-search-input"]').setValue('second');
+  await wrapper.find('[data-testid="datahub-row-search-form"] button').trigger('click');
+  await vi.waitFor(() => expect(wrapper.text()).toContain('1 match'));
+
+  expect(wrapper.text()).not.toContain('Enter a row number between 1 and 2.');
+});
+
 test('offers prefilled issue creation from a preview row and marks open linked issues', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/train/sft.jsonl?offset=0&limit=50') {
