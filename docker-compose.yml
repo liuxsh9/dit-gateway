@@ -30,6 +30,7 @@ services:
       FORGEJO__database__PASSWD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
       FORGEJO__i18n__LANGS: en-US
       FORGEJO__i18n__NAMES: English
+      FORGEJO__service__DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-true}"
       FORGEJO__datahub__ENABLED: "true"
       FORGEJO__datahub__CORE_URL: "http://core:8000"
       FORGEJO__datahub__SERVICE_TOKEN: "${SERVICE_TOKEN:?set SERVICE_TOKEN in .env}"

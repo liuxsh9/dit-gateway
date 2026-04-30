@@ -42,6 +42,21 @@ docker compose up --build -d
 docker compose ps
 ```
 
+Create the first site administrator from the gateway container:
+
+```bash
+docker compose exec gateway forgejo admin user create \
+  --username sys \
+  --email sys@example.com \
+  --random-password \
+  --random-password-length 24 \
+  --admin \
+  --must-change-password=false
+```
+
+The command prints the generated password once. Store it in the production
+password manager before continuing.
+
 Health checks:
 
 ```bash
@@ -85,6 +100,53 @@ SERVICE_TOKEN = <same-as-core>
 
 DIT Gateway defaults to English-only UI terminology so inherited Forgejo pages and DIT pages use the same GitHub-style labels: `Issues`, `Pull requests`, `Actions`, `Security`, `Insights`, `Labels`, `Milestones`, `Assignees`, `Open`, `Closed`, and `Merged`.
 
+## Initial Administrator Setup
+
+Production deployments should bootstrap the first administrator with the
+Forgejo CLI, not open public registration. The recommended first account is a
+break-glass site administrator such as `sys`; create named daily-use
+administrator and repository-owner accounts after the system is online.
+
+For Docker Compose:
+
+```bash
+docker compose exec gateway forgejo admin user create \
+  --username sys \
+  --email sys@example.com \
+  --random-password \
+  --random-password-length 24 \
+  --admin \
+  --must-change-password=false
+```
+
+For a non-Docker deployment, point the same command at the production config
+and work path:
+
+```bash
+./gitea migrate --config /path/to/app.ini --work-path /path/to/forgejo-data
+
+./gitea admin user create \
+  --config /path/to/app.ini \
+  --work-path /path/to/forgejo-data \
+  --username sys \
+  --email sys@example.com \
+  --random-password \
+  --random-password-length 24 \
+  --admin \
+  --must-change-password=false
+```
+
+Notes:
+
+- `SERVICE_TOKEN` is the gateway-to-core service secret. It is not the `sys`
+  password and should not be used for user login.
+- Keep `DISABLE_REGISTRATION=true` in production unless there is an explicit
+  onboarding process for public signups.
+- Keep the `sys` account for emergency administration only. Use separate named
+  accounts for daily administration and repository ownership.
+- If an operator should rotate the generated password during handoff, set
+  `--must-change-password=true` instead.
+
 ## Build Notes
 
 Use the root `Dockerfile` for deployment. It preserves Forgejo's official Docker entrypoint, bindata generation, SQLite build tags, and environment-to-`app.ini` wiring.
@@ -105,6 +167,8 @@ Before moving a server into use:
 - `docker compose ps` shows `db`, `core`, and `gateway` healthy.
 - `curl http://localhost:8000/health` returns core `status: healthy`.
 - `curl http://localhost:3000/api/healthz` returns HTTP 200.
+- The first site administrator was created with `forgejo admin user create`
+  and public registration is disabled unless intentionally enabled.
 - Creating a gateway data repo also creates the backing core repo.
 - The repository UI stays English even when the browser language is Chinese.
 - Pushing a small ML 2.0 / OpenAI messages JSONL dataset through `dit` succeeds.
