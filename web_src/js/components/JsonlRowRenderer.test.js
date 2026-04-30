@@ -181,6 +181,41 @@ test('surfaces ML2 schema warnings and collapses long message content', () => {
   expect(wrapper.text()).toContain('Show full content');
 });
 
+test('renders only a short preview for collapsed long message content until expanded', async () => {
+  const hiddenTail = 'hidden tail should not be in the collapsed DOM';
+  const longContent = `${'visible prefix '.repeat(80)}${hiddenTail}`;
+  const wrapper = mount(JsonlRowRenderer, {
+    props: {
+      rowNumber: 4,
+      row: {
+        version: '2.0.0',
+        meta_info: {
+          teacher: 'glm-5-thinking',
+          query_source: 'demo',
+          response_generate_time: '2026-04-28',
+          response_update_time: '2026-04-28',
+          owner: 'data',
+          language: 'en',
+          category: 'chat',
+          rounds: 1,
+        },
+        messages: [
+          {role: 'user', content: longContent},
+        ],
+      },
+    },
+  });
+
+  expect(wrapper.find('.datahub-sft-content-collapsed').exists()).toBe(true);
+  expect(wrapper.text()).toContain('visible prefix');
+  expect(wrapper.text()).not.toContain(hiddenTail);
+
+  await wrapper.find('.datahub-sft-toggle').trigger('click');
+
+  expect(wrapper.text()).toContain(hiddenTail);
+  expect(wrapper.find('.datahub-sft-content-collapsed').exists()).toBe(false);
+});
+
 test('can collapse whitespace for dense row review', () => {
   const wrapper = mount(JsonlRowRenderer, {
     props: {

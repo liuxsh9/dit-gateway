@@ -48,7 +48,7 @@
             class="datahub-sft-content"
             :class="{'datahub-sft-content-collapsed': isLongContent(message.content) && !isContentExpanded(index)}"
           >
-            {{ renderContent(message.content) }}
+            {{ visibleMessageContent(message.content, index) }}
           </div>
           <div v-else class="datahub-sft-empty-content">empty content</div>
           <button
@@ -71,7 +71,7 @@
             <pre
               class="datahub-sft-field-content"
               :class="{'datahub-sft-field-collapsed': isLongContent(message.reasoning_content) && !isMessageFieldExpanded(index, 'reasoning')}"
-            >{{ renderContent(message.reasoning_content) }}</pre>
+            >{{ visibleMessageFieldContent(message.reasoning_content, index, 'reasoning') }}</pre>
             <button
               v-if="isLongContent(message.reasoning_content)"
               type="button"
@@ -99,7 +99,7 @@
                   <strong>{{ toolCall.function?.name || toolCall.name || 'tool' }}</strong>
                   <span v-if="toolCall.id">{{ toolCall.id }}</span>
                 </div>
-                <pre>{{ formatJson(toolCall.function?.arguments ?? toolCall.arguments ?? toolCall) }}</pre>
+                <pre>{{ visibleToolCallContent(toolCall, index, toolIndex) }}</pre>
               </div>
             </div>
             <button
@@ -156,6 +156,7 @@ const ROW_KEYS = new Set([
 ]);
 
 const MESSAGE_ROLE_ORDER = ['system', 'user', 'assistant', 'tool', 'developer'];
+const COLLAPSED_CONTENT_CHARS = 600;
 
 export default {
   props: {
@@ -317,6 +318,31 @@ export default {
     },
     isLongToolCalls(toolCalls) {
       return this.formatJson(toolCalls).split('\n').length > 8 || this.formatJson(toolCalls).length > 900;
+    },
+    collapsedPreview(content) {
+      if (!content || content.length <= COLLAPSED_CONTENT_CHARS) return content;
+      return `${content.slice(0, COLLAPSED_CONTENT_CHARS).trimEnd()}\n...`;
+    },
+    visibleMessageContent(value, index) {
+      const content = this.renderContent(value);
+      if (!this.isLongContent(value) || this.isContentExpanded(index)) return content;
+      return this.collapsedPreview(content);
+    },
+    visibleMessageFieldContent(value, index, field) {
+      const content = this.renderContent(value);
+      if (!this.isLongContent(value) || this.isMessageFieldExpanded(index, field)) return content;
+      return this.collapsedPreview(content);
+    },
+    toolCallBody(toolCall) {
+      return this.formatJson(toolCall.function?.arguments ?? toolCall.arguments ?? toolCall);
+    },
+    visibleToolCallContent(toolCall, messageIndex, toolIndex) {
+      const content = this.toolCallBody(toolCall);
+      if (!this.isLongToolCalls(this.messages[messageIndex]?.tool_calls || []) || this.isMessageFieldExpanded(messageIndex, 'tool_calls')) {
+        return content;
+      }
+      if (toolIndex > 0) return 'Collapsed. Expand tool_calls to inspect this call.';
+      return this.collapsedPreview(content);
     },
     isContentExpanded(index) {
       return this.expandedContent.has(index);
