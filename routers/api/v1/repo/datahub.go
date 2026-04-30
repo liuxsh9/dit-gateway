@@ -6,6 +6,7 @@ package repo
 import (
 	std_context "context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -162,9 +163,33 @@ func DatahubGetLog(ctx *context.APIContext) {
 }
 
 func DatahubListPulls(ctx *context.APIContext) {
-	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().ListPulls(ctx, ctx.Repo.Repository.Name, ctx.FormString("status"))
+	if !setting.DataHub.Enabled {
+		ctx.NotFound()
+		return
+	}
+	if !ctx.Repo.Repository.IsDataRepo {
+		ctx.NotFound()
+		return
+	}
+	status, ok := normalizeDatahubPullStatus(ctx.FormString("status"))
+	if !ok {
+		ctx.Error(http.StatusBadRequest, "DatahubListPulls", fmt.Sprintf("unknown pull status: %s", ctx.FormString("status")))
+		return
+	}
+	proxyToDatahubWithContentType(ctx, "application/json", func() ([]byte, int, error) {
+		return datahub.DefaultClient().ListPulls(ctx, ctx.Repo.Repository.Name, status)
 	})
+}
+
+func normalizeDatahubPullStatus(status string) (string, bool) {
+	switch status {
+	case "", "all":
+		return "", true
+	case "open", "closed", "merged":
+		return status, true
+	default:
+		return "", false
+	}
 }
 
 func DatahubCreatePull(ctx *context.APIContext) {
