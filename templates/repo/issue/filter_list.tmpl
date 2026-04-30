@@ -148,7 +148,7 @@
 	{{svg "octicon-triangle-down" 14 "dropdown icon"}}
 	<div class="menu">
 		{{$keyword := StringUtils.RemoveAllPrefix $.Keyword "sort:"}}
-		<a rel="nofollow" class="{{if or (eq .SortType "relevance") (not .SortType)}}active {{end}}item" href="?q={{$keyword}}&type={{$.ViewType}}&sort=relevency&state={{$.State}}&labels={{.SelectLabels}}&milestone={{$.MilestoneID}}&project={{$.ProjectID}}&assignee={{$.AssigneeID}}&poster={{$.PosterID}}{{if $.ShowArchivedLabels}}&archived=true{{end}}">{{ctx.Locale.Tr "repo.issues.filter_sort.relevance"}}</a>
+		<a rel="nofollow" class="{{if or (eq .SortType "relevance") (not .SortType)}}active {{end}}item" href="?q={{$keyword}}&type={{$.ViewType}}&sort=relevance&state={{$.State}}&labels={{.SelectLabels}}&milestone={{$.MilestoneID}}&project={{$.ProjectID}}&assignee={{$.AssigneeID}}&poster={{$.PosterID}}{{if $.ShowArchivedLabels}}&archived=true{{end}}">{{ctx.Locale.Tr "repo.issues.filter_sort.relevance"}}</a>
 		{{$o := .}}
 		{{range $opt := StringUtils.Make "latest" "oldest" "recentupdate" "leastupdate" "mostcomment" "leastcomment" "nearduedate" "farduedate"}}
 			{{$text := ctx.Locale.Tr (printf "repo.issues.filter_sort.%s" $opt)}}

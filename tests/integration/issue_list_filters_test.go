@@ -64,6 +64,19 @@ func TestIssueSorting(t *testing.T) {
 				"Sort option %s ('%s') not found in dropdown", key, locale.Tr("repo.issues.filter_sort."+key))
 		}
 	})
+
+	t.Run("Relevance link uses canonical sort parameter", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		req := NewRequest(t, "GET", "/user2/repo1/issues")
+		resp := MakeRequest(t, req, http.StatusOK)
+		htmlDoc := NewHTMLParser(t, resp.Body)
+
+		relevanceLink := htmlDoc.Find(`.list-header-sort .menu a`).First()
+		href, _ := relevanceLink.Attr("href")
+		assert.Contains(t, href, "sort=relevance")
+		assert.NotContains(t, href, "sort=relevency")
+	})
 }
 
 func TestIssueFilterLinks(t *testing.T) {
