@@ -59,7 +59,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - core-data:/data
+      - core-data:/data/dit
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
