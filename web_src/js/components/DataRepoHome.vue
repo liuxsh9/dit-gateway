@@ -222,12 +222,13 @@
                           :size="16"
                         />
                       </span>
-                      <a
+                      <button
                         v-if="entry.type === 'tree'"
-                        class="datahub-file-link datahub-folder-name-link"
-                        :aria-label="`Review folder ${entry.displayName}`"
-                        :href="previewHref(entry.path)"
-                      >{{ entry.displayName }}</a>
+                        type="button"
+                        class="datahub-file-link datahub-folder-name-link datahub-folder-button"
+                        :aria-label="`Open folder ${entry.displayName}`"
+                        @click="openFolder(entry.path)"
+                      >{{ entry.displayName }}</button>
                       <a
                         v-else
                         class="datahub-file-link"

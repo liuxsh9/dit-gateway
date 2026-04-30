@@ -349,7 +349,8 @@ test('renders a GitHub-like Data file browser without duplicate side rails', asy
   expect(wrapper.text()).not.toContain('Blame');
 
   const trainLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'train');
-  expect(trainLink.attributes('href')).toBe('/alice/dataset/data/preview/commit123/train');
+  expect(trainLink.attributes('href')).toBeUndefined();
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/train"]').exists()).toBe(false);
   expect(wrapper.find('.datahub-path-bar').exists()).toBe(false);
   expect(wrapper.find('.datahub-parent-row').exists()).toBe(false);
 });
@@ -518,7 +519,8 @@ test('renders mobile-readable file row metrics without relying on table columns'
   await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
   const evalLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'eval');
-  expect(evalLink.attributes('href')).toBe('/alice/dataset/data/preview/commit123/eval');
+  expect(evalLink.attributes('href')).toBeUndefined();
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/eval"]').exists()).toBe(false);
   expect(wrapper.find('.datahub-path-bar').exists()).toBe(false);
   expect(wrapper.find('.datahub-parent-row').exists()).toBe(false);
 
@@ -569,7 +571,8 @@ test('uses stats file paths to expose nested JSONL files when the root tree only
   await vi.waitFor(() => expect(wrapper.text()).toContain('eval'));
 
   const evalLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'eval');
-  expect(evalLink.attributes('href')).toBe('/alice/dataset/data/preview/commit123/eval');
+  expect(evalLink.attributes('href')).toBeUndefined();
+  expect(wrapper.find('a[href="/alice/dataset/data/preview/commit123/eval"]').exists()).toBe(false);
   expect(wrapper.find('.datahub-parent-row').exists()).toBe(false);
   expect(wrapper.text()).not.toContain('weather.jsonl');
 });
@@ -897,7 +900,7 @@ test('renders the root tree while file statistics are still loading', async () =
   expect(wrapper.find('.datahub-file-row-folder').text()).toContain('stress-large');
 });
 
-test('uses folder names as direct preview links while file statistics are still loading', async () => {
+test('uses folder names to browse folders while file statistics are still loading', async () => {
   datahubFetch.mockImplementation((owner, repo, path) => {
     if (path === '/refs') return Promise.resolve([{name: 'heads/main', target_hash: 'commit123'}]);
     if (path === '/refs/heads/main') return Promise.resolve({target_hash: 'commit123'});
@@ -920,8 +923,11 @@ test('uses folder names as direct preview links while file statistics are still 
   await vi.waitFor(() => expect(wrapper.text()).toContain('stress-large'));
 
   const folderLink = wrapper.findAll('.datahub-folder-name-link').find((link) => link.text() === 'stress');
-  expect(folderLink.attributes('href')).toBe('/alice/large-dataset/data/preview/commit123/stress');
-  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'large-dataset', '/tree/commit123/stress');
+  expect(folderLink.attributes('href')).toBeUndefined();
+  expect(wrapper.find('a[href="/alice/large-dataset/data/preview/commit123/stress"]').exists()).toBe(false);
+  await folderLink.trigger('click');
+  expect(wrapper.vm.currentPath).toBe('stress/');
+  expect(wrapper.find('.datahub-path-bar').text()).toContain('stress');
   expect(wrapper.text()).toContain('Loading file statistics');
 
   wrapper.unmount();
