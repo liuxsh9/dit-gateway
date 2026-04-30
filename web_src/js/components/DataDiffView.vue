@@ -11,11 +11,12 @@
           <span>Rows added</span>
         </div>
         <div class="datahub-diff-stat">
-          <strong>
-            <span class="datahub-stat-remove">-{{ summary.rows_removed || 0 }}</span>
-            <span class="datahub-stat-refresh">~{{ summary.rows_refreshed || 0 }}</span>
-          </strong>
-          <span>Removed / refreshed</span>
+          <strong class="datahub-stat-remove">{{ summary.rows_removed || 0 }}</strong>
+          <span>Rows removed</span>
+        </div>
+        <div class="datahub-diff-stat">
+          <strong class="datahub-stat-refresh">{{ summary.rows_refreshed || 0 }}</strong>
+          <span>Rows refreshed</span>
         </div>
       </div>
     </div>

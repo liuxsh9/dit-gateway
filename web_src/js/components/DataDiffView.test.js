@@ -108,6 +108,42 @@ test('renders github-like files changed controls and reviewed progress in review
   expect(wrapper.text()).toContain('Viewed 1 of 2 files');
 });
 
+test('renders removed and refreshed summary counts with readable labels', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 0, rows_removed: 2, rows_refreshed: 2},
+        files: [
+          {
+            path: 'refresh.jsonl',
+            added: 0,
+            removed: 2,
+            refreshed: 2,
+            added_rows: [],
+            removed_rows: [],
+            refreshed_rows: [],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {owner: 'alice', repo: 'dataset', oldCommit: 'old123', newCommit: 'new456'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('refresh.jsonl'));
+
+  const stats = wrapper.findAll('.datahub-diff-stat');
+  expect(stats.map((stat) => stat.find('span').text())).toContain('Rows removed');
+  expect(stats.map((stat) => stat.find('span').text())).toContain('Rows refreshed');
+  expect(stats.find((stat) => stat.text().includes('Rows removed')).find('strong').text()).toBe('2');
+  expect(stats.find((stat) => stat.text().includes('Rows refreshed')).find('strong').text()).toBe('2');
+  expect(stats.some((stat) => stat.text().includes('-2~2'))).toBe(false);
+});
+
 test('reviews changed rows with a preview-style row index instead of rendering every row at once', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/diff/old123/new456') {
