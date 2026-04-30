@@ -8,8 +8,7 @@ export async function datahubFetch(owner, repo, path, options = {}) {
     ...options,
   });
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Datahub API ${resp.status}: ${text}`);
+    throw datahubResponseError(resp);
   }
   const text = await resp.text();
   return text ? JSON.parse(text) : null;
@@ -24,8 +23,12 @@ export async function datahubFetchRaw(owner, repo, path, options = {}) {
     ...options,
   });
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Datahub API ${resp.status}: ${text}`);
+    throw datahubResponseError(resp);
   }
   return resp;
+}
+
+function datahubResponseError(resp) {
+  const statusText = resp.statusText ? ` ${resp.statusText}` : '';
+  return new Error(`DataHub request failed with ${resp.status}${statusText}.`);
 }

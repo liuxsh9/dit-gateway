@@ -21,3 +21,14 @@ test('datahubFetch returns null for empty successful responses', async () => {
 
   await expect(datahubFetch('alice', 'dataset', '/meta/compute')).resolves.toBeNull();
 });
+
+test('datahubFetch hides raw API error bodies from UI errors', async () => {
+  vi.spyOn(window, 'fetch').mockResolvedValue(new Response('{"message":"object not found","detail":"raw core traceback"}', {
+    status: 404,
+    statusText: 'Not Found',
+    headers: {'Content-Type': 'application/json'},
+  }));
+
+  await expect(datahubFetch('alice', 'dataset', '/tree/badcommit')).rejects.toThrow('DataHub request failed with 404 Not Found.');
+  await expect(datahubFetch('alice', 'dataset', '/tree/badcommit')).rejects.not.toThrow('raw core traceback');
+});
