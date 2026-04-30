@@ -547,6 +547,9 @@ test('offers prefilled issue creation from a preview row and marks open linked i
 
   const link = wrapper.find('a.datahub-preview-issue-link');
   expect(link.exists()).toBe(true);
+  expect(link.attributes('target')).toBe('_blank');
+  expect(link.attributes('rel')).toContain('noopener');
+  expect(link.attributes('rel')).toContain('noreferrer');
   expect(link.attributes('href')).toContain('/alice/dataset/issues/new?');
   const issueUrl = new URL(link.attributes('href'), 'http://localhost');
   expect(issueUrl.searchParams.get('title')).toBe('[Data issue] train/sft.jsonl row 1');

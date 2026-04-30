@@ -142,6 +142,8 @@
             <a
               class="ui small basic button datahub-preview-issue-link"
               :href="issueLinkForRow(selectedRow, selectedRowNumber)"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Open issue
             </a>

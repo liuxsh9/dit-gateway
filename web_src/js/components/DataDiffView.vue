@@ -191,7 +191,12 @@
                       >
                         Comment
                       </button>
-                      <a class="datahub-row-issue-link" :href="issueLinkForRow(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType)">
+                      <a
+                        class="datahub-row-issue-link"
+                        :href="issueLinkForRow(selectedReviewRow.row, selectedReviewRow.sourceIndex, selectedReviewRow.changeType)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         Open issue
                       </a>
                     </span>
@@ -269,6 +274,8 @@
                           <a
                             class="datahub-row-issue-link"
                             :href="issueLinkForRow(selectedReviewRow.beforeRow, selectedReviewRow.sourceIndex, 'before refresh')"
+                            target="_blank"
+                            rel="noopener noreferrer"
                           >
                             Open issue
                           </a>
@@ -314,6 +321,8 @@
                           <a
                             class="datahub-row-issue-link"
                             :href="issueLinkForRow(selectedReviewRow.afterRow, selectedReviewRow.sourceIndex, 'after refresh')"
+                            target="_blank"
+                            rel="noopener noreferrer"
                           >
                             Open issue
                           </a>

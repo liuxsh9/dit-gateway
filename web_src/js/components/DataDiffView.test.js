@@ -316,6 +316,9 @@ test('offers a prefilled issue link for a changed data row', async () => {
 
   const link = wrapper.find('a.datahub-row-issue-link');
   expect(link.exists()).toBe(true);
+  expect(link.attributes('target')).toBe('_blank');
+  expect(link.attributes('rel')).toContain('noopener');
+  expect(link.attributes('rel')).toContain('noreferrer');
   expect(link.attributes('href')).toContain('/alice/dataset/issues/new?');
   const issueUrl = new URL(link.attributes('href'), 'http://localhost');
   expect(issueUrl.searchParams.get('body')).toContain('row_hash: 37655963d03826acf27a3217ef2d5a8dc1e79cc6b903f46c518fe2bf79639b84');
