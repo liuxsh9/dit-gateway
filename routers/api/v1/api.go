@@ -1489,6 +1489,7 @@ func Routes() *web.Route {
 					m.Get("/governance", repo.DatahubGovernance)
 					m.Get("/manifest/{commit}/*", repo.DatahubGetManifest)
 					m.Get("/export/{commit}/*", repo.DatahubExportFile)
+					m.Head("/export/{commit}/*", repo.DatahubExportFile)
 					m.Post("/meta/compute", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubMetaCompute)
 					m.Get("/meta/diff/{old}/{new}", repo.DatahubMetaDiff)
 					m.Get("/meta/{commit}/*", repo.DatahubMetaGet)

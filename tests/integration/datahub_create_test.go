@@ -36,6 +36,7 @@ type datahubCoreCreateRecorder struct {
 	logged         bool
 	statsRead      bool
 	dedupRead      bool
+	exportRead     bool
 	commentsListed bool
 	reviewsListed  bool
 	commentCreated bool
@@ -101,6 +102,14 @@ func mockDatahubCoreCreate(t *testing.T, expectedRepo string) *datahubCoreCreate
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"duplicate_rows":0}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/export/"+datahubTestMainCommit+"/train.jsonl":
+			recorder.mu.Lock()
+			recorder.exportRead = true
+			recorder.mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("{\"id\":1}\n"))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/pulls/1/comments":
 			recorder.mu.Lock()
 			recorder.commentsListed = true
@@ -200,6 +209,14 @@ func (r *datahubCoreCreateRecorder) assertStatsAndDedupRead(t *testing.T) {
 	defer r.mu.Unlock()
 	assert.True(t, r.statsRead, "expected gateway datahub proxy to resolve branch stats through datahub-core")
 	assert.True(t, r.dedupRead, "expected gateway datahub proxy to resolve branch dedup through datahub-core")
+}
+
+func (r *datahubCoreCreateRecorder) assertExportRead(t *testing.T) {
+	t.Helper()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	assert.True(t, r.exportRead, "expected gateway datahub proxy to probe export through datahub-core")
 }
 
 func (r *datahubCoreCreateRecorder) assertPullConversationListed(t *testing.T) {
@@ -374,6 +391,28 @@ func TestAPIDatahubStatsAndDedupAcceptBranchNames(t *testing.T) {
 	resp = session.MakeRequest(t, req, http.StatusOK)
 	assert.Contains(t, resp.Body.String(), `"duplicate_rows":0`)
 	recorder.assertStatsAndDedupRead(t)
+}
+
+func TestAPIDatahubExportSupportsHead(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "api-data-repo-export-head"
+	recorder := mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository, auth_model.AccessTokenScopeWriteUser)
+
+	req := NewRequestWithJSON(t, "POST", "/api/v1/user/repos", map[string]any{
+		"name":         repoName,
+		"is_data_repo": true,
+	}).AddTokenAuth(token)
+	session.MakeRequest(t, req, http.StatusCreated)
+
+	req = NewRequest(t, "HEAD", "/api/v1/repos/user2/"+repoName+"/datahub/export/"+datahubTestMainCommit+"/train.jsonl").AddTokenAuth(token)
+	resp := session.MakeRequest(t, req, http.StatusOK)
+	assert.Equal(t, "application/x-ndjson", resp.Header().Get("Content-Type"))
+	assert.Empty(t, resp.Body.String())
+	recorder.assertExportRead(t)
 }
 
 func TestAPIDatahubMergeRequiresAuthenticatedWriter(t *testing.T) {

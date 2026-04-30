@@ -53,6 +53,9 @@ func proxyToDatahubWithContentType(ctx *context.APIContext, contentType string, 
 	}
 	ctx.Resp.Header().Set("Content-Type", contentType)
 	ctx.Resp.WriteHeader(status)
+	if ctx.Req.Method == http.MethodHead {
+		return
+	}
 	_, _ = ctx.Resp.Write(data)
 }
 
