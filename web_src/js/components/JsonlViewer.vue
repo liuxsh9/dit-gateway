@@ -95,7 +95,7 @@
     </div>
 
     <div v-else-if="singleRowMode" class="datahub-row-review">
-      <aside class="datahub-row-index" aria-label="JSONL rows">
+      <aside v-if="!searchResults.length" class="datahub-row-index" aria-label="JSONL rows">
         <div class="datahub-row-index-list">
           <button
             v-for="(row, idx) in rows"
