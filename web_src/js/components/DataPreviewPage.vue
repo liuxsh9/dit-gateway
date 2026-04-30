@@ -105,7 +105,13 @@
           </div>
         </div>
         <div v-else-if="!canPreviewFile" class="ui message">
-          No JSONL manifest files are available for this ref yet.
+          <template v-if="unpreviewableFilePath">
+            {{ unpreviewableFilePath }} is not a JSONL manifest file.
+            <p>Choose a .jsonl file from the file list.</p>
+          </template>
+          <template v-else>
+            No JSONL manifest files are available for this ref yet.
+          </template>
         </div>
         <JsonlViewer
           v-else-if="canPreviewFile"
@@ -148,6 +154,7 @@ export default {
       openDataIssuesHref: '',
       resolvedCommitHash: '',
       resolvedFilePath: '',
+      unpreviewableFilePath: '',
     };
   },
   computed: {
@@ -248,6 +255,7 @@ export default {
       this.resolvedCommitHash = await this.resolveCommitHash();
       const requestedFilePath = this.normalizePath(this.filePath);
       this.resolvedFilePath = this.isManifestPath(requestedFilePath) ? requestedFilePath : '';
+      this.unpreviewableFilePath = requestedFilePath && !this.isManifestPath(requestedFilePath) && !this.looksLikeDirectoryPath(requestedFilePath) ? requestedFilePath : '';
       this.restoreTreeState();
       this.ensureSelectedPathFoldersOpen();
 
@@ -256,13 +264,13 @@ export default {
       this.tree = tree;
       this.setTreeDirectory('', tree.entries || []);
       this.treeLoading = false;
-      if (!this.resolvedFilePath) {
+      if (!this.resolvedFilePath && !this.unpreviewableFilePath) {
         this.resolvedFilePath = this.resolveFilePath();
         this.ensureSelectedPathFoldersOpen();
       }
       await this.loadSelectedPathDirectories();
       await this.loadOpenFolderDirectories();
-      this.resolvedFilePath = await this.resolvePreviewFilePath(this.resolvedFilePath || requestedFilePath);
+      this.resolvedFilePath = await this.resolvePreviewFilePath(this.resolvedFilePath || (this.unpreviewableFilePath ? '' : requestedFilePath));
       this.ensureSelectedPathFoldersOpen();
       await this.loadSelectedPathDirectories();
       await this.loadOpenFolderDirectories();
@@ -270,7 +278,7 @@ export default {
       const stats = await statsPromise;
       this.stats = stats;
       this.ensureSelectedPathFoldersOpen();
-      if (!this.resolvedFilePath) {
+      if (!this.resolvedFilePath && !this.unpreviewableFilePath) {
         this.resolvedFilePath = this.resolveFilePath();
         this.ensureSelectedPathFoldersOpen();
         await this.loadSelectedPathDirectories();
@@ -363,6 +371,10 @@ export default {
     },
     isManifestPath(path) {
       return /\.jsonl$/i.test(this.normalizePath(path));
+    },
+    looksLikeDirectoryPath(path) {
+      const normalized = this.normalizePath(path);
+      return !normalized || normalized.endsWith('/') || !normalized.split('/').pop().includes('.');
     },
     async resolvePreviewFilePath(path) {
       const normalized = this.normalizePath(path);

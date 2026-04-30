@@ -236,6 +236,37 @@ test('does not mount the JSONL viewer when a folder preview cannot resolve a man
   wrapper.unmount();
 });
 
+test('explains when a requested file is not JSONL previewable', async () => {
+  datahubFetch.mockImplementation((_owner, _repo, path) => {
+    if (path === '/tree/abcdef1234567890') {
+      return Promise.resolve({
+        entries: [
+          {name: 'README.md', obj_type: 'blob', obj_hash: 'readme'},
+          {name: 'train/sft.jsonl', obj_type: 'manifest', obj_hash: 'manifest'},
+        ],
+      });
+    }
+    if (path === '/stats/abcdef1234567890') return Promise.resolve({files: [{path: 'train/sft.jsonl', row_count: 1}]});
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'abcdef1234567890',
+      filePath: 'README.md',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('README.md is not a JSONL manifest file.'));
+  expect(wrapper.text()).toContain('Choose a .jsonl file from the file list.');
+  expect(wrapper.findComponent(viewerStub).exists()).toBe(false);
+
+  wrapper.unmount();
+});
+
 test('shows specific preview resolution errors from the API', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/refs/heads/badref') {
