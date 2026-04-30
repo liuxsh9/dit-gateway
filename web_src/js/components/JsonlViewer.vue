@@ -222,6 +222,7 @@ import {createVirtualScroll} from '../utils/virtual-scroll.js';
 import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
 const PAGE_SIZE = 50;
+const ROW_FETCH_CONCURRENCY = 4;
 const PLACEHOLDER_ROW_HASH_PATTERN = /^row-\d+$/i;
 const DATAHUB_ROW_CONTEXT_MARKER = 'datahub-row-context';
 
@@ -329,7 +330,17 @@ export default {
       await this.loadOpenRowIssues();
     },
     async loadRows(entries) {
-      return Promise.all(entries.map((entry) => this.loadRow(entry)));
+      const rows = new Array(entries.length);
+      let nextIndex = 0;
+      const workers = Array.from({length: Math.min(ROW_FETCH_CONCURRENCY, entries.length)}, async () => {
+        while (nextIndex < entries.length) {
+          const index = nextIndex;
+          nextIndex += 1;
+          rows[index] = await this.loadRow(entries[index]);
+        }
+      });
+      await Promise.all(workers);
+      return rows;
     },
     async loadRow(entry) {
       const inlineRow = this.extractInlineRow(entry);

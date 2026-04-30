@@ -55,6 +55,57 @@ test('loads paged manifest entries and row objects from core API', async () => {
   expect(wrapper.text()).toContain('Explain LFU');
 });
 
+test('limits row object fetch concurrency while loading a manifest page', async () => {
+  let activeRowFetches = 0;
+  let maxActiveRowFetches = 0;
+  const rowResolvers = [];
+
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
+      return {
+        total: 8,
+        entries: Array.from({length: 8}, (_, index) => ({row_hash: `row${index + 1}`})),
+      };
+    }
+    if (path.startsWith('/objects/rows/row')) {
+      activeRowFetches += 1;
+      maxActiveRowFetches = Math.max(maxActiveRowFetches, activeRowFetches);
+      return new Promise((resolve) => {
+        rowResolvers.push(() => {
+          activeRowFetches -= 1;
+          resolve({instruction: path.split('/').pop()});
+        });
+      });
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(JsonlViewer, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'commit123',
+      filePath: 'train.jsonl',
+    },
+  });
+
+  await vi.waitFor(() => expect(rowResolvers).toHaveLength(4));
+  expect(maxActiveRowFetches).toBeLessThanOrEqual(4);
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/objects/rows/row5');
+
+  const releaseQueuedRows = async () => {
+    const resolvers = rowResolvers.splice(0);
+    for (const resolve of resolvers) resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+  await releaseQueuedRows();
+  await vi.waitFor(() => expect(rowResolvers).toHaveLength(4));
+  await releaseQueuedRows();
+  await vi.waitFor(() => expect(wrapper.text()).toContain('row8'));
+  expect(maxActiveRowFetches).toBeLessThanOrEqual(4);
+});
+
 test('shows visible loading context while preview rows are loading', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/manifest/commit123/train.jsonl?offset=0&limit=50') {
