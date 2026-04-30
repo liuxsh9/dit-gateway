@@ -236,6 +236,30 @@ test('does not mount the JSONL viewer when a folder preview cannot resolve a man
   wrapper.unmount();
 });
 
+test('shows specific preview resolution errors from the API', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/refs/heads/badref') {
+      throw new Error("DataHub request failed with 404 Not Found: Ref 'heads/badref' not found.");
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPreviewPage, {
+    props: {
+      owner: 'alice',
+      repo: 'dataset',
+      commitHash: 'badref',
+      filePath: '',
+    },
+    global: {stubs: {JsonlViewer: viewerStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain("Ref 'heads/badref' not found"));
+  expect(wrapper.findComponent(viewerStub).exists()).toBe(false);
+
+  wrapper.unmount();
+});
+
 test('resolves a branch-only preview URL to the first manifest file', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/refs/heads/main') return {target_hash: 'abcdef1234567890'};

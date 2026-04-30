@@ -8,7 +8,7 @@ export async function datahubFetch(owner, repo, path, options = {}) {
     ...options,
   });
   if (!resp.ok) {
-    throw datahubResponseError(resp);
+    throw await datahubResponseError(resp);
   }
   const text = await resp.text();
   return text ? JSON.parse(text) : null;
@@ -23,12 +23,34 @@ export async function datahubFetchRaw(owner, repo, path, options = {}) {
     ...options,
   });
   if (!resp.ok) {
-    throw datahubResponseError(resp);
+    throw await datahubResponseError(resp);
   }
   return resp;
 }
 
-function datahubResponseError(resp) {
+async function datahubResponseError(resp) {
   const statusText = resp.statusText ? ` ${resp.statusText}` : '';
-  return new Error(`DataHub request failed with ${resp.status}${statusText}.`);
+  const summary = await datahubErrorSummary(resp);
+  return new Error(`DataHub request failed with ${resp.status}${statusText}${summary ? `: ${summary}` : ''}.`);
+}
+
+async function datahubErrorSummary(resp) {
+  const contentType = resp.headers?.get?.('Content-Type') || '';
+  if (!contentType.includes('application/json')) return '';
+
+  try {
+    const body = await resp.clone().json();
+    const summary = [body?.message, body?.detail, body?.error]
+      .find((value) => typeof value === 'string' && value.trim());
+    return sanitizeErrorSummary(summary);
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeErrorSummary(summary) {
+  if (!summary) return '';
+  return summary
+    .replace(/\s+/g, ' ')
+    .slice(0, 180);
 }
