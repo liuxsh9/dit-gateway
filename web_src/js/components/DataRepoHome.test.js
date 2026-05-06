@@ -601,6 +601,7 @@ test('shows dit workflow commands for dataset collaboration', async () => {
 
   expect(wrapper.text()).toContain('dit clone http://localhost:3000/alice/sft-data/datahub');
   expect(wrapper.text()).toContain('dit checkout -b update/sft-batch');
+  expect(wrapper.text()).toContain('dit add <jsonl-file> && dit commit -m "update SFT data"');
   expect(wrapper.text()).toContain('dit push --remote origin --branch update/sft-batch');
   expect(wrapper.text()).toContain('curl -X POST http://localhost:3000/api/v1/repos/alice/sft-data/datahub/pulls');
   expect(wrapper.text()).toContain('Authorization: token <token>');
