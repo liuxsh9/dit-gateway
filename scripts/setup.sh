@@ -219,16 +219,36 @@ configure_deployment() {
 
     # Step 5: Image strategy
     echo ""
-    echo -e "${BOLD}Step 5: Gateway Image${NC}"
+    echo -e "${BOLD}Step 5: Image Strategy${NC}"
     echo ""
-    select_option "How to get the gateway image?" \
+    select_option "How to get the service images?" \
         "Build from source  (first build takes 10-20 min, no registry needed)" \
         "Pull pre-built     (fast, requires registry access)"
     if [ $SELECTED -eq 1 ]; then
         prompt "Gateway image" "ghcr.io/liuxsh9/dit-gateway:latest"
         GATEWAY_IMAGE="$REPLY"
+        prompt "Core image" "ghcr.io/liuxsh9/dit-core:latest"
+        CORE_IMAGE="$REPLY"
+        BUILD_FROM_SOURCE=false
     else
         GATEWAY_IMAGE=""
+        CORE_IMAGE=""
+        BUILD_FROM_SOURCE=true
+
+        # Check if dit (core) source is available for building
+        local core_dir="${PROJECT_DIR}/../datahub"
+        if [ ! -d "$core_dir/src" ]; then
+            echo ""
+            warn "dit-core source not found at: $core_dir"
+            info "Cloning dit repository for local build..."
+            git clone https://github.com/liuxsh9/dit.git "$core_dir"
+            if [ ! -d "$core_dir/src" ]; then
+                die "Failed to clone dit repository. Check network access to github.com."
+            fi
+            info "dit-core source ready at: $core_dir"
+        else
+            info "dit-core source found at: $core_dir"
+        fi
     fi
 
     separator
@@ -242,7 +262,7 @@ configure_deployment() {
     [ -n "${SSH_PORT:-}" ] && echo -e "  SSH port:    ${GREEN}${SSH_PORT}${NC}" || true
     echo -e "  URL:         ${GREEN}${ROOT_URL}${NC}"
     echo -e "  Admin:       ${GREEN}${ADMIN_USER}${NC} <${ADMIN_EMAIL}>"
-    [ -n "$GATEWAY_IMAGE" ] && echo -e "  Image:       ${GREEN}${GATEWAY_IMAGE}${NC}" || echo -e "  Image:       ${GREEN}build from source${NC}"
+    [ -n "$GATEWAY_IMAGE" ] && echo -e "  Image:       ${GREEN}${GATEWAY_IMAGE} / ${CORE_IMAGE}${NC}" || echo -e "  Image:       ${GREEN}build from source${NC}"
     echo ""
 
     if ! confirm "Proceed with this configuration?"; then
@@ -280,6 +300,7 @@ generate_env_file() {
         [ -n "${SSH_PORT:-}" ] && echo "SSH_PORT=${SSH_PORT}" || true
         [ -n "${SSH_EXPOSE:-}" ] && echo "SSH_EXPOSE=${SSH_EXPOSE}" || true
         [ -n "${GATEWAY_IMAGE:-}" ] && echo "GATEWAY_IMAGE=${GATEWAY_IMAGE}" || true
+        [ -n "${CORE_IMAGE:-}" ] && echo "CORE_IMAGE=${CORE_IMAGE}" || true
     } > .env
 
     chmod 600 .env

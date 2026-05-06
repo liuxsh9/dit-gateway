@@ -70,7 +70,10 @@ services:
         max-file: "5"
 
   core:
-    image: ${CORE_IMAGE:-ghcr.io/liuxsh9/dit-core:latest}
+    image: ${CORE_IMAGE:-dit-core:local}
+    build:
+      context: ${CORE_BUILD_CONTEXT:-../datahub}
+      dockerfile: Dockerfile
     expose:
       - "8000"
     environment:
