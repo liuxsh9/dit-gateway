@@ -14,25 +14,50 @@ Gateway talks to core with `X-Service-Token`. The gateway `[datahub] SERVICE_TOK
 
 ## Quick Docker Deploy
 
-This repository expects the core repository next to it:
+The fastest path on a fresh Linux server:
 
-```text
-/path/to/datahub
-/path/to/datahub-gateway
+```bash
+git clone <repo-url> /opt/dit-gateway
+cd /opt/dit-gateway
+sudo ./scripts/setup.sh
 ```
 
-Create `.env`:
+The interactive wizard guides you through:
+
+1. **Deployment mode** — HTTP only (1 port), HTTP+SSH (2 ports), or HTTPS+SSH (3 ports, needs domain)
+2. **Port configuration** — choose which ports to expose based on your server constraints
+3. **Access URL** — server IP/hostname or domain for TLS
+4. **Admin account** — username, email, auto-generated or custom password
+5. **Image strategy** — build from source or pull pre-built
+
+After completion, the script starts all services, creates the admin account,
+installs a systemd unit for auto-start on reboot, and runs health verification.
+
+### Manual Deploy (alternative)
+
+If you prefer manual control:
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in:
+Fill in required secrets:
 
 ```bash
-SERVICE_TOKEN=<generate-a-long-random-secret>
-POSTGRES_PASSWORD=<generate-a-db-password>
-DIT_DB_PASSWORD=<generate-a-dit-db-password>
+SERVICE_TOKEN=<openssl rand -base64 32>
+SECRET_KEY=<openssl rand -base64 32>
+POSTGRES_PASSWORD=<openssl rand -base64 32>
+DIT_DB_PASSWORD=<openssl rand -base64 32>
+```
+
+Optional settings (see `.env.example` for full list):
+
+```bash
+GATEWAY_PORT=3000
+ROOT_URL=http://your-server:3000/
+DISABLE_SSH=false
+SSH_EXPOSE=0.0.0.0:3001
+SSH_PORT=3001
 ```
 
 Build and start:
@@ -42,7 +67,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Create the first site administrator from the gateway container:
+Create the first site administrator:
 
 ```bash
 docker compose exec gateway forgejo admin user create \
@@ -54,23 +79,29 @@ docker compose exec gateway forgejo admin user create \
   --must-change-password=false
 ```
 
-The command prints the generated password once. Store it in the production
-password manager before continuing.
+The command prints the generated password once. Store it before continuing.
 
-Health checks:
+### TLS with Custom Domain
+
+Set `DOMAIN` in `.env` and start with the TLS profile:
 
 ```bash
-curl -fsS http://localhost:3000/api/healthz
-curl -fsS http://localhost:8000/health
+DOMAIN=data.example.com
+ROOT_URL=https://data.example.com/
 ```
 
-Full smoke from the core repo:
+```bash
+docker compose --profile tls up -d
+```
+
+Caddy auto-provisions a Let's Encrypt certificate. Ensure ports 80 and 443 are
+open on the firewall.
+
+### Health Checks
 
 ```bash
-cd ../datahub
-CORE_URL=http://localhost:8000 \
-GATEWAY_URL=http://localhost:3000 \
-./scripts/deployment-smoke.sh
+curl -fsS http://localhost:3000/api/v1/version
+curl -fsS http://localhost:8000/health
 ```
 
 ## Required Gateway Config
@@ -78,11 +109,14 @@ GATEWAY_URL=http://localhost:3000 \
 `docker-compose.yml` sets these through Forgejo's `FORGEJO__section__KEY` environment convention:
 
 ```bash
+FORGEJO__security__INSTALL_LOCK=true
+FORGEJO__security__SECRET_KEY=${SECRET_KEY}
 FORGEJO__datahub__ENABLED=true
 FORGEJO__datahub__CORE_URL=http://core:8000
 FORGEJO__datahub__SERVICE_TOKEN=${SERVICE_TOKEN}
 FORGEJO__i18n__LANGS=en-US
 FORGEJO__i18n__NAMES=English
+FORGEJO__server__DISABLE_SSH=${DISABLE_SSH}
 ```
 
 Equivalent `app.ini`:
@@ -166,15 +200,35 @@ Before moving a server into use:
 
 - `docker compose ps` shows `db`, `core`, and `gateway` healthy.
 - `curl http://localhost:8000/health` returns core `status: healthy`.
-- `curl http://localhost:3000/api/healthz` returns HTTP 200.
+- `curl http://localhost:3000/api/v1/version` returns HTTP 200.
 - The first site administrator was created with `forgejo admin user create`
   and public registration is disabled unless intentionally enabled.
+- Systemd unit is enabled (`systemctl is-enabled dit-gateway`) for auto-start on reboot.
 - Creating a gateway data repo also creates the backing core repo.
 - The repository UI stays English even when the browser language is Chinese.
 - Pushing a small ML 2.0 / OpenAI messages JSONL dataset through `dit` succeeds.
 - The data repo page shows latest commit, row count, file size, metadata coverage, and quality checks.
 - JSONL rows and diffs render as structured SFT conversations, not one raw JSON string.
 - A backup and restore drill has been completed with `scripts/compose-backup.sh` and `scripts/compose-restore.sh`.
+
+## Upgrade
+
+```bash
+./scripts/compose-backup.sh
+git pull
+docker compose up --build -d
+docker compose ps
+```
+
+If health checks fail after upgrade, restore from backup:
+
+```bash
+DIT_GATEWAY_RESTORE_CONFIRM=I_UNDERSTAND_THIS_DESTROYS_COMPOSE_VOLUMES \
+./scripts/compose-restore.sh <backup-path>
+```
+
+Database migrations run automatically on startup via Forgejo's auto-migrate
+and core's Alembic.
 
 ## Backup And Restore
 
