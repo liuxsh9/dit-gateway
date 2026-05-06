@@ -322,8 +322,16 @@ deploy_services() {
         info "TLS profile enabled for domain: $DOMAIN"
     fi
 
-    info "Starting services (this may take a few minutes on first build)..."
-    docker compose $profile_args up --build -d
+    if [ -n "${GATEWAY_IMAGE:-}" ] || [ -n "${CORE_IMAGE:-}" ]; then
+        info "Pulling pre-built service images..."
+        docker compose $profile_args pull gateway core
+
+        info "Starting services from pre-built images..."
+        docker compose $profile_args up --no-build -d
+    else
+        info "Building and starting services (this may take a few minutes on first build)..."
+        docker compose $profile_args up --build -d
+    fi
 
     info "Waiting for services to become healthy..."
     local retries=60
