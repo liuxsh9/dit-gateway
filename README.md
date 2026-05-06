@@ -79,6 +79,34 @@ curl -fsS http://localhost:3000/api/v1/version   # gateway
 curl -fsS http://localhost:8000/health            # core
 ```
 
+## Client Setup
+
+Install the [dit CLI](https://github.com/liuxsh9/dit) on developer machines (requires Python 3.12+ and [uv](https://docs.astral.sh/uv/)):
+
+```bash
+uv pip install git+https://github.com/liuxsh9/dit.git
+```
+
+Connect to your gateway:
+
+```bash
+dit remote add origin http://<your-server>:3000/<owner>/<repo>.dit
+dit auth set-token <token> --remote origin
+```
+
+Tokens are created by the site admin via the gateway Web UI (user Settings > Applications).
+
+Basic workflow:
+
+```bash
+dit init
+dit add train.jsonl
+dit commit -m "initial dataset"
+dit push
+```
+
+See the [dit README](https://github.com/liuxsh9/dit) for full CLI documentation.
+
 ## Upgrade
 
 ```bash
