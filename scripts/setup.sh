@@ -228,6 +228,10 @@ configure_deployment() {
 
     separator
 
+    configure_access_policy
+
+    separator
+
     configure_image_strategy
 
     separator
@@ -241,6 +245,9 @@ configure_deployment() {
     [ -n "${SSH_PORT:-}" ] && echo -e "  SSH port:    ${GREEN}${SSH_PORT}${NC}" || true
     echo -e "  URL:         ${GREEN}${ROOT_URL}${NC}"
     echo -e "  Admin:       ${GREEN}${ADMIN_USER}${NC} <${ADMIN_EMAIL}>"
+    echo -e "  Access:      ${GREEN}${ACCESS_POLICY}${NC}"
+    echo -e "  Registration:${GREEN} $([ "$DISABLE_REGISTRATION" = "false" ] && echo "enabled" || echo "disabled")${NC}"
+    echo -e "  Public view: ${GREEN}$([ "$REQUIRE_SIGNIN_VIEW" = "false" ] && echo "enabled" || echo "login required")${NC}"
     [ -n "$GATEWAY_IMAGE" ] && echo -e "  Image:       ${GREEN}${GATEWAY_IMAGE} / ${CORE_IMAGE}${NC}" || echo -e "  Image:       ${GREEN}build from source${NC}"
     echo ""
 
@@ -249,9 +256,37 @@ configure_deployment() {
     fi
 }
 
+configure_access_policy() {
+    echo ""
+    echo -e "${BOLD}Step 5: Access Policy${NC}"
+    echo ""
+    select_option "Choose how users access this site:" \
+        "Private team workspace        — admin creates users, public pages visible" \
+        "Open self-service registration — users can register from the sign-up page" \
+        "Login-required workspace      — admin creates users, anonymous browsing disabled"
+
+    case $SELECTED in
+        0)
+            ACCESS_POLICY="Private team workspace"
+            DISABLE_REGISTRATION="true"
+            REQUIRE_SIGNIN_VIEW="false"
+            ;;
+        1)
+            ACCESS_POLICY="Open self-service registration"
+            DISABLE_REGISTRATION="false"
+            REQUIRE_SIGNIN_VIEW="false"
+            ;;
+        2)
+            ACCESS_POLICY="Login-required workspace"
+            DISABLE_REGISTRATION="true"
+            REQUIRE_SIGNIN_VIEW="true"
+            ;;
+    esac
+}
+
 configure_image_strategy() {
     echo ""
-    echo -e "${BOLD}Step 5: Image Strategy${NC}"
+    echo -e "${BOLD}Step 6: Image Strategy${NC}"
     echo ""
     select_option "How to get the service images?" \
         "Pull release images  (recommended, fastest)" \
@@ -323,6 +358,8 @@ generate_env_file() {
         echo "ROOT_URL=${ROOT_URL}"
         echo "DOMAIN=${DOMAIN}"
         echo "DISABLE_SSH=${DISABLE_SSH}"
+        echo "DISABLE_REGISTRATION=${DISABLE_REGISTRATION}"
+        echo "REQUIRE_SIGNIN_VIEW=${REQUIRE_SIGNIN_VIEW}"
         [ -n "${SSH_PORT:-}" ] && echo "SSH_PORT=${SSH_PORT}" || true
         [ -n "${SSH_EXPOSE:-}" ] && echo "SSH_EXPOSE=${SSH_EXPOSE}" || true
         [ -n "${GATEWAY_IMAGE:-}" ] && echo "GATEWAY_IMAGE=${GATEWAY_IMAGE}" || true

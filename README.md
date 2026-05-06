@@ -33,7 +33,8 @@ The interactive wizard guides you through:
 2. **Port configuration** — choose which ports to expose based on your server constraints
 3. **Access URL** — server IP/hostname or domain for TLS
 4. **Admin account** — username, email, auto-generated or custom password
-5. **Image strategy** — pull release images by tag, build from source, or enter custom images
+5. **Access policy** — admin-managed users, open registration, or login-required browsing
+6. **Image strategy** — pull release images by tag, build from source, or enter custom images
 
 After completion, the script starts all services, creates the admin account,
 installs a systemd unit for auto-start on reboot, and runs health verification.
@@ -223,7 +224,9 @@ Do not use `Dockerfile.datahub`; it is deprecated and fails fast intentionally.
 <summary>Admin account notes</summary>
 
 - `SERVICE_TOKEN` is the gateway-to-core service secret, not a user password.
-- Keep `DISABLE_REGISTRATION=true` in production unless there is an explicit onboarding process.
+- Choose `Private team workspace` in setup for production unless there is an explicit onboarding process.
+- Choose `Open self-service registration` only when users should register themselves at `/user/sign_up`.
+- Choose `Login-required workspace` when anonymous visitors should not browse public pages.
 - Keep the `sys` account for emergency administration only. Use separate named accounts for daily work.
 - To require password change on handoff, use `--must-change-password=true`.
 

@@ -24,6 +24,41 @@ run_image_strategy() {
     rm -f "$input_file" "$output_file"
 }
 
+run_access_policy() {
+    local input="$1"
+    local input_file output_file
+    input_file="$(mktemp)"
+    output_file="$(mktemp)"
+    printf '%b' "$input" > "$input_file"
+    configure_access_policy < "$input_file" > "$output_file" 2>&1
+    strip_ansi < "$output_file"
+    rm -f "$input_file" "$output_file"
+}
+
+test_private_team_access_policy() {
+    run_access_policy '1\n' >/dev/null
+
+    [ "$ACCESS_POLICY" = "Private team workspace" ]
+    [ "$DISABLE_REGISTRATION" = "true" ]
+    [ "$REQUIRE_SIGNIN_VIEW" = "false" ]
+}
+
+test_open_registration_access_policy() {
+    run_access_policy '2\n' >/dev/null
+
+    [ "$ACCESS_POLICY" = "Open self-service registration" ]
+    [ "$DISABLE_REGISTRATION" = "false" ]
+    [ "$REQUIRE_SIGNIN_VIEW" = "false" ]
+}
+
+test_login_required_access_policy() {
+    run_access_policy '3\n' >/dev/null
+
+    [ "$ACCESS_POLICY" = "Login-required workspace" ]
+    [ "$DISABLE_REGISTRATION" = "true" ]
+    [ "$REQUIRE_SIGNIN_VIEW" = "true" ]
+}
+
 test_default_release_images() {
     run_image_strategy '1\n\n' >/dev/null
 
@@ -48,8 +83,11 @@ test_custom_images() {
     [ "$CORE_IMAGE" = "registry.example/core:dev" ]
 }
 
+test_private_team_access_policy
+test_open_registration_access_policy
+test_login_required_access_policy
 test_default_release_images
 test_custom_release_tag
 test_custom_images
 
-echo "setup image strategy tests passed"
+echo "setup wizard option tests passed"
