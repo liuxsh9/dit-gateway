@@ -67,7 +67,7 @@ separator() {
     echo -e "${DIM}─────────────────────────────────────────${NC}"
 }
 
-DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.0}"
+DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.1}"
 
 deployment_mode_label() {
     case "$1" in

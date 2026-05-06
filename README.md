@@ -56,7 +56,7 @@ docker compose exec gateway forgejo admin user create \
 ```
 
 See `.env.example` for all available options (ports, SSH, TLS domain, pre-built image).
-The setup wizard defaults to release images tagged `v0.1.0`. To choose another
+The setup wizard defaults to release images tagged `v0.1.1`. To choose another
 release without typing full image names, run:
 
 ```bash
@@ -117,13 +117,16 @@ See the [dit README](https://github.com/liuxsh9/dit) for full CLI documentation.
 ## Upgrade
 
 ```bash
-./scripts/compose-backup.sh
-git pull
-docker compose up --build -d
-docker compose ps
+./scripts/upgrade.sh
 ```
 
-If health checks fail after upgrade, restore from backup:
+The upgrade script will:
+- Detect the current and latest available version
+- Offer a pre-upgrade backup
+- Pull new images (or checkout source) and restart services
+- Run health checks and print rollback instructions on failure
+
+Manual rollback from backup:
 
 ```bash
 DIT_GATEWAY_RESTORE_CONFIRM=I_UNDERSTAND_THIS_DESTROYS_COMPOSE_VOLUMES \
