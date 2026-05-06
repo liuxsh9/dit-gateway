@@ -27,7 +27,10 @@ import (
 
 const (
 	// tplHome home page template
-	tplHome base.TplName = "home"
+	tplHome    base.TplName = "home"
+	tplDitHelp base.TplName = "help"
+
+	ditHomeDescription = "dit DataHub Gateway is a focused workspace for dataset repositories, row-level previews, pull-request review, and governed merges."
 )
 
 // Home render home page
@@ -83,9 +86,18 @@ func Home(ctx *context.Context) {
 	ctx.Data["PageIsHome"] = true
 	ctx.Data["IsRepoIndexerEnabled"] = setting.Indexer.RepoIndexerEnabled
 
-	ctx.Data["OpenGraphDescription"] = setting.UI.Meta.Description
+	ctx.Data["PageMetaDescription"] = ditHomeDescription
+	ctx.Data["OpenGraphDescription"] = ditHomeDescription
 
 	ctx.HTML(http.StatusOK, tplHome)
+}
+
+// DitHelp renders the local dit and dit-gateway help manual.
+func DitHelp(ctx *context.Context) {
+	ctx.Data["Title"] = "dit and dit-gateway manual"
+	ctx.Data["MetaDescription"] = "Cookbook for using dit commands and dit-gateway dataset review flows."
+	ctx.Data["OpenGraphDescription"] = ctx.Data["MetaDescription"]
+	ctx.HTML(http.StatusOK, tplDitHelp)
 }
 
 // HomeSitemap renders the main sitemap

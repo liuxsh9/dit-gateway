@@ -1,36 +1,43 @@
-	<div class="ui stackable middle very relaxed page grid">
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-flame"}} {{ctx.Locale.Tr "startpage.install"}}
-			</h1>
-			<p class="large">
-				{{ctx.Locale.Tr "startpage.install_desc" "https://forgejo.org/download/#installation-from-binary" "https://forgejo.org/download/#container-image" "https://forgejo.org/download"}}
-			</p>
-		</div>
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-device-desktop"}} {{ctx.Locale.Tr "startpage.platform"}}
-			</h1>
-			<p class="large">
-				{{ctx.Locale.Tr "startpage.platform_desc"}}
-			</p>
-		</div>
+<section class="dit-home-section" aria-labelledby="dit-home-workflow-title">
+	<div class="dit-home-section-heading">
+		<h2 id="dit-home-workflow-title">Review data like code</h2>
+		<p>dit turns dataset work into traceable repository workflows: clone data, inspect rows, propose changes, review diffs, and merge with governance.</p>
 	</div>
-	<div class="ui stackable middle very relaxed page grid">
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-rocket"}} {{ctx.Locale.Tr "startpage.lightweight"}}
-			</h1>
-			<p class="large">
-				{{ctx.Locale.Tr "startpage.lightweight_desc"}}
-			</p>
-		</div>
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-code"}} {{ctx.Locale.Tr "startpage.license"}}
-			</h1>
-			<p class="large">
-				{{ctx.Locale.Tr "startpage.license_desc" "https://forgejo.org/download" "https://codeberg.org/forgejo/forgejo"}}
-			</p>
-		</div>
+	<div class="dit-home-feature-grid">
+		<a class="dit-home-feature" href="{{AppSubUrl}}/explore/repos">
+			{{svg "octicon-repo" 26}}
+			<strong>Dataset repositories</strong>
+			<span>Browse public datasets, commits, branches, and row previews.</span>
+		</a>
+		<a class="dit-home-feature" href="{{AppSubUrl}}/pulls">
+			{{svg "octicon-git-pull-request" 26}}
+			<strong>Review queues</strong>
+			<span>Follow dataset pull requests from proposed rows to accepted changes.</span>
+		</a>
+		<a class="dit-home-feature" href="{{AppSubUrl}}/repo/create">
+			{{svg "octicon-plus" 26}}
+			<strong>Create a data repo</strong>
+			<span>Start a governed dataset workspace backed by Git storage.</span>
+		</a>
 	</div>
+</section>
+
+<section class="dit-home-section dit-home-steps" aria-labelledby="dit-home-steps-title">
+	<div class="dit-home-section-heading">
+		<h2 id="dit-home-steps-title">A short path from data to review</h2>
+	</div>
+	<ol>
+		<li>
+			<strong>Authenticate</strong>
+			<span>Sign in, create a token, and connect dit clients or scripts.</span>
+		</li>
+		<li>
+			<strong>Prepare changes</strong>
+			<span>Clone a dataset repo, edit JSONL or other managed assets, and push a branch.</span>
+		</li>
+		<li>
+			<strong>Inspect and merge</strong>
+			<span>Use DataHub Gateway to preview rows, discuss diffs, and merge reviewed updates.</span>
+		</li>
+	</ol>
+</section>

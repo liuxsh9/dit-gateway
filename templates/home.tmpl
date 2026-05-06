@@ -1,16 +1,46 @@
 {{template "base/head" .}}
 <div role="main" aria-label="{{if .IsSigned}}{{ctx.Locale.Tr "dashboard"}}{{else}}{{ctx.Locale.Tr "home"}}{{end}}" class="page-content home">
-	<div class="tw-mb-8 tw-px-8">
-		<div class="center">
-			<img class="logo" width="220" height="220" src="{{AssetUrlPrefix}}/img/logo.svg" alt="{{ctx.Locale.Tr "logo"}}">
-			<div class="hero">
-				<h1 class="ui icon header title">
-					{{AppDisplayName}}
-				</h1>
-				<h2>{{ctx.Locale.Tr "startpage.app_desc"}}</h2>
+	<section class="dit-home-hero">
+		<div class="dit-home-hero-copy">
+			<div class="dit-home-mark">
+				<img class="logo" width="56" height="56" src="{{AssetUrlPrefix}}/img/logo.svg" alt="{{ctx.Locale.Tr "logo"}}">
+				<span>dit DataHub Gateway</span>
+			</div>
+			<h1 class="title">dit project collaboration for datasets</h1>
+			<p class="dit-home-lede">A focused gateway for dataset repositories, row-level previews, pull-request review, and governed merges. It keeps data iteration close to Git workflows while exposing the DataHub tools reviewers need every day.</p>
+			<div class="dit-home-actions">
+				{{if .IsSigned}}
+					<a class="ui primary button" href="{{AppSubUrl}}/explore/repos">{{svg "octicon-repo" 16 "tw-mr-2"}}Browse repositories</a>
+				{{else}}
+					<a class="ui primary button" href="{{AppSubUrl}}/user/login">{{svg "octicon-sign-in" 16 "tw-mr-2"}}Sign in</a>
+				{{end}}
+				<a class="ui button" href="{{AppSubUrl}}/explore/repos">{{svg "octicon-search" 16 "tw-mr-2"}}Explore repos</a>
+				<a class="ui button" href="{{AppSubUrl}}/repo/create">{{svg "octicon-plus" 16 "tw-mr-2"}}Create repo</a>
 			</div>
 		</div>
-	</div>
+		<div class="dit-home-panel" aria-label="Key dit workspace links">
+			<a href="{{AppSubUrl}}/explore/repos">
+				<span>{{svg "octicon-repo" 18}}</span>
+				<strong>Repositories</strong>
+				<small>Find dataset workspaces</small>
+			</a>
+			<a href="{{AppSubUrl}}/pulls">
+				<span>{{svg "octicon-git-pull-request" 18}}</span>
+				<strong>Pull requests</strong>
+				<small>Review proposed data changes</small>
+			</a>
+			<a href="{{AppSubUrl}}/user/settings/applications">
+				<span>{{svg "octicon-key" 18}}</span>
+				<strong>Tokens</strong>
+				<small>Connect dit clients</small>
+			</a>
+			<a href="{{AppSubUrl}}/api/swagger">
+				<span>{{svg "octicon-code" 18}}</span>
+				<strong>API</strong>
+				<small>Automate repository flows</small>
+			</a>
+		</div>
+	</section>
 	{{template "home_forgejo" .}}
 </div>
 {{template "base/footer" .}}

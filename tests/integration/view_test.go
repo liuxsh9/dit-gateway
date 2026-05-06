@@ -198,7 +198,29 @@ func TestHomeDisplayName(t *testing.T) {
 	req := NewRequest(t, "GET", "/")
 	resp := session.MakeRequest(t, req, http.StatusOK)
 	htmlDoc := NewHTMLParser(t, resp.Body)
-	assert.Equal(t, "Forgejo: Beyond coding. We Forge.", strings.TrimSpace(htmlDoc.Find("h1.title").Text()))
+	assert.Equal(t, "dit project collaboration for datasets", strings.TrimSpace(htmlDoc.Find("h1.title").Text()))
+}
+
+func TestHomeIntroducesDitGateway(t *testing.T) {
+	session := emptyTestSession(t)
+	req := NewRequest(t, "GET", "/")
+	resp := session.MakeRequest(t, req, http.StatusOK)
+	htmlDoc := NewHTMLParser(t, resp.Body)
+
+	homeText := htmlDoc.Find(".home").Text()
+	assert.Contains(t, homeText, "dit")
+	assert.Contains(t, homeText, "DataHub Gateway")
+	assert.Contains(t, homeText, "Dataset repositories")
+	assert.NotContains(t, homeText, "Forgejo has low minimal requirements")
+
+	assert.NotZero(t, htmlDoc.Find(`.home a[href="/user/login"]`).Length())
+	assert.NotZero(t, htmlDoc.Find(`.home a[href="/explore/repos"]`).Length())
+	assert.NotZero(t, htmlDoc.Find(`.home a[href="/repo/create"]`).Length())
+	assert.NotZero(t, htmlDoc.Find(`.home a[href="/pulls"]`).Length())
+
+	metaDescription, _ := htmlDoc.Find(`meta[name="description"]`).Attr("content")
+	assert.Contains(t, metaDescription, "dit DataHub Gateway")
+	assert.NotContains(t, metaDescription, "Forgejo")
 }
 
 func TestOpenGraphDisplayName(t *testing.T) {
