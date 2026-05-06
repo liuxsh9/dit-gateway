@@ -72,7 +72,7 @@ services:
   core:
     image: ${CORE_IMAGE:-dit-core:local}
     build:
-      context: ${CORE_BUILD_CONTEXT:-../datahub}
+      context: ${CORE_BUILD_CONTEXT:-../dit}
       dockerfile: Dockerfile
     expose:
       - "8000"

@@ -236,7 +236,7 @@ configure_deployment() {
         BUILD_FROM_SOURCE=true
 
         # Check if dit (core) source is available for building
-        local core_dir="${PROJECT_DIR}/../datahub"
+        local core_dir="${PROJECT_DIR}/../dit"
         if [ ! -d "$core_dir/src" ]; then
             echo ""
             warn "dit-core source not found at: $core_dir"
@@ -274,8 +274,12 @@ configure_deployment() {
 
 generate_env_file() {
     if [ -f .env ] && [ "$FORCE" != true ]; then
-        warn ".env already exists. Skipping generation (use --force to overwrite)."
-        return 0
+        if confirm "Existing .env found. Overwrite with new configuration?" "n"; then
+            info "Overwriting .env..."
+        else
+            info "Keeping existing .env."
+            return 0
+        fi
     fi
 
     info "Generating .env with random secrets..."
