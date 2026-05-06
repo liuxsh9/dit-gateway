@@ -33,7 +33,7 @@ The interactive wizard guides you through:
 2. **Port configuration** — choose which ports to expose based on your server constraints
 3. **Access URL** — server IP/hostname or domain for TLS
 4. **Admin account** — username, email, auto-generated or custom password
-5. **Image strategy** — build from source or pull pre-built
+5. **Image strategy** — pull release images by tag, build from source, or enter custom images
 
 After completion, the script starts all services, creates the admin account,
 installs a systemd unit for auto-start on reboot, and runs health verification.
@@ -55,6 +55,12 @@ docker compose exec gateway forgejo admin user create \
 ```
 
 See `.env.example` for all available options (ports, SSH, TLS domain, pre-built image).
+The setup wizard defaults to release images tagged `v0.1.0`. To choose another
+release without typing full image names, run:
+
+```bash
+DIT_IMAGE_TAG=v0.1.1 sudo ./scripts/setup.sh
+```
 
 ### TLS with Custom Domain
 

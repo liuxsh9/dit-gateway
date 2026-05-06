@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEST_SCRIPT="$(mktemp)"
+trap 'rm -f "$TEST_SCRIPT"' EXIT
+sed 's/^main "$@"$/# main disabled for tests/' "$ROOT_DIR/scripts/setup.sh" > "$TEST_SCRIPT"
+
+# shellcheck source=/dev/null
+source "$TEST_SCRIPT"
+
+strip_ansi() {
+    sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g'
+}
+
+run_image_strategy() {
+    local input="$1"
+    local input_file output_file
+    input_file="$(mktemp)"
+    output_file="$(mktemp)"
+    printf '%b' "$input" > "$input_file"
+    configure_image_strategy < "$input_file" > "$output_file" 2>&1
+    strip_ansi < "$output_file"
+    rm -f "$input_file" "$output_file"
+}
+
+test_default_release_images() {
+    run_image_strategy '1\n\n' >/dev/null
+
+    [ "$BUILD_FROM_SOURCE" = false ]
+    [ "$GATEWAY_IMAGE" = "ghcr.io/liuxsh9/dit-gateway:v0.1.0" ]
+    [ "$CORE_IMAGE" = "ghcr.io/liuxsh9/dit-core:v0.1.0" ]
+}
+
+test_custom_release_tag() {
+    run_image_strategy '1\nv0.1.1\n' >/dev/null
+
+    [ "$BUILD_FROM_SOURCE" = false ]
+    [ "$GATEWAY_IMAGE" = "ghcr.io/liuxsh9/dit-gateway:v0.1.1" ]
+    [ "$CORE_IMAGE" = "ghcr.io/liuxsh9/dit-core:v0.1.1" ]
+}
+
+test_custom_images() {
+    run_image_strategy '3\nregistry.example/gateway:dev\nregistry.example/core:dev\n' >/dev/null
+
+    [ "$BUILD_FROM_SOURCE" = false ]
+    [ "$GATEWAY_IMAGE" = "registry.example/gateway:dev" ]
+    [ "$CORE_IMAGE" = "registry.example/core:dev" ]
+}
+
+test_default_release_images
+test_custom_release_tag
+test_custom_images
+
+echo "setup image strategy tests passed"

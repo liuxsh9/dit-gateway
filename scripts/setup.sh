@@ -67,6 +67,17 @@ separator() {
     echo -e "${DIM}─────────────────────────────────────────${NC}"
 }
 
+DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.0}"
+
+deployment_mode_label() {
+    case "$1" in
+        0) echo "HTTP only" ;;
+        1) echo "HTTP + SSH" ;;
+        2) echo "HTTPS + SSH" ;;
+        *) echo "unknown" ;;
+    esac
+}
+
 # --- Preflight ---
 
 check_prerequisites() {
@@ -217,20 +228,43 @@ configure_deployment() {
 
     separator
 
-    # Step 5: Image strategy
+    configure_image_strategy
+
+    separator
+
+    # Summary
+    echo ""
+    echo -e "${BOLD}  Configuration Summary${NC}"
+    echo ""
+    echo -e "  Mode:        ${GREEN}$(deployment_mode_label "$MODE")${NC}"
+    echo -e "  Web port:    ${GREEN}${GATEWAY_PORT}${NC}"
+    [ -n "${SSH_PORT:-}" ] && echo -e "  SSH port:    ${GREEN}${SSH_PORT}${NC}" || true
+    echo -e "  URL:         ${GREEN}${ROOT_URL}${NC}"
+    echo -e "  Admin:       ${GREEN}${ADMIN_USER}${NC} <${ADMIN_EMAIL}>"
+    [ -n "$GATEWAY_IMAGE" ] && echo -e "  Image:       ${GREEN}${GATEWAY_IMAGE} / ${CORE_IMAGE}${NC}" || echo -e "  Image:       ${GREEN}build from source${NC}"
+    echo ""
+
+    if ! confirm "Proceed with this configuration?"; then
+        die "Setup cancelled."
+    fi
+}
+
+configure_image_strategy() {
     echo ""
     echo -e "${BOLD}Step 5: Image Strategy${NC}"
     echo ""
     select_option "How to get the service images?" \
-        "Build from source  (first build takes 10-20 min, no registry needed)" \
-        "Pull pre-built     (fast, requires registry access)"
-    if [ $SELECTED -eq 1 ]; then
-        prompt "Gateway image" "ghcr.io/liuxsh9/dit-gateway:latest"
-        GATEWAY_IMAGE="$REPLY"
-        prompt "Core image" "ghcr.io/liuxsh9/dit-core:latest"
-        CORE_IMAGE="$REPLY"
+        "Pull release images  (recommended, fastest)" \
+        "Build from source    (first build takes 10-20 min, no registry needed)" \
+        "Use custom images    (advanced)"
+
+    if [ $SELECTED -eq 0 ]; then
+        prompt "Image tag" "$DEFAULT_IMAGE_TAG"
+        local image_tag="$REPLY"
+        GATEWAY_IMAGE="ghcr.io/liuxsh9/dit-gateway:${image_tag}"
+        CORE_IMAGE="ghcr.io/liuxsh9/dit-core:${image_tag}"
         BUILD_FROM_SOURCE=false
-    else
+    elif [ $SELECTED -eq 1 ]; then
         GATEWAY_IMAGE=""
         CORE_IMAGE=""
         BUILD_FROM_SOURCE=true
@@ -249,24 +283,12 @@ configure_deployment() {
         else
             info "dit-core source found at: $core_dir"
         fi
-    fi
-
-    separator
-
-    # Summary
-    echo ""
-    echo -e "${BOLD}  Configuration Summary${NC}"
-    echo ""
-    echo -e "  Mode:        ${GREEN}$(case $MODE in 0) echo "HTTP only";; 1) echo "HTTP + SSH";; 2) echo "HTTPS + SSH";; esac)${NC}"
-    echo -e "  Web port:    ${GREEN}${GATEWAY_PORT}${NC}"
-    [ -n "${SSH_PORT:-}" ] && echo -e "  SSH port:    ${GREEN}${SSH_PORT}${NC}" || true
-    echo -e "  URL:         ${GREEN}${ROOT_URL}${NC}"
-    echo -e "  Admin:       ${GREEN}${ADMIN_USER}${NC} <${ADMIN_EMAIL}>"
-    [ -n "$GATEWAY_IMAGE" ] && echo -e "  Image:       ${GREEN}${GATEWAY_IMAGE} / ${CORE_IMAGE}${NC}" || echo -e "  Image:       ${GREEN}build from source${NC}"
-    echo ""
-
-    if ! confirm "Proceed with this configuration?"; then
-        die "Setup cancelled."
+    else
+        prompt "Gateway image" "ghcr.io/liuxsh9/dit-gateway:${DEFAULT_IMAGE_TAG}"
+        GATEWAY_IMAGE="$REPLY"
+        prompt "Core image" "ghcr.io/liuxsh9/dit-core:${DEFAULT_IMAGE_TAG}"
+        CORE_IMAGE="$REPLY"
+        BUILD_FROM_SOURCE=false
     fi
 }
 
