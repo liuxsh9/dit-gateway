@@ -113,6 +113,8 @@ run_backup() {
         echo -en "${CYAN}?${NC} Backup directory ${DIM}[${default_backup}]${NC}: "
         read -r REPLY || true
         [ -z "$REPLY" ] && REPLY="$default_backup"
+        # Expand ~ to $HOME (shell doesn't expand tilde in variables)
+        REPLY="${REPLY/#\~/$HOME}"
         export DIT_GATEWAY_BACKUP_DIR="$REPLY"
     fi
 
