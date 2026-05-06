@@ -9,8 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"forgejo.org/models/db"
 	"forgejo.org/models/unittest"
+	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/translation"
+	repo_service "forgejo.org/services/repository"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,7 +56,7 @@ func TestSignedInGlobalNavigationUsesAppLevelDestinations(t *testing.T) {
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/explore/repos']", true)
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/explore/users']", true)
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/explore/organizations']", true)
-	page.AssertElement(t, "nav#navbar .navbar-left a[href='https://forgejo.org/docs/latest/']", true)
+	page.AssertElement(t, "nav#navbar .navbar-left a[href='/-/help']", true)
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/admin']", false)
 }
 
@@ -72,6 +75,7 @@ func TestAnonymousGlobalNavigationUsesPublicAppLevelDestinations(t *testing.T) {
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/explore/repos']", true)
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/explore/users']", true)
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/explore/organizations']", true)
+	page.AssertElement(t, "nav#navbar .navbar-left a[href='/-/help']", true)
 }
 
 func TestSignedInGlobalNavigationShowsSettingsForAdmins(t *testing.T) {
@@ -84,4 +88,37 @@ func TestSignedInGlobalNavigationShowsSettingsForAdmins(t *testing.T) {
 
 	assert.Contains(t, navbarText, "Settings")
 	page.AssertElement(t, "nav#navbar .navbar-left a[href='/admin']", true)
+}
+
+func TestDitHelpPage(t *testing.T) {
+	require.NoError(t, unittest.PrepareTestDatabase())
+
+	response := MakeRequest(t, NewRequest(t, "GET", "/-/help"), http.StatusOK)
+	page := NewHTMLParser(t, response.Body)
+
+	assert.Contains(t, page.Find("main").Text(), "Get started with dit and dit-gateway")
+	assert.Contains(t, page.Find("main").Text(), "快速开始使用 dit 与 dit-gateway")
+	assert.Contains(t, page.Find("main").Text(), "dit clone")
+	assert.Contains(t, page.Find("main").Text(), "dit auth set-token")
+}
+
+func TestEmptyRepositoryCloneHelpUsesDitHelp(t *testing.T) {
+	require.NoError(t, unittest.PrepareTestDatabase())
+
+	owner := unittest.AssertExistsAndLoadBean(t, &user_model.User{Name: "user5"})
+	repository, err := repo_service.CreateRepository(db.DefaultContext, owner, owner, repo_service.CreateRepoOptions{
+		Name:     "empty-help-repo",
+		AutoInit: false,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, repo_service.DeleteRepository(db.DefaultContext, owner, repository, false))
+	})
+
+	session := loginUser(t, owner.Name)
+	response := session.MakeRequest(t, NewRequest(t, "GET", repository.HTMLURL()), http.StatusOK)
+	page := NewHTMLParser(t, response.Body)
+
+	page.AssertElement(t, ".empty-repo-guide a[href='/-/help']", true)
+	page.AssertElement(t, ".empty-repo-guide a[href='http://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository']", false)
 }

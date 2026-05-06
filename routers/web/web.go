@@ -480,6 +480,7 @@ func registerRoutes(m *web.Route) {
 	// Especially some AJAX requests, we can reduce middleware number to improve performance.
 
 	m.Get("/", Home)
+	m.Get("/-/help", DitHelp, ignExploreSignIn)
 	m.Get("/sitemap.xml", sitemapEnabled, ignExploreSignIn, HomeSitemap)
 	m.Group("/.well-known", func() {
 		m.Get("/openid-configuration", auth.OIDCWellKnown)

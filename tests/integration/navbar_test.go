@@ -96,7 +96,7 @@ func TestNavbarItems(t *testing.T) {
 			{`details.dropdown a[href="/user/settings"]`, true},
 			{`details.dropdown a[href="/admin"]`, false},
 			{`details.dropdown a[href="/-/demo"]`, false},
-			{`details.dropdown a[href="https://forgejo.org/docs/latest/"]`, true},
+			{`details.dropdown a[href="/-/help"]`, true},
 			{`details.dropdown a[data-url="/user/logout"]`, true},
 		}
 		page := NewHTMLParser(t, regularUser.MakeRequest(t, NewRequest(t, "GET", testPage), http.StatusOK).Body)
@@ -115,7 +115,7 @@ func TestNavbarItems(t *testing.T) {
 			{`details.dropdown a[href="/user/settings"]`, true},
 			{`details.dropdown a[href="/admin"]`, true},
 			{`details.dropdown a[href="/-/demo"]`, false},
-			{`details.dropdown a[href="https://forgejo.org/docs/latest/"]`, true},
+			{`details.dropdown a[href="/-/help"]`, true},
 			{`details.dropdown a[data-url="/user/logout"]`, true},
 		}
 		page = NewHTMLParser(t, adminUser.MakeRequest(t, NewRequest(t, "GET", testPage), http.StatusOK).Body)

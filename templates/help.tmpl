@@ -1,0 +1,75 @@
+{{template "base/head" .}}
+<main role="main" aria-label="{{.Title}}" class="page-content repository">
+	<div class="ui container tw-py-4">
+		<div class="markup">
+			<h1>Get started with dit and dit-gateway / 快速开始使用 dit 与 dit-gateway</h1>
+			<p>Use <strong>dit</strong> to change dataset files locally, and use <strong>dit-gateway</strong> to review row-level changes, discuss them, and merge safely in the browser. / 使用 <strong>dit</strong> 在本地修改数据集文件，使用 <strong>dit-gateway</strong> 在浏览器中查看行级变更、讨论并安全合并。</p>
+
+			<h2>Why teams use it / 为什么团队使用它</h2>
+			<ul>
+				<li>Review JSONL and dataset rows in a readable Web UI. / 在可读性更好的网页界面中审阅 JSONL 和数据行。</li>
+				<li>Discuss and approve changes before merge. / 在合并前完成讨论与审批。</li>
+				<li>Keep dataset collaboration traceable and governed. / 让数据集协作过程可追踪、可治理。</li>
+			</ul>
+
+			<h2>Get started in 3 steps / 三步开始</h2>
+			<ol>
+				<li>Install the <code>dit</code> CLI. / 安装 <code>dit</code> 命令行工具。</li>
+				<li>Sign in here and create an access token in <a href="{{AppSubUrl}}/user/settings/applications">Settings &gt; Applications</a>. / 在这里登录，并在 <a href="{{AppSubUrl}}/user/settings/applications">Settings &gt; Applications</a> 创建访问令牌。</li>
+				<li>Clone a repository, work on a branch, then push and open a pull request for review. / 克隆仓库，在分支上完成修改，然后推送并创建 Pull Request 发起审阅。</li>
+			</ol>
+
+			<h2>Install and connect / 安装与连接</h2>
+			<p>The <code>dit</code> CLI requires Python 3.12+ and <code>uv</code>. / <code>dit</code> CLI 依赖 Python 3.12+ 和 <code>uv</code>。</p>
+			<pre><code>uv pip install git+https://github.com/liuxsh9/dit.git
+dit remote add origin http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit
+dit auth set-token &lt;token&gt; --remote origin</code></pre>
+			<p>Keep the token private. The token is for your user account; the gateway-to-core <code>SERVICE_TOKEN</code> is a separate server-side secret. / 请妥善保管令牌。这里使用的是你的用户访问令牌；网关到 core 的 <code>SERVICE_TOKEN</code> 是另一套服务端密钥。</p>
+
+			<h2>First successful workflow / 第一次成功跑通流程</h2>
+			<p>Create your working branch before editing data, so <code>main</code> stays clean. / 修改数据前先创建工作分支，避免把提交直接落到 <code>main</code>。</p>
+			<pre><code>dit clone http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset
+cd my-dataset
+dit switch -c my-data-change
+
+# edit your dataset files
+dit status
+dit diff
+dit add path/to/file.jsonl
+dit commit -m "Update evaluation rows"
+dit push -u origin my-data-change</code></pre>
+
+			<h2>For large repositories / 大仓库建议</h2>
+			<p>Choose one clone mode below. Do not paste both blocks for the same target directory. / 下面两种克隆方式二选一；不要对同一个目标目录连续执行两组命令。</p>
+			<p>Option A: full clone / 方案 A：完整克隆</p>
+			<pre><code>dit clone http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset</code></pre>
+			<p>Option B: sparse clone / 方案 B：稀疏克隆</p>
+			<pre><code>dit clone --sparse http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset-sparse
+cd my-dataset-sparse
+dit sparse-checkout add path/to/file.jsonl</code></pre>
+
+			<h2>Open a pull request in dit-gateway / 在 dit-gateway 中创建 Pull Request</h2>
+			<ol>
+				<li>Open the repository page in the browser. / 在浏览器中打开仓库页面。</li>
+				<li>Go to <a href="{{AppSubUrl}}/pulls">Pull Requests</a> or the repository PR tab, then create a new pull request. / 进入 <a href="{{AppSubUrl}}/pulls">Pull Requests</a> 或仓库内的 PR 页面，创建新的 Pull Request。</li>
+				<li>Compare <code>my-data-change</code> into <code>main</code>. / 选择把 <code>my-data-change</code> 合并到 <code>main</code>。</li>
+				<li>Review row-level changes, request reviewers, and merge after approval. / 查看行级变更，邀请审阅者，在审批通过后合并。</li>
+			</ol>
+
+			<h2>What reviewers do in the Web UI / 审阅者在网页端做什么</h2>
+			<ul>
+				<li>Browse changed rows instead of raw Git diffs. / 审阅的是变更后的数据行，而不是生硬的 Git 文本 diff。</li>
+				<li>Comment on suspicious samples and compare revisions. / 对可疑样本评论并比较修订内容。</li>
+				<li>Approve or reject the proposal before merge. / 在合并前批准或驳回该变更。</li>
+			</ul>
+
+			<h2>Useful links / 常用入口</h2>
+			<ul>
+				<li><a href="{{AppSubUrl}}/explore/repos">Repositories / 仓库列表</a></li>
+				<li><a href="{{AppSubUrl}}/pulls">Pull Requests / Pull Request 列表</a></li>
+				<li><a href="{{AppSubUrl}}/user/settings/applications">Applications / 应用与令牌</a></li>
+			</ul>
+		</div>
+	</div>
+</main>
+{{template "base/footer" .}}

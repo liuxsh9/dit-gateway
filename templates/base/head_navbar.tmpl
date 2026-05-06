@@ -30,7 +30,7 @@
 			<a class="item{{if .PageIsExploreRepositories}} active{{end}}" {{if .PageIsExploreRepositories}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "explore.repos"}}</a>
 			<a class="item{{if .PageIsExploreUsers}} active{{end}}" {{if .PageIsExploreUsers}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/users">{{ctx.Locale.Tr "explore.users"}}</a>
 			<a class="item{{if .PageIsExploreOrganizations}} active{{end}}" {{if .PageIsExploreOrganizations}}aria-current="page" {{end}}href="{{AppSubUrl}}/explore/organizations">{{ctx.Locale.Tr "explore.organizations"}}</a>
-			<a class="item" target="_blank" rel="noopener noreferrer" href="https://forgejo.org/docs/latest/">{{ctx.Locale.Tr "help"}}</a>
+			<a class="item" href="{{AppSubUrl}}/-/help">{{ctx.Locale.Tr "help"}}</a>
 			{{if .IsAdmin}}
 				<a class="item{{if .PageIsAdmin}} active{{end}}" {{if .PageIsAdmin}}aria-current="page" {{end}}href="{{AppSubUrl}}/admin">{{ctx.Locale.Tr "settings"}}</a>
 			{{end}}
@@ -55,7 +55,7 @@
 		{{template "custom/extra_links" .}}
 
 		{{if not .IsSigned}}
-			<a class="item" target="_blank" rel="noopener noreferrer" href="https://forgejo.org/docs/latest/">{{ctx.Locale.Tr "help"}}</a>
+			<a class="item" href="{{AppSubUrl}}/-/help">{{ctx.Locale.Tr "help"}}</a>
 		{{end}}
 	</div>
 
@@ -196,7 +196,7 @@
 							</a>
 						</li>
 						<li>
-							<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org/docs/latest/">
+							<a href="{{AppSubUrl}}/-/help">
 								{{svg "octicon-question"}}
 								{{ctx.Locale.Tr "help"}}
 							</a>
