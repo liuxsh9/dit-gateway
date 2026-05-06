@@ -58,15 +58,41 @@ check_prerequisites() {
 
 # --- Version detection ---
 
-current_version() {
+current_running_version() {
+    # For prebuilt: read tag from .env
     if grep -q '^GATEWAY_IMAGE=' .env 2>/dev/null; then
         grep '^GATEWAY_IMAGE=' .env | sed 's/.*://'
+        return
+    fi
+
+    # For source build: query the running container's version API
+    local port
+    port=$(grep '^GATEWAY_PORT=' .env 2>/dev/null | cut -d= -f2 || echo "3000")
+    [ -z "$port" ] && port="3000"
+
+    local running_ver
+    running_ver=$(curl -fsS "http://localhost:${port}/api/v1/version" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
+
+    if [ -n "$running_ver" ]; then
+        echo "$running_ver"
     else
-        git describe --tags --abbrev=0 2>/dev/null || echo "unknown"
+        # Fallback: check docker image label
+        local img_id
+        img_id=$(docker compose images gateway --format '{{.ID}}' 2>/dev/null | head -1)
+        if [ -n "$img_id" ]; then
+            local label_ver
+            label_ver=$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$img_id" 2>/dev/null || true)
+            if [ -n "$label_ver" ] && [ "$label_ver" != "<no value>" ]; then
+                echo "$label_ver"
+                return
+            fi
+        fi
+        # Last resort: if container is not running, we don't know
+        echo "unknown"
     fi
 }
 
-latest_remote_version() {
+latest_available_version() {
     git fetch --tags --quiet 2>/dev/null || true
     git tag -l 'v*' --sort=-version:refname | head -1
 }
@@ -114,8 +140,16 @@ upgrade_prebuilt() {
 upgrade_source() {
     local target_tag="$1"
 
-    info "Checking out ${target_tag}..."
-    git checkout "$target_tag"
+    # Source is already at the latest commit (user ran git pull).
+    # Just ensure we're on main and the tag matches HEAD.
+    local head_tag
+    head_tag=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+    if [ "$head_tag" != "$target_tag" ]; then
+        info "Checking out ${target_tag}..."
+        git checkout "$target_tag"
+    else
+        info "Source already at ${target_tag}."
+    fi
 
     local core_dir="${PROJECT_DIR}/../dit"
     if [ -d "$core_dir/.git" ]; then
@@ -181,12 +215,12 @@ main() {
     check_prerequisites
 
     local current latest strategy
-    current=$(current_version)
-    latest=$(latest_remote_version)
+    current=$(current_running_version)
+    latest=$(latest_available_version)
     strategy=$(image_strategy)
 
     echo ""
-    echo -e "  Current version:  ${CYAN}${current}${NC}"
+    echo -e "  Running version:  ${CYAN}${current}${NC}"
     echo -e "  Latest available: ${CYAN}${latest:-none found}${NC}"
     echo -e "  Image strategy:   ${CYAN}${strategy}${NC}"
     echo ""
@@ -197,7 +231,15 @@ main() {
 
     if [ "$current" = "$latest" ]; then
         info "Already running the latest version (${current}). Nothing to do."
-        exit 0
+        info "Use --force to rebuild anyway."
+        if [ "${1:-}" != "--force" ]; then
+            exit 0
+        fi
+    fi
+
+    if [ "$current" = "unknown" ]; then
+        warn "Could not detect running version (service may be stopped)."
+        warn "Will deploy ${latest}."
     fi
 
     separator
