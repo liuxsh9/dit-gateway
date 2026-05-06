@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: caddy:2
+    image: caddy:2.9
     profiles: ["tls"]
     ports:
       - "80:80"
@@ -15,19 +15,33 @@ services:
       gateway:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   gateway:
+    image: ${GATEWAY_IMAGE:-dit-gateway:local}
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "${GATEWAY_PORT:-3000}:3000"
+      - "${SSH_EXPOSE:-127.0.0.1:2222}:22"
     environment:
       FORGEJO__database__DB_TYPE: postgres
       FORGEJO__database__HOST: db:5432
       FORGEJO__database__NAME: forgejo
       FORGEJO__database__USER: forgejo
       FORGEJO__database__PASSWD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__security__SECRET_KEY: "${SECRET_KEY:?set SECRET_KEY in .env}"
+      FORGEJO__server__ROOT_URL: "${ROOT_URL:-http://localhost:3000/}"
+      FORGEJO__server__DOMAIN: "${DOMAIN:-localhost}"
+      FORGEJO__server__SSH_DOMAIN: "${DOMAIN:-localhost}"
+      FORGEJO__server__SSH_PORT: "${SSH_PORT:-2222}"
+      FORGEJO__server__DISABLE_SSH: "${DISABLE_SSH:-true}"
       FORGEJO__i18n__LANGS: en-US
       FORGEJO__i18n__NAMES: English
       FORGEJO__service__DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-true}"
@@ -48,6 +62,12 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   core:
     image: ${CORE_IMAGE:-ghcr.io/liuxsh9/dit-core:latest}
@@ -69,6 +89,12 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   db:
     image: postgres:16
@@ -86,6 +112,13 @@ services:
       - pg-data:/var/lib/postgresql/data
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     restart: unless-stopped
+    mem_limit: 1g
+    shm_size: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
 volumes:
   caddy-data:
