@@ -27,8 +27,9 @@ prompt() {
     else
         echo -en "${CYAN}?${NC} ${msg}: "
     fi
-    read -r REPLY
+    read -r REPLY || true
     [ -z "$REPLY" ] && REPLY="$default"
+    return 0
 }
 
 confirm() {
@@ -38,7 +39,7 @@ confirm() {
     else
         echo -en "${CYAN}?${NC} ${msg} ${DIM}[y/N]${NC}: "
     fi
-    read -r REPLY
+    read -r REPLY || true
     [ -z "$REPLY" ] && REPLY="$default"
     [[ "$REPLY" =~ ^[Yy] ]]
 }
@@ -54,10 +55,10 @@ select_option() {
         echo -e "  ${BOLD}$((i+1)))${NC} ${options[$i]}"
     done
     echo -en "  ${DIM}Enter choice [1-${count}]${NC}: "
-    read -r REPLY
+    read -r REPLY || true
     while [[ ! "$REPLY" =~ ^[0-9]+$ ]] || [ "$REPLY" -lt 1 ] || [ "$REPLY" -gt "$count" ]; do
         echo -en "  ${RED}Invalid.${NC} Enter [1-${count}]: "
-        read -r REPLY
+        read -r REPLY || true
     done
     SELECTED=$((REPLY - 1))
 }
@@ -197,14 +198,14 @@ configure_deployment() {
     else
         while true; do
             echo -en "${CYAN}?${NC} Enter password (min 8 chars): "
-            read -rs ADMIN_PASSWORD
+            read -rs ADMIN_PASSWORD || true
             echo ""
             if [ ${#ADMIN_PASSWORD} -lt 8 ]; then
                 warn "Password must be at least 8 characters."
                 continue
             fi
             echo -en "${CYAN}?${NC} Confirm password: "
-            read -rs password_confirm
+            read -rs password_confirm || true
             echo ""
             if [ "$ADMIN_PASSWORD" != "$password_confirm" ]; then
                 warn "Passwords do not match. Try again."
@@ -238,7 +239,7 @@ configure_deployment() {
     echo ""
     echo -e "  Mode:        ${GREEN}$(case $MODE in 0) echo "HTTP only";; 1) echo "HTTP + SSH";; 2) echo "HTTPS + SSH";; esac)${NC}"
     echo -e "  Web port:    ${GREEN}${GATEWAY_PORT}${NC}"
-    [ -n "$SSH_PORT" ] && echo -e "  SSH port:    ${GREEN}${SSH_PORT}${NC}"
+    [ -n "${SSH_PORT:-}" ] && echo -e "  SSH port:    ${GREEN}${SSH_PORT}${NC}" || true
     echo -e "  URL:         ${GREEN}${ROOT_URL}${NC}"
     echo -e "  Admin:       ${GREEN}${ADMIN_USER}${NC} <${ADMIN_EMAIL}>"
     [ -n "$GATEWAY_IMAGE" ] && echo -e "  Image:       ${GREEN}${GATEWAY_IMAGE}${NC}" || echo -e "  Image:       ${GREEN}build from source${NC}"
@@ -276,9 +277,9 @@ generate_env_file() {
         echo "ROOT_URL=${ROOT_URL}"
         echo "DOMAIN=${DOMAIN}"
         echo "DISABLE_SSH=${DISABLE_SSH}"
-        [ -n "$SSH_PORT" ] && echo "SSH_PORT=${SSH_PORT}"
-        [ -n "$SSH_EXPOSE" ] && echo "SSH_EXPOSE=${SSH_EXPOSE}"
-        [ -n "$GATEWAY_IMAGE" ] && echo "GATEWAY_IMAGE=${GATEWAY_IMAGE}"
+        [ -n "${SSH_PORT:-}" ] && echo "SSH_PORT=${SSH_PORT}" || true
+        [ -n "${SSH_EXPOSE:-}" ] && echo "SSH_EXPOSE=${SSH_EXPOSE}" || true
+        [ -n "${GATEWAY_IMAGE:-}" ] && echo "GATEWAY_IMAGE=${GATEWAY_IMAGE}" || true
     } > .env
 
     chmod 600 .env
