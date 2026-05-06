@@ -50,12 +50,12 @@
 								<h3>{{ctx.Locale.Tr "repo.create_new_repo_command"}}</h3>
 								<div class="markup">
 									<pre><code>touch README.md
-git init{{if eq .Repository.ObjectFormatName "sha256"}} --object-format=sha256{{end}}
-{{if ne .Repository.DefaultBranch "master"}}git switch -c {{.Repository.DefaultBranch}}{{end}}
-git add README.md
-git commit -m "first commit"
-git remote add origin <span class="js-clone-url">{{$.CloneButtonOriginLink.HTTPS}}</span>
-git push -u origin {{.Repository.DefaultBranch}}</code></pre>
+dit init
+{{if ne .Repository.DefaultBranch "master"}}dit checkout -b {{.Repository.DefaultBranch}}{{end}}
+dit add README.md
+dit commit -m "first commit"
+dit remote add origin <span class="js-clone-url">{{$.CloneButtonOriginLink.HTTPS}}</span>
+dit push --branch {{.Repository.DefaultBranch}}</code></pre>
 								</div>
 							</div>
 							<div class="divider"></div>
@@ -63,8 +63,8 @@ git push -u origin {{.Repository.DefaultBranch}}</code></pre>
 							<div class="item">
 								<h3>{{ctx.Locale.Tr "repo.push_exist_repo"}}</h3>
 								<div class="markup">
-									<pre><code>git remote add origin <span class="js-clone-url">{{$.CloneButtonOriginLink.HTTPS}}</span>
-git push -u origin {{.Repository.DefaultBranch}}</code></pre>
+									<pre><code>dit remote add origin <span class="js-clone-url">{{$.CloneButtonOriginLink.HTTPS}}</span>
+dit push --branch {{.Repository.DefaultBranch}}</code></pre>
 								</div>
 							</div>
 						{{end}}

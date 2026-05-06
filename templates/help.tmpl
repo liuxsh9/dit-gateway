@@ -3,7 +3,7 @@
 	<div class="ui container tw-py-4">
 		<div class="markup">
 			<h1>Get started with dit and dit-gateway / 快速开始使用 dit 与 dit-gateway</h1>
-			<p>Use <strong>dit</strong> to change dataset files locally, and use <strong>dit-gateway</strong> to review row-level changes, discuss them, and merge safely in the browser. / 使用 <strong>dit</strong> 在本地修改数据集文件，使用 <strong>dit-gateway</strong> 在浏览器中查看行级变更、讨论并安全合并。</p>
+			<p>Use <strong>dit</strong> to manage dataset files locally, and use <strong>dit-gateway</strong> to review row-level changes, discuss them, and merge safely in the browser. / 使用 <strong>dit</strong> 在本地管理数据集文件，使用 <strong>dit-gateway</strong> 在浏览器中查看行级变更、讨论并安全合并。</p>
 
 			<h2>Why teams use it / 为什么团队使用它</h2>
 			<ul>
@@ -21,47 +21,182 @@
 
 			<h2>Install and connect / 安装与连接</h2>
 			<p>The <code>dit</code> CLI requires Python 3.12+ and <code>uv</code>. / <code>dit</code> CLI 依赖 Python 3.12+ 和 <code>uv</code>。</p>
-			<pre><code>uv pip install git+https://github.com/liuxsh9/dit.git
-dit remote add origin http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit
-dit auth set-token &lt;token&gt; --remote origin</code></pre>
+			<pre><code>uv pip install git+https://github.com/liuxsh9/dit.git</code></pre>
+			<p>After cloning a repo (see below), configure the remote token: / 克隆仓库后（见下文），配置远程令牌：</p>
+			<pre><code>dit auth set-token &lt;token&gt; --remote origin</code></pre>
 			<p>Keep the token private. The token is for your user account; the gateway-to-core <code>SERVICE_TOKEN</code> is a separate server-side secret. / 请妥善保管令牌。这里使用的是你的用户访问令牌；网关到 core 的 <code>SERVICE_TOKEN</code> 是另一套服务端密钥。</p>
 
 			<h2>First successful workflow / 第一次成功跑通流程</h2>
 			<p>Create your working branch before editing data, so <code>main</code> stays clean. / 修改数据前先创建工作分支，避免把提交直接落到 <code>main</code>。</p>
 			<pre><code>dit clone http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset
 cd my-dataset
-dit switch -c my-data-change
+dit checkout -b my-data-change
 
-# edit your dataset files
+# edit your dataset files / 编辑你的数据集文件
 dit status
 dit diff
 dit add path/to/file.jsonl
 dit commit -m "Update evaluation rows"
-dit push -u origin my-data-change</code></pre>
+dit push --branch my-data-change</code></pre>
 
 			<h2>For large repositories / 大仓库建议</h2>
 			<p>Choose one clone mode below. Do not paste both blocks for the same target directory. / 下面两种克隆方式二选一；不要对同一个目标目录连续执行两组命令。</p>
-			<p>Option A: full clone / 方案 A：完整克隆</p>
+			<p>Option A: full clone (default) / 方案 A：完整克隆（默认）</p>
 			<pre><code>dit clone http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset</code></pre>
-			<p>Option B: sparse clone / 方案 B：稀疏克隆</p>
+			<p>Option B: sparse clone — downloads metadata only, fetches file content on demand / 方案 B：稀疏克隆 — 仅下载元数据，按需拉取文件内容</p>
 			<pre><code>dit clone --sparse http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset-sparse
 cd my-dataset-sparse
 dit sparse-checkout add path/to/file.jsonl</code></pre>
+			<p>Manage sparse paths: / 管理稀疏路径：</p>
+			<ul>
+				<li><code>dit sparse-checkout add &lt;path&gt;</code> — fetch and track a file or directory / 拉取并跟踪文件或目录</li>
+				<li><code>dit sparse-checkout remove &lt;path&gt;</code> — stop tracking a path / 停止跟踪某路径</li>
+				<li><code>dit sparse-checkout list</code> — show currently tracked paths / 显示当前跟踪的路径</li>
+				<li><code>dit sparse-checkout disable</code> — convert to full clone / 转为完整克隆</li>
+			</ul>
+
+			<h2>Syncing with the remote / 与远程同步</h2>
+			<pre><code># fetch new objects without updating local branch / 仅下载新对象，不更新本地分支
+dit fetch --branch main
+
+# fetch + fast-forward local branch + update working directory / 拉取并快进本地分支
+dit pull --branch main
+
+# push your branch to the remote / 推送分支到远程
+dit push --branch my-data-change</code></pre>
+
+			<h2>Branching and merging / 分支与合并</h2>
+			<pre><code># create and switch to a new branch / 创建并切换到新分支
+dit checkout -b feature-branch
+
+# switch to an existing branch / 切换到已有分支
+dit switch main
+
+# list branches / 列出分支
+dit branch
+
+# create a branch without switching / 创建分支但不切换
+dit branch new-branch
+
+# delete a branch / 删除分支
+dit branch -d old-branch
+
+# merge a branch into current branch / 将分支合并到当前分支
+dit merge feature-branch
+
+# if conflicts occur / 如果出现冲突
+# resolve conflicts, then:
+dit add &lt;resolved-files&gt;
+dit merge --continue
+
+# or abort the merge / 或者中止合并
+dit merge --abort</code></pre>
+
+			<h2>Tags / 标签</h2>
+			<pre><code># create a tag at HEAD / 在 HEAD 创建标签
+dit tag v1.0
+
+# list tags / 列出标签
+dit tag
+
+# delete a tag / 删除标签
+dit tag -d v1.0</code></pre>
+
+			<h2>Data inspection / 数据检查</h2>
+			<pre><code># search for rows matching a query / 搜索匹配的行
+dit search "keyword"
+dit search "keyword" path/to/file.jsonl --field prompt --limit 20
+
+# show repo-level stats from sidecar metadata / 显示仓库级别的元数据统计
+dit stats
+dit stats --ref my-branch --format json
+
+# compare stats between two refs / 比较两个版本的统计
+dit stats --compare main my-branch
+
+# show which commit introduced each row / 显示每行由哪个提交引入
+dit blame train.jsonl
+dit blame train.jsonl --row 42
+
+# validate rows against .ditvalidate.yaml rules / 根据 .ditvalidate.yaml 规则校验行
+dit validate --ref main
+
+# detect duplicate rows / 检测重复行
+dit dedup --ref main</code></pre>
+
+			<h2>Metadata management / 元数据管理</h2>
+			<p>dit automatically computes sidecar metadata (row count, token stats, field distributions) for JSONL files. / dit 会自动为 JSONL 文件计算附属元数据（行数、token 统计、字段分布）。</p>
+			<pre><code># compute metadata for manifests that lack it / 为缺少元数据的 manifest 计算元数据
+dit meta compute
+
+# show metadata for a specific file / 显示某文件的元数据
+dit meta show train.jsonl
+
+# compare metadata between two refs / 比较两个版本的元数据差异
+dit meta diff main my-branch</code></pre>
+
+			<h2>Export data / 导出数据</h2>
+			<pre><code># export all files from a branch to a local directory / 将分支中的所有文件导出到本地目录
+dit export --ref main --output ./exported
+
+# export a single file as CSV / 导出单个文件为 CSV
+dit export --ref main --file train.jsonl --format csv --output ./out
+
+# include .meta.json sidecar files / 同时导出 .meta.json 附属文件
+dit export --ref main --include-meta --output ./out</code></pre>
+
+			<h2>Maintenance / 维护</h2>
+			<pre><code># verify object store integrity / 验证对象存储完整性
+dit fsck
+
+# remove unreachable objects / 清理不可达对象
+dit gc --dry-run
+dit gc --grace 48</code></pre>
 
 			<h2>Open a pull request in dit-gateway / 在 dit-gateway 中创建 Pull Request</h2>
 			<ol>
 				<li>Open the repository page in the browser. / 在浏览器中打开仓库页面。</li>
-				<li>Go to <a href="{{AppSubUrl}}/pulls">Pull Requests</a> or the repository PR tab, then create a new pull request. / 进入 <a href="{{AppSubUrl}}/pulls">Pull Requests</a> 或仓库内的 PR 页面，创建新的 Pull Request。</li>
+				<li>Go to the Pull Requests tab and click <strong>New Pull Request</strong>. / 进入 Pull Requests 页面，点击 <strong>New Pull Request</strong>。</li>
 				<li>Compare <code>my-data-change</code> into <code>main</code>. / 选择把 <code>my-data-change</code> 合并到 <code>main</code>。</li>
 				<li>Review row-level changes, request reviewers, and merge after approval. / 查看行级变更，邀请审阅者，在审批通过后合并。</li>
 			</ol>
 
-			<h2>What reviewers do in the Web UI / 审阅者在网页端做什么</h2>
-			<ul>
-				<li>Browse changed rows instead of raw Git diffs. / 审阅的是变更后的数据行，而不是生硬的 Git 文本 diff。</li>
-				<li>Comment on suspicious samples and compare revisions. / 对可疑样本评论并比较修订内容。</li>
-				<li>Approve or reject the proposal before merge. / 在合并前批准或驳回该变更。</li>
-			</ul>
+			<h2>Command reference / 命令速查</h2>
+			<table>
+				<thead><tr><th>Command</th><th>Description / 说明</th></tr></thead>
+				<tbody>
+					<tr><td><code>dit init</code></td><td>Initialize a new repository / 初始化新仓库</td></tr>
+					<tr><td><code>dit clone</code></td><td>Clone a remote repository / 克隆远程仓库</td></tr>
+					<tr><td><code>dit add</code></td><td>Stage files / 暂存文件</td></tr>
+					<tr><td><code>dit status</code></td><td>Show working directory status / 显示工作目录状态</td></tr>
+					<tr><td><code>dit diff</code></td><td>Show changes / 显示变更</td></tr>
+					<tr><td><code>dit commit -m "msg"</code></td><td>Create a commit / 创建提交</td></tr>
+					<tr><td><code>dit log</code></td><td>Show commit history / 显示提交历史</td></tr>
+					<tr><td><code>dit branch</code></td><td>List, create, or delete branches / 列出、创建或删除分支</td></tr>
+					<tr><td><code>dit checkout</code></td><td>Switch branches or create with <code>-b</code> / 切换分支或用 <code>-b</code> 创建</td></tr>
+					<tr><td><code>dit switch</code></td><td>Switch to an existing branch / 切换到已有分支</td></tr>
+					<tr><td><code>dit merge</code></td><td>Merge a branch / 合并分支</td></tr>
+					<tr><td><code>dit cherry-pick</code></td><td>Apply a single commit / 挑选单个提交</td></tr>
+					<tr><td><code>dit tag</code></td><td>List, create, or delete tags / 列出、创建或删除标签</td></tr>
+					<tr><td><code>dit reset</code></td><td>Unstage files or reset to HEAD / 取消暂存或重置到 HEAD</td></tr>
+					<tr><td><code>dit push</code></td><td>Push commits to remote / 推送提交到远程</td></tr>
+					<tr><td><code>dit fetch</code></td><td>Download objects from remote / 从远程下载对象</td></tr>
+					<tr><td><code>dit pull</code></td><td>Fetch + fast-forward + update files / 拉取并更新</td></tr>
+					<tr><td><code>dit remote add/remove/list</code></td><td>Manage remotes / 管理远程</td></tr>
+					<tr><td><code>dit auth set-token</code></td><td>Store token for a remote / 存储远程令牌</td></tr>
+					<tr><td><code>dit auth login</code></td><td>Store Forgejo credentials / 存储 Forgejo 凭据</td></tr>
+					<tr><td><code>dit sparse-checkout</code></td><td>Manage sparse paths / 管理稀疏路径</td></tr>
+					<tr><td><code>dit meta compute/show/diff</code></td><td>Sidecar metadata / 元数据计算与查看</td></tr>
+					<tr><td><code>dit stats</code></td><td>Repo-level statistics / 仓库级统计</td></tr>
+					<tr><td><code>dit search</code></td><td>Search rows by keyword / 按关键词搜索行</td></tr>
+					<tr><td><code>dit validate</code></td><td>Validate against rules / 按规则验证</td></tr>
+					<tr><td><code>dit blame</code></td><td>Row-level blame / 行级追溯</td></tr>
+					<tr><td><code>dit dedup</code></td><td>Detect duplicate rows / 检测重复行</td></tr>
+					<tr><td><code>dit export</code></td><td>Export files from a commit / 从提交导出文件</td></tr>
+					<tr><td><code>dit gc</code></td><td>Garbage collection / 垃圾回收</td></tr>
+					<tr><td><code>dit fsck</code></td><td>Verify integrity / 验证完整性</td></tr>
+				</tbody>
+			</table>
 
 			<h2>Useful links / 常用入口</h2>
 			<ul>
