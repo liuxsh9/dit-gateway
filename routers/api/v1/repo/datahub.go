@@ -412,7 +412,7 @@ func datahubGovernancePermissions(ctx *context.APIContext) map[string]bool {
 	return map[string]bool{
 		"pull":  ctx.Repo.CanRead(unit_model.TypeCode),
 		"push":  ctx.Repo.CanWrite(unit_model.TypeCode),
-		"admin": ctx.Repo.Permission.IsAdmin(),
+		"admin": ctx.Repo.IsAdmin(),
 	}
 }
 
