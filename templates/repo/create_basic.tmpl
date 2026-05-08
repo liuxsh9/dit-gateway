@@ -34,7 +34,7 @@
 	<span class="help">{{ctx.Locale.Tr "repo.owner_helper"}}</span>
 </label>
 <label>
-	<input name="is_data_repo" type="checkbox" checked>
+	<input name="is_data_repo" type="checkbox" {{if .is_data_repo}}checked{{end}}>
 	{{ctx.Locale.Tr "repo.data_repo_helper"}}
 	<span class="help">{{ctx.Locale.Tr "repo.data_repo_description"}}</span>
 </label>

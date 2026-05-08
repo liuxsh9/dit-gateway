@@ -716,4 +716,22 @@ func TestRepoCreateFormExposesDataRepoOption(t *testing.T) {
 	htmlDoc := NewHTMLParser(t, resp.Body)
 
 	htmlDoc.AssertElement(t, "input[name='is_data_repo'][type='checkbox']", true)
+	_, checked := htmlDoc.doc.Find("input[name='is_data_repo']").Attr("checked")
+	assert.True(t, checked)
+}
+
+func TestRepoCreateFormKeepsDataRepoUncheckedAfterValidationError(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	session := loginUser(t, "user2")
+	req := NewRequestWithValues(t, "POST", "/repo/create", map[string]string{
+		"uid":       "2",
+		"repo_name": "",
+	})
+	resp := session.MakeRequest(t, req, http.StatusOK)
+	htmlDoc := NewHTMLParser(t, resp.Body)
+
+	htmlDoc.AssertElement(t, "input[name='is_data_repo'][type='checkbox']", true)
+	_, checked := htmlDoc.doc.Find("input[name='is_data_repo']").Attr("checked")
+	assert.False(t, checked)
 }
