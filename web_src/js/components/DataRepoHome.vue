@@ -19,9 +19,61 @@
         <div class="header">Loading repository metadata</div>
         <p>Preparing branches and dataset files.</p>
       </div>
-      <div v-else class="ui message datahub-empty-state">
-        <div class="header">No branches have been published yet</div>
-        <p>Push JSONL data with dit to create the first dataset branch, then this page will show files, rows, tokens, and validation status.</p>
+      <div v-else class="datahub-empty-onboarding">
+        <div class="datahub-empty-onboarding-header">
+          <div>
+            <div class="datahub-overview-label">New dit repository / 新 dit 仓库</div>
+            <h2 class="ui header datahub-empty-title">Quick setup for your first dataset branch</h2>
+            <p>Use dit locally to add JSONL data, push the first branch, then return here for row previews, review workflow, and repository activity.</p>
+            <p class="datahub-empty-cn">在本地用 dit 添加 JSONL 数据并推送第一个分支后，这里会展示文件、行级预览、评审流程和提交记录。</p>
+          </div>
+          <a class="ui small basic button datahub-help-link" :href="helpHref">
+            Full dit guide / 完整指南
+          </a>
+        </div>
+        <div class="datahub-empty-steps" aria-label="Quick start steps">
+          <div class="datahub-empty-step">
+            <div class="datahub-empty-step-icon" aria-hidden="true">
+              <SvgIcon name="octicon-code" :size="18"/>
+            </div>
+            <div>
+              <h3>1. Install dit / 安装 dit</h3>
+              <p>Install the CLI before creating or cloning dataset repositories.</p>
+              <div class="datahub-command-card datahub-empty-command-card">
+                <code>uv pip install git+https://github.com/liuxsh9/dit.git</code>
+              </div>
+            </div>
+          </div>
+          <div class="datahub-empty-step">
+            <div class="datahub-empty-step-icon" aria-hidden="true">
+              <SvgIcon name="octicon-lock" :size="18"/>
+            </div>
+            <div>
+              <h3>2. Create a token / 创建访问令牌</h3>
+              <p>Create a user token in Settings. After adding the origin remote, store the token locally.</p>
+              <div class="datahub-command-card datahub-empty-command-card">
+                <code>dit auth set-token &lt;token&gt; --remote origin</code>
+              </div>
+              <a :href="applicationsHref">Open token settings / 打开令牌设置</a>
+            </div>
+          </div>
+          <div class="datahub-empty-step">
+            <div class="datahub-empty-step-icon" aria-hidden="true">
+              <SvgIcon name="octicon-git-branch" :size="18"/>
+            </div>
+            <div>
+              <h3>3. Push the first JSONL file / 推送第一个 JSONL 文件</h3>
+              <p>Create a branch, commit a JSONL file, and push it to make this Data page useful.</p>
+              <div class="datahub-command-card datahub-empty-command-card">
+                <code>{{ firstDatasetCommand }}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="datahub-empty-next">
+          <strong>After push / 推送后:</strong>
+          refresh this page to browse files, inspect rows, open data pull requests, and review changes before merge.
+        </div>
       </div>
     </div>
 
@@ -143,8 +195,17 @@
           <div v-else-if="currentFolderError" class="ui warning message datahub-table-message">
             {{ currentFolderError }}
           </div>
-          <div v-else-if="directoryEntries.length === 0 && !statsLoading" class="ui message datahub-table-message">
-            This data repository has no JSONL manifests on the selected branch yet.
+          <div v-else-if="directoryEntries.length === 0 && !statsLoading" class="datahub-table-message datahub-empty-branch-guide">
+            <div class="datahub-empty-branch-copy">
+              <div>
+                <div class="header">No JSONL files on this branch yet</div>
+                <p>Add a dataset file with dit, then push the branch to populate this Data page.</p>
+              </div>
+              <a class="ui small basic button" :href="helpHref">dit guide / dit 指南</a>
+            </div>
+            <div class="datahub-command-card datahub-empty-command-card">
+              <code>{{ addDatasetCommand }}</code>
+            </div>
           </div>
           <div v-else-if="filteredDirectoryEntries.length === 0" class="ui message datahub-table-message">
             No files match "{{ fileFilter }}".
@@ -234,14 +295,17 @@
                         class="datahub-file-link"
                         :href="previewHref(entry.path)"
                       >{{ entry.displayName }}</a>
-                      <span v-if="entry.type === 'manifest' && sidecars[entry.path] === null" class="ui tiny basic label">metadata missing</span>
                       <button
                         v-if="entry.type === 'manifest' && sidecars[entry.path] === null"
-                        class="ui mini basic button"
+                        class="ui mini basic icon button datahub-meta-refresh-button"
                         :class="{loading: computingMeta[entry.path]}"
                         :disabled="computingMeta[entry.path]"
+                        :aria-label="`Refresh metadata for ${entry.displayName}`"
+                        :title="`Refresh metadata for ${entry.displayName}`"
                         @click="computeMeta(entry)"
-                      >Compute</button>
+                      >
+                        <SvgIcon name="octicon-sync" :size="14"/>
+                      </button>
                     </div>
                     <div class="datahub-file-mobile-metrics" aria-label="File metrics">
                       <span><strong>Rows</strong> {{ formatCount(entry.row_count) }}</span>
@@ -622,6 +686,18 @@ export default {
     repoPath() {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
     },
+    appSubUrl() {
+      return window.config?.appSubUrl || '';
+    },
+    helpHref() {
+      return `${this.appSubUrl}/-/help`;
+    },
+    applicationsHref() {
+      return `${this.appSubUrl}/user/settings/applications`;
+    },
+    onboardingBranch() {
+      return this.currentBranch ? this.branchName(this.currentBranch) : (this.defaultBranch || 'main');
+    },
     commitsHref() {
       return `${this.repoPath}/data/commits/${encodeURIComponent(this.branchName(this.currentBranch) || this.defaultBranch || 'main')}`;
     },
@@ -630,6 +706,28 @@ export default {
     },
     cloneCommand() {
       return `dit clone ${this.repoUrl}`;
+    },
+    firstDatasetCommand() {
+      return [
+        'mkdir -p data',
+        'printf \'{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}\\n\' > data/sample.jsonl',
+        'dit init',
+        `dit checkout -b ${this.onboardingBranch}`,
+        'dit add data/sample.jsonl',
+        'dit commit -m "add first dataset sample"',
+        `dit remote add origin ${this.repoUrl}`,
+        'dit auth set-token <token> --remote origin',
+        `dit push --remote origin --branch ${this.onboardingBranch}`,
+      ].join('\n');
+    },
+    addDatasetCommand() {
+      return [
+        'mkdir -p data',
+        'printf \'{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}\\n\' > data/sample.jsonl',
+        'dit add data/sample.jsonl',
+        'dit commit -m "add dataset sample"',
+        `dit push --remote origin --branch ${this.onboardingBranch}`,
+      ].join('\n');
     },
     datahubApiUrl() {
       const origin = window.location?.origin || 'http://localhost';
@@ -1102,7 +1200,7 @@ export default {
       try {
         await datahubFetch(this.owner, this.repo, '/meta/compute', {
           method: 'POST',
-          body: JSON.stringify({file: entry.path}),
+          body: JSON.stringify({file: entry.path, refresh: true}),
         });
         await this.loadTree();
       } catch (e) {
@@ -1591,6 +1689,119 @@ export default {
   padding: 10px 0;
 }
 
+.datahub-empty-onboarding {
+  border: 1px solid var(--color-secondary);
+  border-radius: 8px;
+  background: var(--color-box-body);
+  overflow: hidden;
+}
+
+.datahub-empty-onboarding-header {
+  align-items: flex-start;
+  background: var(--color-box-header);
+  border-bottom: 1px solid var(--color-secondary);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 18px 20px;
+}
+
+.datahub-empty-onboarding-header p {
+  color: var(--color-text-light-2);
+  margin: 6px 0 0;
+  max-width: 760px;
+}
+
+.datahub-empty-title {
+  margin: 2px 0 0 !important;
+}
+
+.datahub-empty-cn {
+  color: var(--color-text-light-1) !important;
+}
+
+.datahub-help-link {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.datahub-empty-steps {
+  display: grid;
+  gap: 0;
+}
+
+.datahub-empty-step {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding: 16px 20px;
+}
+
+.datahub-empty-step + .datahub-empty-step {
+  border-top: 1px solid var(--color-secondary);
+}
+
+.datahub-empty-step h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.datahub-empty-step p {
+  color: var(--color-text-light-2);
+  margin: 0 0 10px;
+}
+
+.datahub-empty-step-icon {
+  align-items: center;
+  background: var(--color-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 50%;
+  color: var(--color-text-light-2);
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.datahub-empty-command-card {
+  padding: 8px;
+}
+
+.datahub-empty-command-card code:first-child {
+  margin-top: 0;
+}
+
+.datahub-empty-next {
+  background: var(--color-body);
+  border-top: 1px solid var(--color-secondary);
+  color: var(--color-text-light-2);
+  font-size: 13px;
+  padding: 12px 20px;
+}
+
+.datahub-empty-branch-guide {
+  border-top: 1px solid var(--color-secondary);
+  padding: 16px;
+}
+
+.datahub-empty-branch-copy {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.datahub-empty-branch-copy .header {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.datahub-empty-branch-copy p {
+  color: var(--color-text-light-2);
+  margin: 0;
+}
+
 .datahub-commit-list,
 .datahub-pr-list {
   display: flex;
@@ -1861,6 +2072,19 @@ export default {
   padding-right: 9px !important;
 }
 
+.datahub-meta-refresh-button {
+  min-height: 24px !important;
+  min-width: 24px !important;
+  opacity: 0.45;
+  padding: 4px !important;
+}
+
+.datahub-file-row:hover .datahub-meta-refresh-button,
+.datahub-meta-refresh-button:focus-visible,
+.datahub-meta-refresh-button.loading {
+  opacity: 1;
+}
+
 .datahub-file-mobile-metrics {
   display: none;
 }
@@ -1912,6 +2136,15 @@ export default {
   .datahub-file-browser-tools {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .datahub-empty-onboarding-header,
+  .datahub-empty-branch-copy {
+    flex-direction: column;
+  }
+
+  .datahub-help-link {
+    align-self: flex-start;
   }
 
   .datahub-latest-commit {

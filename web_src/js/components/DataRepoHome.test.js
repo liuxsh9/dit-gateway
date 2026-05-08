@@ -285,7 +285,8 @@ test('shows latest commit and missing metadata inline with affected files', asyn
 
   expect(wrapper.text()).toContain('abcdef1');
   expect(wrapper.text()).toContain('alice');
-  expect(wrapper.text()).toContain('metadata missing');
+  expect(wrapper.text()).not.toContain('metadata missing');
+  expect(wrapper.find('button[aria-label="Refresh metadata for ml2.jsonl"]').exists()).toBe(true);
   expect(wrapper.text()).not.toContain('Metadata coverage');
 });
 
@@ -599,6 +600,11 @@ test('shows dit workflow commands for dataset collaboration', async () => {
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('Use this dataset'));
 
+  expect(wrapper.text()).toContain('No JSONL files on this branch yet');
+  expect(wrapper.text()).toContain('Add a dataset file with dit');
+  expect(wrapper.text()).toContain('dit guide / dit 指南');
+  expect(wrapper.text()).toContain('printf \'{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}\\n\' > data/sample.jsonl');
+  expect(wrapper.text()).toContain('dit commit -m "add dataset sample"');
   expect(wrapper.text()).toContain('dit clone http://localhost:3000/alice/sft-data/datahub');
   expect(wrapper.text()).toContain('dit checkout -b update/sft-batch');
   expect(wrapper.text()).toContain('dit add <jsonl-file> && dit commit -m "update SFT data"');
@@ -801,7 +807,10 @@ test('surfaces metadata compute failures for a file', async () => {
     if (path === '/checks/commit123') return {checks: []};
     if (path === '/log?ref=heads/main&limit=5') return {commits: []};
     if (path === '/pulls?status=open') return [];
-    if (path === '/meta/compute' && options?.method === 'POST') throw new Error('compute failed');
+    if (path === '/meta/compute' && options?.method === 'POST') {
+      expect(JSON.parse(options.body)).toEqual({file: 'ml2.jsonl', refresh: true});
+      throw new Error('compute failed');
+    }
     throw new Error(`unexpected path ${path}`);
   });
 
@@ -810,7 +819,7 @@ test('surfaces metadata compute failures for a file', async () => {
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('ml2.jsonl'));
 
-  await wrapper.findAll('button').find((button) => button.text() === 'Compute').trigger('click');
+  await wrapper.find('button[aria-label="Refresh metadata for ml2.jsonl"]').trigger('click');
   await vi.waitFor(() => expect(wrapper.text()).toContain('compute failed'));
 });
 
@@ -823,9 +832,18 @@ test('shows an empty state when a new data repo has no refs yet', async () => {
   const wrapper = mount(DataRepoHome, {
     props: {owner: 'alice', repo: 'empty-dataset', defaultBranch: 'main'},
   });
-  await vi.waitFor(() => expect(wrapper.text()).toContain('No branches have been published yet'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Quick setup for your first dataset branch'));
 
-  expect(wrapper.text()).toContain('Push JSONL data with dit to create the first dataset branch');
+  expect(wrapper.text()).toContain('New dit repository / 新 dit 仓库');
+  expect(wrapper.text()).toContain('Full dit guide / 完整指南');
+  expect(wrapper.find('a[href="/-/help"]').exists()).toBe(true);
+  expect(wrapper.find('a[href="/user/settings/applications"]').exists()).toBe(true);
+  expect(wrapper.text()).toContain('uv pip install git+https://github.com/liuxsh9/dit.git');
+  expect(wrapper.text()).toContain('dit init');
+  expect(wrapper.text()).toContain('dit checkout -b main');
+  expect(wrapper.text()).toContain('dit remote add origin http://localhost:3000/alice/empty-dataset/datahub');
+  expect(wrapper.text()).toContain('dit auth set-token <token> --remote origin');
+  expect(wrapper.text()).toContain('dit push --remote origin --branch main');
 });
 
 test('keeps a visible loading state while the root data page hydrates', async () => {
@@ -848,7 +866,7 @@ test('keeps a visible loading state while the root data page hydrates', async ()
 
   await wrapper.vm.$nextTick();
   resolveRefs();
-  await vi.waitFor(() => expect(wrapper.text()).toContain('No branches have been published yet'));
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Quick setup for your first dataset branch'));
 });
 
 test('does not keep the whole data page blank when the refs request stalls', async () => {
@@ -1288,7 +1306,7 @@ test('shows API errors before the no-branches empty state', async () => {
   });
   await vi.waitFor(() => expect(wrapper.text()).toContain('Datahub API 502: Bad Gateway'));
 
-  expect(wrapper.text()).not.toContain('No branches have been published yet');
+  expect(wrapper.text()).not.toContain('Quick setup for your first dataset branch');
 });
 
 test('uses file names as direct preview links for manifest files', async () => {
@@ -1330,7 +1348,7 @@ test('uses file names as direct preview links for manifest files', async () => {
   expect(wrapper.text()).not.toContain('Blame');
 });
 
-test('keeps missing metadata compute actions next to the file name', async () => {
+test('keeps missing metadata refresh actions subtle and next to the file name', async () => {
   datahubFetch.mockImplementation(async (owner, repo, path) => {
     if (path === '/refs') return [{name: 'heads/main', target_hash: 'commit123'}];
     if (path === '/refs/heads/main') return {target_hash: 'commit123'};
@@ -1367,7 +1385,8 @@ test('keeps missing metadata compute actions next to the file name', async () =>
 
   expect(wrapper.findAll('th').map((header) => header.text())).not.toContain('Actions');
   const actionCell = wrapper.find('.datahub-file-table tbody tr td:first-child');
-  expect(actionCell.text()).toContain('Compute');
+  expect(actionCell.text()).not.toContain('Compute');
+  expect(actionCell.find('button[aria-label="Refresh metadata for ml2.jsonl"]').exists()).toBe(true);
   expect(actionCell.text()).not.toContain('Preview');
   expect(actionCell.text()).not.toContain('Blame');
 });
