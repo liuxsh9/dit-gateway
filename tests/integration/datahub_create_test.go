@@ -679,6 +679,35 @@ func TestDataRepoActionsPageDoesNotRequireGitRepo(t *testing.T) {
 	htmlDoc.AssertElement(t, ".empty-placeholder", true)
 }
 
+func TestDataRepoWatchAndStarActionsReturnPartialHTML(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "data-repo-watch-star"
+	recorder := mockDatahubCoreCreate(t, repoName)
+
+	ownerSession := loginUser(t, "user2")
+	req := NewRequestWithValues(t, "POST", "/repo/create", map[string]string{
+		"uid":          "2",
+		"repo_name":    repoName,
+		"is_data_repo": "true",
+	})
+	resp := ownerSession.MakeRequest(t, req, http.StatusSeeOther)
+	assert.Equal(t, "/user2/"+repoName, test.RedirectURL(resp))
+	recorder.assertCreated(t)
+
+	actionSession := loginUser(t, "user5")
+	for _, action := range []string{"star", "watch"} {
+		req = NewRequest(t, "POST", "/user2/"+repoName+"/action/"+action).
+			SetHeader("HX-Request", "true").
+			SetHeader("HX-Boosted", "true")
+		resp = actionSession.MakeRequest(t, req, http.StatusOK)
+		assert.Empty(t, resp.Header().Get("HX-Redirect"))
+
+		htmlDoc := NewHTMLParser(t, resp.Body)
+		htmlDoc.AssertElement(t, "form[action='/user2/"+repoName+"/action/un"+action+"']", true)
+	}
+}
+
 func TestRepoCreateFormExposesDataRepoOption(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 
