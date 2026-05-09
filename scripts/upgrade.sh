@@ -59,9 +59,12 @@ check_prerequisites() {
 # --- Version detection ---
 
 current_running_version() {
-    # For prebuilt: read tag from .env
-    if grep -q '^GATEWAY_IMAGE=' .env 2>/dev/null; then
-        grep '^GATEWAY_IMAGE=' .env | sed 's/.*://'
+    # Prefer the actually running gateway container image. .env may have been
+    # edited by a failed upgrade before the container was recreated.
+    local running_image
+    running_image=$(docker compose images gateway --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | head -1 || true)
+    if [ -n "$running_image" ]; then
+        echo "$running_image" | sed 's/.*://'
         return
     fi
 
@@ -128,15 +131,28 @@ run_backup() {
 upgrade_prebuilt() {
     local target_tag="$1"
     local owner="liuxsh9"
+    local gateway_image="ghcr.io/${owner}/dit-gateway:${target_tag}"
+    local core_image="ghcr.io/${owner}/dit-core:${target_tag}"
+
+    info "Pulling gateway and core images for ${target_tag}..."
+    export GATEWAY_IMAGE="$gateway_image"
+    export CORE_IMAGE="$core_image"
+    if ! docker compose pull gateway core; then
+        die "Could not pull both gateway and core images for ${target_tag}. .env was not changed."
+    fi
 
     info "Updating .env image tags to ${target_tag}..."
-    sed -i.bak "s|^GATEWAY_IMAGE=.*|GATEWAY_IMAGE=ghcr.io/${owner}/dit-gateway:${target_tag}|" .env
-    sed -i.bak "s|^CORE_IMAGE=.*|CORE_IMAGE=ghcr.io/${owner}/dit-core:${target_tag}|" .env
+    if grep -q '^GATEWAY_IMAGE=' .env; then
+        sed -i.bak "s|^GATEWAY_IMAGE=.*|GATEWAY_IMAGE=${gateway_image}|" .env
+    else
+        echo "GATEWAY_IMAGE=${gateway_image}" >> .env
+    fi
+    if grep -q '^CORE_IMAGE=' .env; then
+        sed -i.bak "s|^CORE_IMAGE=.*|CORE_IMAGE=${core_image}|" .env
+    else
+        echo "CORE_IMAGE=${core_image}" >> .env
+    fi
     rm -f .env.bak
-
-    info "Pulling new images..."
-    set -a; source .env; set +a
-    docker compose pull gateway core
 }
 
 upgrade_source() {
