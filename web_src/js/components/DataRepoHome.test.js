@@ -679,6 +679,7 @@ test('shows dit workflow commands for dataset collaboration', async () => {
   expect(wrapper.text()).toContain('Add a dataset file with dit');
   expect(wrapper.text()).toContain('dit guide / dit 指南');
   expect(wrapper.text()).toContain('printf \'{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}\\n\' > data/sample.jsonl');
+  expect(wrapper.text()).toContain('dit config user.name "Your Name"');
   expect(wrapper.text()).toContain('dit commit -m "add dataset sample"');
   expect(wrapper.text()).toContain('dit clone http://localhost:3000/alice/sft-data/datahub');
   expect(wrapper.text()).toContain('dit checkout -b update/sft-batch');
@@ -966,6 +967,7 @@ test('shows an empty state when a new data repo has no refs yet', async () => {
   expect(wrapper.find('a[href="/user/settings/applications"]').exists()).toBe(true);
   expect(wrapper.text()).toContain('uv pip install git+https://github.com/liuxsh9/dit.git');
   expect(wrapper.text()).toContain('dit init');
+  expect(wrapper.text()).toContain('dit config user.name "Your Name"');
   expect(wrapper.text()).toContain('dit checkout -b main');
   expect(wrapper.text()).toContain('dit remote add origin http://localhost:3000/alice/empty-dataset/datahub');
   expect(wrapper.text()).toContain('dit auth set-token <token> --remote origin');

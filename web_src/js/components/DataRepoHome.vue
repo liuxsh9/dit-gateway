@@ -726,6 +726,8 @@ export default {
         'mkdir -p data',
         'printf \'{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}\\n\' > data/sample.jsonl',
         'dit init',
+        'dit config user.name "Your Name"',
+        'dit config user.email "you@example.com"',
         `dit checkout -b ${this.onboardingBranch}`,
         'dit add data/sample.jsonl',
         'dit commit -m "add first dataset sample"',
@@ -738,6 +740,8 @@ export default {
       return [
         'mkdir -p data',
         'printf \'{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}\\n\' > data/sample.jsonl',
+        'dit config user.name "Your Name"',
+        'dit config user.email "you@example.com"',
         'dit add data/sample.jsonl',
         'dit commit -m "add dataset sample"',
         `dit push --remote origin --branch ${this.onboardingBranch}`,

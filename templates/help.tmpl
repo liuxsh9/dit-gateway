@@ -25,11 +25,16 @@
 			<p>After cloning a repo (see below), configure the remote token: / 克隆仓库后（见下文），配置远程令牌：</p>
 			<pre><code>dit auth set-token &lt;token&gt; --remote origin</code></pre>
 			<p>Keep the token private. The token is for your user account; the gateway-to-core <code>SERVICE_TOKEN</code> is a separate server-side secret. / 请妥善保管令牌。这里使用的是你的用户访问令牌；网关到 core 的 <code>SERVICE_TOKEN</code> 是另一套服务端密钥。</p>
+			<p>Before your first local commit, set a readable commit identity. / 第一次本地提交前，请先配置可读的提交身份：</p>
+			<pre><code>dit config user.name "Your Name"
+dit config user.email "you@example.com"</code></pre>
 
 			<h2>First successful workflow / 第一次成功跑通流程</h2>
 			<p>Create your working branch before editing data, so <code>main</code> stays clean. / 修改数据前先创建工作分支，避免把提交直接落到 <code>main</code>。</p>
 			<pre><code>dit clone http://&lt;your-server&gt;/&lt;owner&gt;/&lt;repo&gt;.dit my-dataset
 cd my-dataset
+dit config user.name "Your Name"
+dit config user.email "you@example.com"
 dit checkout -b my-data-change
 
 # edit your dataset files / 编辑你的数据集文件
@@ -168,6 +173,7 @@ dit gc --grace 48</code></pre>
 					<tr><td><code>dit init</code></td><td>Initialize a new repository / 初始化新仓库</td></tr>
 					<tr><td><code>dit clone</code></td><td>Clone a remote repository / 克隆远程仓库</td></tr>
 					<tr><td><code>dit add</code></td><td>Stage files / 暂存文件</td></tr>
+					<tr><td><code>dit config user.name</code></td><td>Set local commit identity / 设置本地提交身份</td></tr>
 					<tr><td><code>dit status</code></td><td>Show working directory status / 显示工作目录状态</td></tr>
 					<tr><td><code>dit diff</code></td><td>Show changes / 显示变更</td></tr>
 					<tr><td><code>dit commit -m "msg"</code></td><td>Create a commit / 创建提交</td></tr>

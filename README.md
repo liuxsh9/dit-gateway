@@ -123,6 +123,8 @@ Basic workflow:
 
 ```bash
 dit init
+dit config user.name "Your Name"
+dit config user.email "you@example.com"
 dit add train.jsonl
 dit commit -m "initial dataset"
 dit push
