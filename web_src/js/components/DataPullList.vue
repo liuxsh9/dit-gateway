@@ -127,6 +127,10 @@ export default {
   props: {
     owner: String,
     repo: String,
+    defaultBranch: {
+      type: String,
+      default: 'main',
+    },
   },
   data() {
     return {
@@ -162,7 +166,7 @@ export default {
       return `/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}`;
     },
     newPullHref() {
-      return `${this.repoPath}#change-workflow`;
+      return `${this.repoPath}/data/pulls/new?target=${encodeURIComponent(this.defaultBranch || 'main')}`;
     },
     visiblePulls() {
       const query = this.searchText();

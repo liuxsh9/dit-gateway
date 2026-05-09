@@ -57,6 +57,19 @@ export function initDatahubPullList() {
     createApp(App, {
       owner: el.dataset.owner,
       repo: el.dataset.repo,
+      defaultBranch: el.dataset.defaultBranch,
+    }).mount(el);
+  });
+}
+
+export function initDatahubPullNew() {
+  const el = document.getElementById('data-pull-new');
+  if (!el) return;
+  import(/* webpackChunkName: "datahub-pull-new" */'../components/DataPullNew.vue').then(({default: App}) => {
+    createApp(App, {
+      owner: el.dataset.owner,
+      repo: el.dataset.repo,
+      defaultBranch: el.dataset.defaultBranch,
     }).mount(el);
   });
 }

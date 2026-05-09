@@ -189,6 +189,42 @@ func DatahubListPulls(ctx *context.APIContext) {
 	})
 }
 
+func DatahubDefaultTemplate(ctx *context.APIContext) {
+	if !setting.DataHub.Enabled {
+		ctx.NotFound()
+		return
+	}
+	if !ctx.Repo.Repository.IsDataRepo {
+		ctx.NotFound()
+		return
+	}
+	kind := repo_model.TemplateKind(ctx.FormString("kind"))
+	if kind == "" {
+		kind = repo_model.TemplateKindPullRequest
+	}
+	if kind != repo_model.TemplateKindIssue && kind != repo_model.TemplateKindPullRequest {
+		ctx.Error(http.StatusBadRequest, "DatahubDefaultTemplate", "unknown template kind")
+		return
+	}
+	tmpl, has, err := repo_model.GetDefaultIssuePRTemplate(ctx, ctx.Repo.Repository.ID, kind)
+	if err != nil {
+		ctx.Error(http.StatusInternalServerError, "GetDefaultIssuePRTemplate", err)
+		return
+	}
+	if !has {
+		ctx.JSON(http.StatusOK, map[string]any{})
+		return
+	}
+	ctx.JSON(http.StatusOK, map[string]any{
+		"id":         tmpl.ID,
+		"kind":       tmpl.Kind,
+		"name":       tmpl.Name,
+		"about":      tmpl.About,
+		"content":    tmpl.Content,
+		"is_default": tmpl.IsDefault,
+	})
+}
+
 func normalizeDatahubPullStatus(status string) (string, bool) {
 	switch status {
 	case "", "all":

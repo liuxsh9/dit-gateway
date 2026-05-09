@@ -720,6 +720,19 @@ func (f *DeleteRepoFileForm) Validate(req *http.Request, errs binding.Errors) bi
 	return middleware.Validate(errs, ctx.Data, f, ctx.Locale)
 }
 
+type IssuePRTemplateForm struct {
+	Kind      string `binding:"Required;In(issue,pull_request)"`
+	Name      string `binding:"Required;MaxSize(100)"`
+	About     string `binding:"MaxSize(255)"`
+	Content   string
+	IsDefault bool
+}
+
+func (f *IssuePRTemplateForm) Validate(req *http.Request, errs binding.Errors) binding.Errors {
+	ctx := context.GetValidateContext(req)
+	return middleware.Validate(errs, ctx.Data, f, ctx.Locale)
+}
+
 // ___________.__                 ___________                     __
 // \__    ___/|__| _____   ____   \__    ___/___________    ____ |  | __ ___________
 // |    |   |  |/     \_/ __ \    |    |  \_  __ \__  \ _/ ___\|  |/ // __ \_  __ \

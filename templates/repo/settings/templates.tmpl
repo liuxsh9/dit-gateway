@@ -1,0 +1,62 @@
+{{template "repo/settings/layout_head" (dict "ctxData" . "pageClass" "repository settings templates")}}
+	<div class="user-main-content twelve wide column">
+		<h4 class="ui top attached header">Issue and pull request templates</h4>
+		<div class="ui attached segment">
+			<p class="help">Manage reusable templates for new issues and DataHub pull requests. These follow the same idea as GitHub repository templates: issue templates guide reports, and pull request templates prefill review descriptions.</p>
+			<div class="button-row">
+				<a class="ui primary button" href="{{.RepoLink}}/settings/templates/new?kind=pull_request">New pull request template</a>
+				<a class="ui button" href="{{.RepoLink}}/settings/templates/new?kind=issue">New issue template</a>
+			</div>
+		</div>
+		<div class="ui attached segment">
+			<h4>Managed templates</h4>
+			{{if .ManagedTemplates}}
+				<div class="flex-list">
+					{{range .ManagedTemplates}}
+						<div class="flex-item">
+							<div class="flex-item-main">
+								<div class="flex-item-title">
+									<a href="{{$.RepoLink}}/settings/templates/{{.ID}}">{{.DisplayName}}</a>
+									{{if .IsDefault}}<span class="ui tiny label">Default</span>{{end}}
+								</div>
+								<div class="flex-item-body">{{if eq .Kind "pull_request"}}Pull request{{else}}Issue{{end}}{{if .About}} · {{.About}}{{end}}</div>
+							</div>
+							<div class="flex-item-trailing">
+								<a class="ui tiny button" href="{{$.RepoLink}}/settings/templates/{{.ID}}">Edit</a>
+								<form class="tw-inline" action="{{$.RepoLink}}/settings/templates/{{.ID}}/delete" method="post">
+									<button class="ui tiny red button" type="submit">Delete</button>
+								</form>
+							</div>
+						</div>
+					{{end}}
+				</div>
+			{{else}}
+				<div class="ui message">No managed templates yet.</div>
+			{{end}}
+		</div>
+		{{if not .Repository.IsDataRepo}}
+			<div class="ui attached segment">
+				<h4>File-based templates</h4>
+				<p class="help">For normal Git repositories, you can also create standard template files on the default branch.</p>
+				<div class="ui two column stackable grid">
+					<div class="column">
+						<strong>Pull request templates</strong>
+						<div class="ui list">
+							{{range .PullRequestTemplateFiles}}
+								<a class="item" href="{{$.RepoLink}}/_new/{{$.Repository.DefaultBranch | PathEscapeSegments}}/?filename={{PathEscape .}}">{{.}}</a>
+							{{end}}
+						</div>
+					</div>
+					<div class="column">
+						<strong>Issue templates</strong>
+						<div class="ui list">
+							{{range .IssueTemplateFiles}}
+								<a class="item" href="{{$.RepoLink}}/_new/{{$.Repository.DefaultBranch | PathEscapeSegments}}/?filename={{PathEscape .}}">{{.}}</a>
+							{{end}}
+						</div>
+					</div>
+				</div>
+			</div>
+		{{end}}
+	</div>
+{{template "repo/settings/layout_footer" .}}

@@ -1,0 +1,38 @@
+{{template "repo/settings/layout_head" (dict "ctxData" . "pageClass" "repository settings template-edit")}}
+	<div class="user-main-content twelve wide column">
+		<h4 class="ui top attached header">{{if .Template}}Edit template{{else}}New template{{end}}</h4>
+		<div class="ui attached segment">
+			<form class="ui form" method="post">
+				{{$kind := .TemplateKind}}
+				{{if .Template}}{{$kind = .Template.Kind}}{{end}}
+				<div class="field">
+					<label>Template type</label>
+					<select name="kind">
+						<option value="pull_request" {{if eq $kind "pull_request"}}selected{{end}}>Pull request</option>
+						<option value="issue" {{if eq $kind "issue"}}selected{{end}}>Issue</option>
+					</select>
+				</div>
+				<div class="required field {{if .Err_Name}}error{{end}}">
+					<label>Name</label>
+					<input name="name" maxlength="100" value="{{if .Template}}{{.Template.Name}}{{end}}" required>
+				</div>
+				<div class="field {{if .Err_About}}error{{end}}">
+					<label>Description</label>
+					<input name="about" maxlength="255" value="{{if .Template}}{{.Template.About}}{{end}}">
+				</div>
+				<div class="field">
+					<label>Template content</label>
+					<textarea name="content" rows="14">{{if .Template}}{{.Template.Content}}{{end}}</textarea>
+				</div>
+				<div class="inline field">
+					<div class="ui checkbox">
+						<input name="is_default" type="checkbox" {{if and .Template .Template.IsDefault}}checked{{end}}>
+						<label>Use as default for this template type</label>
+					</div>
+				</div>
+				<button class="ui primary button" type="submit">Save template</button>
+				<a class="ui button" href="{{.RepoLink}}/settings/templates">Cancel</a>
+			</form>
+		</div>
+	</div>
+{{template "repo/settings/layout_footer" .}}

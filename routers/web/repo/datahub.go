@@ -17,6 +17,7 @@ const (
 	tplDataHubCommit  base.TplName = "repo/datahub/commit"
 	tplDataHubPreview base.TplName = "repo/datahub/preview"
 	tplDataHubPulls   base.TplName = "repo/datahub/pulls"
+	tplDataHubPullNew base.TplName = "repo/datahub/pull_new"
 	tplDataHubPull    base.TplName = "repo/datahub/pull"
 	tplDataHubSimple  base.TplName = "repo/datahub/simple"
 )
@@ -81,6 +82,16 @@ func DataHubPulls(ctx *context.Context) {
 	ctx.Data["PageIsViewCode"] = false
 	ctx.Data["PageIsPullList"] = true
 	ctx.HTML(http.StatusOK, tplDataHubPulls)
+}
+
+func DataHubPullNew(ctx *context.Context) {
+	if !requireDataHubRepo(ctx) {
+		return
+	}
+
+	ctx.Data["PageIsViewCode"] = false
+	ctx.Data["PageIsPullList"] = true
+	ctx.HTML(http.StatusOK, tplDataHubPullNew)
 }
 
 func DataHubPull(ctx *context.Context) {

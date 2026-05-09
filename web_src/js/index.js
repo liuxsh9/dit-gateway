@@ -74,6 +74,7 @@ import {
   initDatahubCommitList,
   initDatahubCommitPage,
   initDatahubPullList,
+  initDatahubPullNew,
   initDatahubPullPage,
   initDatahubPreviewPage,
   initDatahubConflictResolver,
@@ -196,6 +197,7 @@ onDomReady(() => {
   initDatahubCommitList();
   initDatahubCommitPage();
   initDatahubPullList();
+  initDatahubPullNew();
   initDatahubPullPage();
   initDatahubPreviewPage();
   initDatahubConflictResolver();

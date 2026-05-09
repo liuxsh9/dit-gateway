@@ -309,6 +309,43 @@ func TestAPIDatahubPullConversationProxy(t *testing.T) {
 	recorder.assertPullConversationCreated(t)
 }
 
+func TestDatahubPullRequestTemplateManagement(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "api-data-repo-pr-template"
+	mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository, auth_model.AccessTokenScopeWriteUser)
+
+	req := NewRequestWithJSON(t, "POST", "/api/v1/user/repos", map[string]any{
+		"name":         repoName,
+		"is_data_repo": true,
+	}).AddTokenAuth(token)
+	session.MakeRequest(t, req, http.StatusCreated)
+
+	req = NewRequest(t, "GET", "/user2/"+repoName+"/settings/templates")
+	resp := session.MakeRequest(t, req, http.StatusOK)
+	settingsBody := resp.Body.String()
+	htmlDoc := NewHTMLParser(t, resp.Body)
+	htmlDoc.AssertElement(t, `a[href="/user2/`+repoName+`/settings/templates/new?kind=pull_request"]`, true)
+	assert.Contains(t, settingsBody, "Issue and pull request templates")
+
+	req = NewRequestWithValues(t, "POST", "/user2/"+repoName+"/settings/templates/new", map[string]string{
+		"kind":       "pull_request",
+		"name":       "Dataset review",
+		"about":      "Default PR checklist",
+		"content":    "## Checklist\n- [ ] Source reviewed",
+		"is_default": "on",
+	})
+	session.MakeRequest(t, req, http.StatusSeeOther)
+
+	req = NewRequest(t, "GET", "/api/v1/repos/user2/"+repoName+"/datahub/templates/default?kind=pull_request").AddTokenAuth(token)
+	resp = session.MakeRequest(t, req, http.StatusOK)
+	assert.Contains(t, resp.Body.String(), "Dataset review")
+	assert.Contains(t, resp.Body.String(), "Source reviewed")
+}
+
 func TestAPIGitRefsOnDataRepoReturnsUnsupportedWithoutOpeningGit(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 

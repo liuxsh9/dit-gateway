@@ -52,6 +52,8 @@ const (
 	tplGithooks        base.TplName = "repo/settings/githooks"
 	tplGithookEdit     base.TplName = "repo/settings/githook_edit"
 	tplDeployKeys      base.TplName = "repo/settings/deploy_keys"
+	tplTemplates       base.TplName = "repo/settings/templates"
+	tplTemplateEdit    base.TplName = "repo/settings/template_edit"
 )
 
 // SettingsCtxData is a middleware that sets all the general context data for the
@@ -105,6 +107,105 @@ func Units(ctx *context.Context) {
 	ctx.Data["PageIsRepoSettingsUnits"] = true
 
 	ctx.HTML(http.StatusOK, tplSettingsUnits)
+}
+
+func Templates(ctx *context.Context) {
+	ctx.Data["Title"] = "Templates"
+	ctx.Data["PageIsSettingsTemplates"] = true
+	templates, err := repo_model.ListIssuePRTemplates(ctx, ctx.Repo.Repository.ID, "")
+	if err != nil {
+		ctx.ServerError("ListIssuePRTemplates", err)
+		return
+	}
+	ctx.Data["ManagedTemplates"] = templates
+	ctx.Data["IssueTemplateFiles"] = []string{
+		".github/ISSUE_TEMPLATE/bug_report.md",
+		".github/ISSUE_TEMPLATE/feature_request.md",
+		".github/ISSUE_TEMPLATE/config.yml",
+	}
+	ctx.Data["PullRequestTemplateFiles"] = []string{
+		".github/PULL_REQUEST_TEMPLATE.md",
+		"docs/PULL_REQUEST_TEMPLATE.md",
+	}
+	ctx.HTML(http.StatusOK, tplTemplates)
+}
+
+func NewTemplate(ctx *context.Context) {
+	ctx.Data["Title"] = "New template"
+	ctx.Data["PageIsSettingsTemplates"] = true
+	ctx.Data["TemplateKind"] = ctx.FormString("kind")
+	ctx.HTML(http.StatusOK, tplTemplateEdit)
+}
+
+func EditTemplate(ctx *context.Context) {
+	ctx.Data["Title"] = "Edit template"
+	ctx.Data["PageIsSettingsTemplates"] = true
+	tmpl, has, err := repo_model.GetIssuePRTemplateByID(ctx, ctx.Repo.Repository.ID, ctx.ParamsInt64("id"))
+	if err != nil {
+		ctx.ServerError("GetIssuePRTemplateByID", err)
+		return
+	}
+	if !has {
+		ctx.NotFound("GetIssuePRTemplateByID", nil)
+		return
+	}
+	ctx.Data["Template"] = tmpl
+	ctx.Data["TemplateKind"] = string(tmpl.Kind)
+	ctx.HTML(http.StatusOK, tplTemplateEdit)
+}
+
+func SaveTemplate(ctx *context.Context) {
+	form := web.GetForm(ctx).(*forms.IssuePRTemplateForm)
+	ctx.Data["Title"] = "Template"
+	ctx.Data["PageIsSettingsTemplates"] = true
+	if ctx.HasError() {
+		ctx.Data["Template"] = &repo_model.IssuePRTemplate{
+			Kind:      repo_model.TemplateKind(form.Kind),
+			Name:      form.Name,
+			About:     form.About,
+			Content:   form.Content,
+			IsDefault: form.IsDefault,
+		}
+		ctx.Data["TemplateKind"] = form.Kind
+		ctx.HTML(http.StatusOK, tplTemplateEdit)
+		return
+	}
+
+	tmpl := &repo_model.IssuePRTemplate{
+		RepoID:    ctx.Repo.Repository.ID,
+		Kind:      repo_model.TemplateKind(form.Kind),
+		Name:      strings.TrimSpace(form.Name),
+		About:     strings.TrimSpace(form.About),
+		Content:   form.Content,
+		IsDefault: form.IsDefault,
+	}
+	if id := ctx.ParamsInt64("id"); id > 0 {
+		existing, has, err := repo_model.GetIssuePRTemplateByID(ctx, ctx.Repo.Repository.ID, id)
+		if err != nil {
+			ctx.ServerError("GetIssuePRTemplateByID", err)
+			return
+		}
+		if !has {
+			ctx.NotFound("GetIssuePRTemplateByID", nil)
+			return
+		}
+		tmpl.ID = existing.ID
+	}
+	if err := repo_model.UpsertIssuePRTemplate(ctx, tmpl); err != nil {
+		ctx.ServerError("UpsertIssuePRTemplate", err)
+		return
+	}
+	ctx.Flash.Success("Template saved.")
+	ctx.Redirect(ctx.Repo.RepoLink + "/settings/templates")
+}
+
+func DeleteTemplate(ctx *context.Context) {
+	if err := repo_model.DeleteIssuePRTemplate(ctx, ctx.Repo.Repository.ID, ctx.ParamsInt64("id")); err != nil {
+		ctx.ServerError("DeleteIssuePRTemplate", err)
+		return
+	}
+	ctx.Flash.Success("Template deleted.")
+	ctx.Redirect(ctx.Repo.RepoLink + "/settings/templates")
 }
 
 func UnitsPost(ctx *context.Context) {

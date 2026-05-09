@@ -67,6 +67,7 @@ test('loads dit pull request counts and renders a github-like inbox', async () =
   expect(wrapper.find('a[href="/alice/dataset/labels"]').exists()).toBe(false);
   expect(wrapper.find('a[href="/alice/dataset/milestones"]').exists()).toBe(false);
   expect(wrapper.text()).toContain('New pull request');
+  expect(wrapper.find('a.datahub-pr-new').attributes('href')).toBe('/alice/dataset/data/pulls/new?target=main');
   expect(wrapper.text()).toContain('2 Open');
   expect(wrapper.text()).toContain('1 Closed');
   expect(wrapper.text()).toContain('1 Merged');
@@ -84,6 +85,23 @@ test('loads dit pull request counts and renders a github-like inbox', async () =
   expect(wrapper.text()).toContain('2');
   expect(wrapper.find('a[href="/alice/dataset/data/pulls/7"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/data/pulls/8"]').exists()).toBe(true);
+});
+
+test('links new pull request to the datahub create page with the default branch', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls?status=open') return [];
+    if (path === '/pulls?status=closed') return [];
+    if (path === '/pulls?status=merged') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullList, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'release/v2'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain("There aren't any open pull requests."));
+
+  expect(wrapper.find('a.datahub-pr-new').attributes('href')).toBe('/alice/dataset/data/pulls/new?target=release%2Fv2');
 });
 
 test('orders pull request filters like the issue list toolbar', async () => {

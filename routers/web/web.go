@@ -1094,6 +1094,12 @@ func registerRoutes(m *web.Route) {
 			}, repo_setting.SettingsCtxData)
 			m.Combo("/units").Get(repo_setting.Units).
 				Post(web.Bind(forms.RepoUnitSettingForm{}), repo_setting.UnitsPost)
+			m.Get("/templates", repo_setting.Templates)
+			m.Combo("/templates/new").Get(repo_setting.NewTemplate).
+				Post(web.Bind(forms.IssuePRTemplateForm{}), repo_setting.SaveTemplate)
+			m.Combo("/templates/{id}").Get(repo_setting.EditTemplate).
+				Post(web.Bind(forms.IssuePRTemplateForm{}), repo_setting.SaveTemplate)
+			m.Post("/templates/{id}/delete", repo_setting.DeleteTemplate)
 			m.Post("/avatar", web.Bind(forms.AvatarForm{}), repo_setting.SettingsAvatar)
 			m.Post("/avatar/delete", repo_setting.SettingsDeleteAvatar)
 
@@ -1199,6 +1205,7 @@ func registerRoutes(m *web.Route) {
 		m.Get("/find/*", repo.FindFiles)
 		m.Group("/data", func() {
 			m.Get("/pulls", repo.DataHubPulls)
+			m.Get("/pulls/new", repo.DataHubPullNew)
 			m.Get("/pulls/{id}", repo.DataHubPull)
 			m.Get("/security", repo.DataHubSecurity)
 			m.Get("/insights", repo.DataHubInsights)
