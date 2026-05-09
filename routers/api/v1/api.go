@@ -1485,6 +1485,7 @@ func Routes() *web.Route {
 					m.Get("/pulls/{id}", repo.DatahubGetPull)
 					m.Post("/pulls/{id}/merge", reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubMergePull)
 					m.Combo("/pulls/{id}/comments").Get(repo.DatahubListPullComments).Post(reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubCreatePullComment)
+					m.Combo("/pulls/{id}/comments/{comment_id}").Patch(reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubUpdatePullComment).Delete(reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubDeletePullComment)
 					m.Combo("/pulls/{id}/reviews").Get(repo.DatahubListPullReviews).Post(reqToken(), reqRepoWriter(unit.TypeCode), repo.DatahubCreatePullReview)
 					m.Get("/governance", repo.DatahubGovernance)
 					m.Get("/manifest/{commit}/*", repo.DatahubGetManifest)

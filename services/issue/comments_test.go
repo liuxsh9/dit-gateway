@@ -83,6 +83,19 @@ func TestDeleteComment(t *testing.T) {
 	})
 }
 
+func TestDeleteCommentWithUnloadedPendingReview(t *testing.T) {
+	require.NoError(t, unittest.PrepareTestDatabase())
+
+	comment := unittest.AssertExistsAndLoadBean(t, &issues_model.Comment{ID: 4}, "review_id != 0")
+	review := unittest.AssertExistsAndLoadBean(t, &issues_model.Review{ID: comment.ReviewID})
+	assert.Equal(t, issues_model.ReviewTypePending, review.Type)
+
+	require.NoError(t, issue_service.DeleteComment(db.DefaultContext, nil, comment))
+
+	unittest.AssertNotExistsBean(t, &issues_model.Comment{ID: comment.ID})
+	unittest.AssertNotExistsBean(t, &issues_model.Review{ID: comment.ReviewID})
+}
+
 func TestUpdateComment(t *testing.T) {
 	// Use the webhook notification to check if a notification is fired for an action.
 	defer test.MockVariableValue(&setting.DisableWebhooks, false)()

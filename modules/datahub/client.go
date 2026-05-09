@@ -232,6 +232,14 @@ func (c *Client) CreatePullComment(ctx context.Context, repoName, id string, bod
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoName+"/pulls/"+id+"/comments", body)
 }
 
+func (c *Client) UpdatePullComment(ctx context.Context, repoName, id, commentID string, body []byte) ([]byte, int, error) {
+	return c.do(ctx, http.MethodPatch, "/api/v1/repos/"+repoName+"/pulls/"+id+"/comments/"+commentID, body)
+}
+
+func (c *Client) DeletePullComment(ctx context.Context, repoName, id, commentID string) ([]byte, int, error) {
+	return c.do(ctx, http.MethodDelete, "/api/v1/repos/"+repoName+"/pulls/"+id+"/comments/"+commentID, nil)
+}
+
 func (c *Client) ListPullReviews(ctx context.Context, repoName, id string) ([]byte, int, error) {
 	return c.do(ctx, http.MethodGet, "/api/v1/repos/"+repoName+"/pulls/"+id+"/reviews", nil)
 }

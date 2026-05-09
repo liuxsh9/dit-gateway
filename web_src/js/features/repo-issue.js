@@ -160,6 +160,7 @@ export function initRepoIssueCommentDelete() {
         }
       } catch (error) {
         console.error(error);
+        showErrorToast(error.message);
       }
     }
   });

@@ -95,10 +95,33 @@
                       <strong>{{ comment.author || comment.user || 'unknown reviewer' }}</strong>
                       commented<span v-if="comment.file_path"> on {{ comment.file_path }}</span>
                       <span class="datahub-muted">{{ formatTimestamp(comment.created_at || comment.updated_at) }}</span>
+                      <div v-if="canWriteConversation && comment.id" class="datahub-comment-actions" @click.stop>
+                        <button type="button" class="ui mini basic button" :disabled="submittingConversation" @click="startEditComment(comment)">
+                          Edit
+                        </button>
+                        <button type="button" class="ui mini basic button" :disabled="submittingConversation" @click="deleteComment(comment)">
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <div class="datahub-timeline-body">
                       <div v-if="commentLocationText(comment)" class="datahub-row-ref">{{ commentLocationText(comment) }}</div>
-                      <p>{{ comment.body || comment.content || 'No comment body.' }}</p>
+                      <form
+                        v-if="editingCommentId === comment.id"
+                        class="datahub-comment-edit-form"
+                        @submit.prevent="saveEditComment(comment)"
+                      >
+                        <textarea v-model="editingCommentBody" rows="3" :disabled="submittingConversation"></textarea>
+                        <div class="datahub-composer-actions">
+                          <button type="button" class="ui small basic button" :disabled="submittingConversation" @click="cancelEditComment">
+                            Cancel
+                          </button>
+                          <button class="ui small primary button" type="submit" :disabled="submittingConversation || !editingCommentBody.trim()">
+                            Save
+                          </button>
+                        </div>
+                      </form>
+                      <p v-else>{{ comment.body || comment.content || 'No comment body.' }}</p>
                     </div>
                   </div>
                 </article>
@@ -134,7 +157,21 @@
                     placeholder="Leave a comment"
                     :disabled="submittingConversation"
                   ></textarea>
+                  <div class="datahub-emoji-strip" aria-label="Insert emoji">
+                    <button
+                      v-for="emoji in quickEmojis"
+                      :key="emoji.value"
+                      type="button"
+                      class="datahub-emoji-button"
+                      :disabled="submittingConversation"
+                      :title="emoji.label"
+                      @click="insertCommentEmoji(emoji.value)"
+                    >
+                      {{ emoji.symbol }}
+                    </button>
+                  </div>
                   <div class="datahub-composer-actions">
+                    <span v-if="conversationError" class="datahub-form-error">{{ conversationError }}</span>
                     <button class="ui primary small button" type="submit" :disabled="submittingConversation || !newCommentBody.trim()">
                       Comment
                     </button>
@@ -374,6 +411,14 @@ export default {
       reviewDecision: 'approved',
       submittingConversation: false,
       conversationError: null,
+      editingCommentId: null,
+      editingCommentBody: '',
+      quickEmojis: [
+        {label: 'Looks good', value: ':+1:', symbol: '+1'},
+        {label: 'Needs attention', value: ':eyes:', symbol: 'eyes'},
+        {label: 'Issue found', value: ':warning:', symbol: '!'},
+        {label: 'Thanks', value: ':heart:', symbol: '<3'},
+      ],
       merging: false,
       mergeError: null,
       diffSummary: null,
@@ -749,6 +794,53 @@ export default {
       } finally {
         this.submittingConversation = false;
       }
+    },
+    startEditComment(comment) {
+      this.conversationError = null;
+      this.editingCommentId = comment.id;
+      this.editingCommentBody = comment.body || comment.content || '';
+    },
+    cancelEditComment() {
+      this.editingCommentId = null;
+      this.editingCommentBody = '';
+    },
+    async saveEditComment(comment) {
+      const body = this.editingCommentBody.trim();
+      if (!body || !comment.id) return;
+      this.submittingConversation = true;
+      this.conversationError = null;
+      try {
+        const updatedComment = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments/${comment.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({body}),
+        });
+        this.comments = this.normalizedComments.map((item) => item.id === comment.id ? updatedComment : item);
+        this.cancelEditComment();
+      } catch (e) {
+        this.conversationError = e.message;
+      } finally {
+        this.submittingConversation = false;
+      }
+    },
+    async deleteComment(comment) {
+      if (!comment.id || !window.confirm('Delete this comment?')) return;
+      this.submittingConversation = true;
+      this.conversationError = null;
+      try {
+        await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments/${comment.id}`, {
+          method: 'DELETE',
+        });
+        this.comments = this.normalizedComments.filter((item) => item.id !== comment.id);
+        if (this.editingCommentId === comment.id) this.cancelEditComment();
+      } catch (e) {
+        this.conversationError = e.message;
+      } finally {
+        this.submittingConversation = false;
+      }
+    },
+    insertCommentEmoji(value) {
+      const separator = this.newCommentBody && !/\s$/.test(this.newCommentBody) ? ' ' : '';
+      this.newCommentBody = `${this.newCommentBody}${separator}${value} `;
     },
     async submitReview() {
       const body = this.newReviewBody.trim();
@@ -1138,11 +1230,21 @@ export default {
 }
 
 .datahub-timeline-card-header {
+  align-items: center;
   background: var(--color-box-header);
   border-bottom: 1px solid var(--color-secondary);
   border-radius: 6px 6px 0 0;
   color: var(--color-text-light);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 10px 14px;
+}
+
+.datahub-comment-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .datahub-timeline-body {
@@ -1206,9 +1308,50 @@ export default {
 }
 
 .datahub-comment-form textarea,
+.datahub-comment-edit-form textarea,
 .datahub-review-form textarea {
   min-height: 88px;
   resize: vertical;
+}
+
+.datahub-comment-edit-form {
+  display: grid;
+  gap: 8px;
+}
+
+.datahub-comment-edit-form textarea {
+  background: var(--color-input-background);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  font: inherit;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.datahub-emoji-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.datahub-emoji-button {
+  align-items: center;
+  background: var(--color-button);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0 8px;
+}
+
+.datahub-emoji-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .datahub-review-form select {

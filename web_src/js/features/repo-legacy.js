@@ -321,8 +321,6 @@ async function onEditContent(event) {
 
   const saveAndRefresh = async (e) => {
     e.preventDefault();
-    showElem(renderContent);
-    hideElem(editContentZone);
     const dropzone = editContentZone.querySelector('.dropzone')?.dropzone;
     for (const element of dropzone?.element?.querySelectorAll('.dz-preview') ?? []) element.classList.remove('dz-success');
     try {
@@ -338,8 +336,8 @@ async function onEditContent(event) {
 
       const response = await POST(editContentZone.getAttribute('data-update-url'), {data: params});
       const data = await response.json();
-      if (response.status === 400) {
-        showErrorToast(data.errorMessage);
+      if (!response.ok) {
+        showErrorToast(data.errorMessage || `server error: ${response.status}`);
         return;
       }
       editContentZone.setAttribute('data-content-version', data.contentVersion);
@@ -365,8 +363,11 @@ async function onEditContent(event) {
       dropzone?.emit('submit');
       initMarkupContent();
       initCommentContent();
+      showElem(renderContent);
+      hideElem(editContentZone);
     } catch (error) {
       console.error(error);
+      showErrorToast(error.message);
     }
   };
 

@@ -313,6 +313,22 @@ func DatahubCreatePullComment(ctx *context.APIContext) {
 	})
 }
 
+func DatahubUpdatePullComment(ctx *context.APIContext) {
+	body, ok := readBody(ctx)
+	if !ok {
+		return
+	}
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().UpdatePullComment(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), ctx.Params(":comment_id"), body)
+	})
+}
+
+func DatahubDeletePullComment(ctx *context.APIContext) {
+	proxyToDatahub(ctx, func() ([]byte, int, error) {
+		return datahub.DefaultClient().DeletePullComment(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), ctx.Params(":comment_id"))
+	})
+}
+
 func DatahubListPullReviews(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().ListPullReviews(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))

@@ -182,6 +182,12 @@ test('loads a github-like pull request conversation with timeline, checks, commi
     if (path === '/pulls/7/comments' && options.method === 'POST') {
       return {id: 3, author: 'carol', body: JSON.parse(options.body).body};
     }
+    if (path === '/pulls/7/comments/3' && options.method === 'PATCH') {
+      return {id: 3, author: 'carol', body: JSON.parse(options.body).body};
+    }
+    if (path === '/pulls/7/comments/3' && options.method === 'DELETE') {
+      return {status: 'deleted', id: 3};
+    }
     if (path === '/pulls/7/comments') {
       return [
         {
@@ -318,6 +324,26 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments', {
     method: 'POST',
     body: JSON.stringify({author: 'carol', body: 'Looks ready for data review.'}),
+  });
+
+  await wrapper.findAll('.datahub-emoji-button').find((button) => button.attributes('title') === 'Looks good').trigger('click');
+  expect(wrapper.find('#datahub-pr-comment').element.value).toBe(':+1: ');
+
+  const addedCommentCard = wrapper.findAll('.datahub-timeline-card').find((card) => card.text().includes('Looks ready for data review.'));
+  await addedCommentCard.findAll('.datahub-comment-actions button').find((button) => button.text() === 'Edit').trigger('click');
+  await addedCommentCard.find('.datahub-comment-edit-form textarea').setValue('Updated PR comment.');
+  await addedCommentCard.find('.datahub-comment-edit-form').trigger('submit');
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Updated PR comment.'));
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments/3', {
+    method: 'PATCH',
+    body: JSON.stringify({body: 'Updated PR comment.'}),
+  });
+
+  vi.stubGlobal('confirm', vi.fn(() => true));
+  await addedCommentCard.findAll('.datahub-comment-actions button').find((button) => button.text() === 'Delete').trigger('click');
+  await vi.waitFor(() => expect(wrapper.text()).not.toContain('Updated PR comment.'));
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments/3', {
+    method: 'DELETE',
   });
 
   await wrapper.find('#datahub-pr-review').setValue('Approved for merge.');
