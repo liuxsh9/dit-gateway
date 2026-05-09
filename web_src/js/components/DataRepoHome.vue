@@ -103,6 +103,10 @@
             </div>
             <span class="datahub-meta-pill">
               <SvgIcon name="octicon-git-branch" :size="16"/>
+              Browsing branch {{ currentBranchName }}
+            </span>
+            <span class="datahub-meta-pill">
+              <SvgIcon name="octicon-git-branch" :size="16"/>
               {{ branchCountText }}
             </span>
             <span class="datahub-meta-pill">
@@ -359,6 +363,9 @@
                 <div class="datahub-overview-detail">
                   {{ pull.author || 'unknown author' }} · {{ branchName(pull.source_ref) }} → {{ branchName(pull.target_ref) }}
                 </div>
+                <div class="datahub-review-range">
+                  Review changes from {{ branchName(pull.source_ref) }} into {{ branchName(pull.target_ref) }}
+                </div>
               </div>
               <span class="ui tiny label" :class="pull.is_mergeable ? 'green' : 'red'">
                 {{ pull.is_mergeable ? 'Mergeable' : 'Needs resolution' }}
@@ -482,6 +489,7 @@
         <div class="item">
           <strong>Review data changes</strong>
           <span class="datahub-review-title">{{ activeReview.title }}</span>
+          <span v-if="activeReview.rangeLabel" class="datahub-review-range">{{ activeReview.rangeLabel }}</span>
         </div>
         <div class="right menu">
           <a class="item" @click="closeReview"><i class="times icon"></i> Close</a>
@@ -698,6 +706,12 @@ export default {
     onboardingBranch() {
       return this.currentBranch ? this.branchName(this.currentBranch) : (this.defaultBranch || 'main');
     },
+    currentBranchName() {
+      return this.currentBranch ? this.branchName(this.currentBranch) : (this.defaultBranch || 'main');
+    },
+    branchStorageKey() {
+      return `datahub-current-branch:${this.owner}/${this.repo}`;
+    },
     commitsHref() {
       return `${this.repoPath}/data/commits/${encodeURIComponent(this.branchName(this.currentBranch) || this.defaultBranch || 'main')}`;
     },
@@ -784,7 +798,7 @@ export default {
     try {
       const refsData = await datahubFetch(this.owner, this.repo, '/refs');
       this.refs = refsData.filter((r) => r.name.startsWith('heads/'));
-      this.currentBranch = this.refs.find((r) => r.name === `heads/${this.defaultBranch}`)?.name || this.refs[0]?.name || '';
+      this.currentBranch = this.resolveInitialBranch();
       if (this.currentBranch) await this.loadTree();
     } catch (e) {
       this.error = e.message;
@@ -798,6 +812,7 @@ export default {
       this.loading = true;
       this.error = null;
       try {
+        this.persistCurrentBranch();
         await this.loadTree();
       } catch (e) {
         this.error = e.message;
@@ -806,6 +821,7 @@ export default {
       }
     },
     async loadTree() {
+      this.persistCurrentBranch();
       const ref = await datahubFetch(this.owner, this.repo, `/refs/${this.currentBranch}`);
       const commitHash = ref.target_hash;
       this.commitHash = commitHash;
@@ -1256,10 +1272,49 @@ export default {
       this.activeReview = {
         id: pull.pull_request_id || pull.id,
         title: `#${pull.pull_request_id || pull.id} ${pull.title || 'Untitled data review'}`,
+        rangeLabel: `${this.branchName(pull.source_ref)} → ${this.branchName(pull.target_ref)}`,
         oldCommit: pull.target_commit,
         newCommit: pull.source_commit,
         conflicts: pull.conflict_files || [],
       };
+    },
+    resolveInitialBranch() {
+      const candidates = [
+        this.branchRefFromName(new URLSearchParams(window.location?.search || '').get('branch')),
+        this.branchRefFromName(this.readStoredBranch()),
+        this.branchRefFromName(this.defaultBranch),
+      ].filter(Boolean);
+      for (const candidate of candidates) {
+        if (this.refs.some((ref) => ref.name === candidate)) return candidate;
+      }
+      return this.refs[0]?.name || '';
+    },
+    persistCurrentBranch() {
+      if (!this.currentBranch) return;
+      const branch = this.branchName(this.currentBranch);
+      try {
+        window.localStorage?.setItem(this.branchStorageKey, branch);
+      } catch {
+        // Ignore unavailable storage; the URL remains the canonical visible state.
+      }
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('branch', branch);
+        window.history?.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      } catch {
+        // Ignore non-browser or locked history environments.
+      }
+    },
+    readStoredBranch() {
+      try {
+        return window.localStorage?.getItem(this.branchStorageKey) || '';
+      } catch {
+        return '';
+      }
+    },
+    branchRefFromName(branch) {
+      const cleanBranch = String(branch || '').trim().replace(/^heads\//, '');
+      return cleanBranch ? `heads/${cleanBranch}` : '';
     },
     closeReview() {
       this.activeReview = null;
@@ -1868,6 +1923,18 @@ export default {
 .datahub-review-title {
   color: var(--color-text-light-2);
   margin-left: 8px;
+}
+
+.datahub-review-range {
+  color: var(--color-text-light-2);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+span.datahub-review-range {
+  display: inline-flex;
+  margin-left: 8px;
+  margin-top: 0;
 }
 
 .datahub-file-table td,

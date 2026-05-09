@@ -1,5 +1,5 @@
 import {mount} from '@vue/test-utils';
-import {expect, test, vi} from 'vitest';
+import {beforeEach, expect, test, vi} from 'vitest';
 
 vi.mock('../utils/datahub-api.js', () => ({
   datahubFetch: vi.fn(),
@@ -7,6 +7,12 @@ vi.mock('../utils/datahub-api.js', () => ({
 
 import DataRepoHome from './DataRepoHome.vue';
 import {datahubFetch} from '../utils/datahub-api.js';
+
+beforeEach(() => {
+  window.history.pushState({}, '', '/');
+  window.localStorage.clear();
+  datahubFetch.mockReset();
+});
 
 const diffStub = {
   name: 'DataDiffView',
@@ -54,6 +60,75 @@ test('loads core tree entries using obj_type and obj_hash fields', async () => {
   expect(wrapper.text()).not.toContain('1 files');
   expect(wrapper.text()).toContain('train.jsonl');
   expect(wrapper.vm.directoryEntries[0].row_count).toBe(2);
+});
+
+test('restores the branch selected on the data page from the URL', async () => {
+  window.history.pushState({}, '', '/alice/dataset?branch=feature%2Fsft-refresh');
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') {
+      return [
+        {name: 'heads/main', target_hash: 'maincommit'},
+        {name: 'heads/feature/sft-refresh', target_hash: 'featurecommit'},
+      ];
+    }
+    if (path === '/refs/heads/feature/sft-refresh') return {target_hash: 'featurecommit'};
+    if (path === '/tree/featurecommit') return {entries: []};
+    if (path === '/stats/featurecommit') {
+      return {
+        files: [],
+        totals: {file_count: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
+      };
+    }
+    if (path === '/checks/featurecommit') return {checks: []};
+    if (path === '/log?ref=heads/feature/sft-refresh&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('No JSONL files on this branch yet'));
+
+  expect(wrapper.vm.currentBranch).toBe('heads/feature/sft-refresh');
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/refs/heads/main');
+  window.history.pushState({}, '', '/');
+});
+
+test('keeps the selected data branch in the URL when switching branches', async () => {
+  window.history.pushState({}, '', '/alice/dataset');
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') {
+      return [
+        {name: 'heads/main', target_hash: 'maincommit'},
+        {name: 'heads/review/safety', target_hash: 'reviewcommit'},
+      ];
+    }
+    if (path === '/refs/heads/main') return {target_hash: 'maincommit'};
+    if (path === '/refs/heads/review/safety') return {target_hash: 'reviewcommit'};
+    if (path === '/tree/maincommit' || path === '/tree/reviewcommit') return {entries: []};
+    if (path === '/stats/maincommit' || path === '/stats/reviewcommit') {
+      return {
+        files: [],
+        totals: {file_count: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
+      };
+    }
+    if (path === '/checks/maincommit' || path === '/checks/reviewcommit') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5' || path === '/log?ref=heads/review/safety&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+  });
+  await vi.waitFor(() => expect(wrapper.vm.currentBranch).toBe('heads/main'));
+
+  await wrapper.find('select[aria-label="Branch"]').setValue('heads/review/safety');
+  await vi.waitFor(() => expect(wrapper.vm.commitHash).toBe('reviewcommit'));
+
+  expect(window.location.search).toBe('?branch=review%2Fsafety');
+  window.history.pushState({}, '', '/');
 });
 
 test('hydrates file list metrics from stats when tree omits row and size fields', async () => {
@@ -747,6 +822,57 @@ test('opens an inline data diff preview from the pull request queue', async () =
   expect(wrapper.text()).toContain('Refresh safety SFT split');
   expect(wrapper.text()).toContain('Diff targetcommit123456..sourcecommit123456');
   expect(wrapper.text()).toContain('Conflicts: train.jsonl');
+});
+
+test('labels the current data branch and pull request review range', async () => {
+  datahubFetch.mockImplementation(async (owner, repo, path) => {
+    if (path === '/refs') {
+      return [
+        {name: 'heads/main', target_hash: 'maincommit'},
+        {name: 'heads/experiment/evals', target_hash: 'evalcommit'},
+      ];
+    }
+    if (path === '/refs/heads/experiment/evals') return {target_hash: 'evalcommit'};
+    if (path === '/tree/evalcommit') return {entries: []};
+    if (path === '/stats/evalcommit') {
+      return {
+        files: [],
+        totals: {file_count: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
+      };
+    }
+    if (path === '/checks/evalcommit') return {checks: []};
+    if (path === '/log?ref=heads/experiment/evals&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') {
+      return [{
+        pull_request_id: 12,
+        title: 'Review eval refresh',
+        author: 'dora',
+        status: 'open',
+        source_ref: 'heads/experiment/evals',
+        target_ref: 'heads/main',
+        source_commit: 'evalcommit',
+        target_commit: 'maincommit',
+        is_mergeable: true,
+      }];
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  window.history.pushState({}, '', '/alice/dataset?branch=experiment%2Fevals');
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main'},
+    global: {stubs: {DataDiffView: diffStub}},
+  });
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Review eval refresh'));
+
+  expect(wrapper.text()).toContain('Browsing branch experiment/evals');
+  expect(wrapper.text()).toContain('Review changes from experiment/evals into main');
+
+  await wrapper.findAll('button').find((button) => button.text() === 'Preview changes').trigger('click');
+
+  expect(wrapper.text()).toContain('experiment/evals → main');
+  expect(wrapper.text()).toContain('Diff maincommit..evalcommit');
+  window.history.pushState({}, '', '/');
 });
 
 test('links recent commits to the dedicated commit page', async () => {
