@@ -76,6 +76,9 @@ func TestNavbarItems(t *testing.T) {
 		defer test.MockVariableValue(&setting.IsProd, false)()
 
 		page := NewHTMLParser(t, regularUser.MakeRequest(t, NewRequest(t, "GET", testPage), http.StatusOK).Body)
+		page.AssertElement(t, `details.dropdown a[href="/-/demo"]`, false)
+
+		page = NewHTMLParser(t, adminUser.MakeRequest(t, NewRequest(t, "GET", testPage), http.StatusOK).Body)
 		page.AssertElement(t, `details.dropdown a[href="/-/demo"]`, true)
 
 		testNavbarUserMenuActiveItem(t, regularUser, "/user/settings")

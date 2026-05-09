@@ -29,12 +29,13 @@ func enableDemoPages() func() {
 
 func TestDemoErrorPages(t *testing.T) {
 	defer enableDemoPages()()
+	session := loginUser(t, "user1")
 
 	t.Run("Server error", func(t *testing.T) {
 		// `/-/demo/error/x` returns 500 for any x by default.
 		// `/500` is simply for good look here
 		req := NewRequest(t, "GET", "/-/demo/error/500")
-		resp := MakeRequest(t, req, http.StatusInternalServerError)
+		resp := session.MakeRequest(t, req, http.StatusInternalServerError)
 		doc := NewHTMLParser(t, resp.Body)
 		assert.Equal(t, "500", doc.Find(".error-code").Text())
 		assert.Contains(t, doc.Find("head title").Text(), "Internal server error")
@@ -45,7 +46,7 @@ func TestDemoErrorPages(t *testing.T) {
 			req := NewRequest(t, "GET", "/-/demo/error/404").
 				// Without this header `notFoundInternal` returns plaintext error message
 				SetHeader("Accept", "text/html")
-			resp := MakeRequest(t, req, http.StatusNotFound)
+			resp := session.MakeRequest(t, req, http.StatusNotFound)
 			doc := NewHTMLParser(t, resp.Body)
 			assert.Equal(t, "404", doc.Find(".error-code").Text())
 			assert.Contains(t, doc.Find("head title").Text(), "Page not found")
@@ -54,7 +55,7 @@ func TestDemoErrorPages(t *testing.T) {
 	t.Run("Quota exhaustion",
 		func(t *testing.T) {
 			req := NewRequest(t, "GET", "/-/demo/error/413")
-			resp := MakeRequest(t, req, http.StatusRequestEntityTooLarge)
+			resp := session.MakeRequest(t, req, http.StatusRequestEntityTooLarge)
 			doc := NewHTMLParser(t, resp.Body)
 			assert.Equal(t, "413", doc.Find(".error-code").Text())
 		})

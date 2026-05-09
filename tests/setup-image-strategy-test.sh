@@ -41,6 +41,9 @@ test_private_team_access_policy() {
     [ "$ACCESS_POLICY" = "Private team workspace" ]
     [ "$DISABLE_REGISTRATION" = "true" ]
     [ "$REQUIRE_SIGNIN_VIEW" = "false" ]
+    [ "$USER_REPO_CREATION_LIMIT" = "0" ]
+    [ "$ALLOW_USER_ORG_CREATION" = "false" ]
+    [ "$DISABLE_REGULAR_ORG_CREATION" = "true" ]
 }
 
 test_open_registration_access_policy() {
@@ -49,6 +52,9 @@ test_open_registration_access_policy() {
     [ "$ACCESS_POLICY" = "Open self-service registration" ]
     [ "$DISABLE_REGISTRATION" = "false" ]
     [ "$REQUIRE_SIGNIN_VIEW" = "false" ]
+    [ "$USER_REPO_CREATION_LIMIT" = "0" ]
+    [ "$ALLOW_USER_ORG_CREATION" = "false" ]
+    [ "$DISABLE_REGULAR_ORG_CREATION" = "true" ]
 }
 
 test_login_required_access_policy() {
@@ -57,14 +63,17 @@ test_login_required_access_policy() {
     [ "$ACCESS_POLICY" = "Login-required workspace" ]
     [ "$DISABLE_REGISTRATION" = "true" ]
     [ "$REQUIRE_SIGNIN_VIEW" = "true" ]
+    [ "$USER_REPO_CREATION_LIMIT" = "0" ]
+    [ "$ALLOW_USER_ORG_CREATION" = "false" ]
+    [ "$DISABLE_REGULAR_ORG_CREATION" = "true" ]
 }
 
 test_default_release_images() {
     run_image_strategy '1\n\n' >/dev/null
 
     [ "$BUILD_FROM_SOURCE" = false ]
-    [ "$GATEWAY_IMAGE" = "ghcr.io/liuxsh9/dit-gateway:v0.1.0" ]
-    [ "$CORE_IMAGE" = "ghcr.io/liuxsh9/dit-core:v0.1.0" ]
+    [ "$GATEWAY_IMAGE" = "ghcr.io/liuxsh9/dit-gateway:${DEFAULT_IMAGE_TAG}" ]
+    [ "$CORE_IMAGE" = "ghcr.io/liuxsh9/dit-core:${DEFAULT_IMAGE_TAG}" ]
 }
 
 test_custom_release_tag() {

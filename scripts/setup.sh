@@ -67,7 +67,7 @@ separator() {
     echo -e "${DIM}─────────────────────────────────────────${NC}"
 }
 
-DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.1}"
+DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.4}"
 
 deployment_mode_label() {
     case "$1" in
@@ -270,16 +270,25 @@ configure_access_policy() {
             ACCESS_POLICY="Private team workspace"
             DISABLE_REGISTRATION="true"
             REQUIRE_SIGNIN_VIEW="false"
+            USER_REPO_CREATION_LIMIT="0"
+            ALLOW_USER_ORG_CREATION="false"
+            DISABLE_REGULAR_ORG_CREATION="true"
             ;;
         1)
             ACCESS_POLICY="Open self-service registration"
             DISABLE_REGISTRATION="false"
             REQUIRE_SIGNIN_VIEW="false"
+            USER_REPO_CREATION_LIMIT="0"
+            ALLOW_USER_ORG_CREATION="false"
+            DISABLE_REGULAR_ORG_CREATION="true"
             ;;
         2)
             ACCESS_POLICY="Login-required workspace"
             DISABLE_REGISTRATION="true"
             REQUIRE_SIGNIN_VIEW="true"
+            USER_REPO_CREATION_LIMIT="0"
+            ALLOW_USER_ORG_CREATION="false"
+            DISABLE_REGULAR_ORG_CREATION="true"
             ;;
     esac
 }
@@ -360,6 +369,9 @@ generate_env_file() {
         echo "DISABLE_SSH=${DISABLE_SSH}"
         echo "DISABLE_REGISTRATION=${DISABLE_REGISTRATION}"
         echo "REQUIRE_SIGNIN_VIEW=${REQUIRE_SIGNIN_VIEW}"
+        echo "USER_REPO_CREATION_LIMIT=${USER_REPO_CREATION_LIMIT:-0}"
+        echo "ALLOW_USER_ORG_CREATION=${ALLOW_USER_ORG_CREATION:-false}"
+        echo "DISABLE_REGULAR_ORG_CREATION=${DISABLE_REGULAR_ORG_CREATION:-true}"
         [ -n "${SSH_PORT:-}" ] && echo "SSH_PORT=${SSH_PORT}" || true
         [ -n "${SSH_EXPOSE:-}" ] && echo "SSH_EXPOSE=${SSH_EXPOSE}" || true
         [ -n "${GATEWAY_IMAGE:-}" ] && echo "GATEWAY_IMAGE=${GATEWAY_IMAGE}" || true

@@ -201,7 +201,7 @@
 								{{ctx.Locale.Tr "help"}}
 							</a>
 						</li>
-						{{$showDemo := not .RunModeIsProd}}
+						{{$showDemo := and .IsAdmin (not .RunModeIsProd)}}
 						{{if or .IsAdmin $showDemo}}
 							<hr>
 						{{end}}

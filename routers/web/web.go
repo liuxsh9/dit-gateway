@@ -1755,7 +1755,7 @@ func registerRoutes(m *web.Route) {
 			m.Any("/demo/fetch-action-test", demo.FetchActionTest)
 			m.Any("/demo/{sub}", demo.Tmpl)
 			m.Get("/demo/error/{errcode}", demo.ErrorPage)
-		}, ignSignIn)
+		}, adminReq)
 	}
 
 	m.NotFound(func(w http.ResponseWriter, req *http.Request) {

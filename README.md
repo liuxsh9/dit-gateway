@@ -55,12 +55,26 @@ docker compose exec gateway forgejo admin user create \
   --admin --must-change-password=false
 ```
 
+To reset or recreate the production administrator account later, run the
+host-side helper against the running container:
+
+```bash
+ADMIN_USER=sys ADMIN_PASSWORD='new-strong-password' ./scripts/reset-admin.sh
+```
+
+If `ADMIN_PASSWORD` is omitted, the script generates a random password and
+prints it once. The helper runs `docker compose exec gateway forgejo ...`, so an
+existing release container such as `v0.1.4` does not need a new image tag just to
+use this script; pull the repository on the server and run the helper from the
+deployment directory. A new tag/image is only needed when the change must be
+baked into the container image or changes runtime compose behavior.
+
 See `.env.example` for all available options (ports, SSH, TLS domain, pre-built image).
-The setup wizard defaults to release images tagged `v0.1.1`. To choose another
+The setup wizard defaults to release images tagged `v0.1.4`. To choose another
 release without typing full image names, run:
 
 ```bash
-DIT_IMAGE_TAG=v0.1.1 sudo ./scripts/setup.sh
+DIT_IMAGE_TAG=v0.1.4 sudo ./scripts/setup.sh
 ```
 
 ### TLS with Custom Domain
@@ -230,7 +244,12 @@ Do not use `Dockerfile.datahub`; it is deprecated and fails fast intentionally.
 - Choose `Private team workspace` in setup for production unless there is an explicit onboarding process.
 - Choose `Open self-service registration` only when users should register themselves at `/user/sign_up`.
 - Choose `Login-required workspace` when anonymous visitors should not browse public pages.
+- By default, setup also keeps repository and organization creation admin-managed:
+  `USER_REPO_CREATION_LIMIT=0`, `ALLOW_USER_ORG_CREATION=false`, and
+  `DISABLE_REGULAR_ORG_CREATION=true`.
 - Keep the `sys` account for emergency administration only. Use separate named accounts for daily work.
+- To force-reset the emergency admin password in a container deployment, use
+  `ADMIN_USER=sys ADMIN_PASSWORD='new-strong-password' ./scripts/reset-admin.sh`.
 - To require password change on handoff, use `--must-change-password=true`.
 
 </details>

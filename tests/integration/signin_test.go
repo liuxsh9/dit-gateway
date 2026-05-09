@@ -171,14 +171,18 @@ func TestGlobalTwoFactorRequirement(t *testing.T) {
 			assert.Greater(t, htmlDoc.Find(".navbar-left > a.item").Length(), 1) // show the Logo, and other links
 			assert.Greater(t, htmlDoc.Find(".navbar-right details.dropdown a").Length(), 1)
 
-			// demo pages are using ignSignIn and are expected to be accessible with loginAllowed
+			// demo pages are dev-only system pages and require site admin access
 			reset := enableDemoPages()
 			req = NewRequest(t, "GET", "/-/demo/error/500")
 			req.Header.Add("Accept", "text/html")
-			resp = session.MakeRequest(t, req, http.StatusInternalServerError)
-			htmlDoc = NewHTMLParser(t, resp.Body)
-			assert.Equal(t, 1, htmlDoc.Find(".navbar-left > a.item").Length())
-			htmlDoc.AssertElement(t, ".navbar-right", false)
+			if user.IsAdmin {
+				resp = session.MakeRequest(t, req, http.StatusInternalServerError)
+				htmlDoc = NewHTMLParser(t, resp.Body)
+				assert.Equal(t, 1, htmlDoc.Find(".navbar-left > a.item").Length())
+				htmlDoc.AssertElement(t, ".navbar-right", false)
+			} else {
+				session.MakeRequest(t, req, http.StatusForbidden)
+			}
 			reset()
 		} else {
 			resp := session.MakeRequest(t, req, http.StatusSeeOther)
