@@ -67,7 +67,7 @@ separator() {
     echo -e "${DIM}─────────────────────────────────────────${NC}"
 }
 
-DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.4}"
+DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.5}"
 GATEWAY_EXEC_USER="${GATEWAY_EXEC_USER:-git}"
 
 deployment_mode_label() {

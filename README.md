@@ -64,7 +64,7 @@ ADMIN_USER=sys ADMIN_PASSWORD='new-strong-password' ./scripts/reset-admin.sh
 
 If `ADMIN_PASSWORD` is omitted, the script generates a random password and
 prints it once. The helper runs `docker compose exec gateway forgejo ...`, so an
-existing release container such as `v0.1.4` does not need a new image tag just to
+existing release container such as `v0.1.5` does not need a new image tag just to
 use this script; pull the repository on the server and run the helper from the
 deployment directory. A new tag/image is only needed when the change must be
 baked into the container image or changes runtime compose behavior. The helper
@@ -72,11 +72,11 @@ runs Forgejo inside the container as the `git` user, because Forgejo refuses to
 run administrative commands as root.
 
 See `.env.example` for all available options (ports, SSH, TLS domain, pre-built image).
-The setup wizard defaults to release images tagged `v0.1.4`. To choose another
+The setup wizard defaults to release images tagged `v0.1.5`. To choose another
 release without typing full image names, run:
 
 ```bash
-DIT_IMAGE_TAG=v0.1.4 sudo ./scripts/setup.sh
+DIT_IMAGE_TAG=v0.1.5 sudo ./scripts/setup.sh
 ```
 
 ### TLS with Custom Domain
