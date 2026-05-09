@@ -64,7 +64,7 @@ ADMIN_USER=sys ADMIN_PASSWORD='new-strong-password' ./scripts/reset-admin.sh
 
 If `ADMIN_PASSWORD` is omitted, the script generates a random password and
 prints it once. The helper runs `docker compose exec gateway forgejo ...`, so an
-existing release container such as `v0.1.5` does not need a new image tag just to
+existing release container such as `v0.1.6` does not need a new image tag just to
 use this script; pull the repository on the server and run the helper from the
 deployment directory. A new tag/image is only needed when the change must be
 baked into the container image or changes runtime compose behavior. The helper
@@ -72,11 +72,11 @@ runs Forgejo inside the container as the `git` user, because Forgejo refuses to
 run administrative commands as root.
 
 See `.env.example` for all available options (ports, SSH, TLS domain, pre-built image).
-The setup wizard defaults to release images tagged `v0.1.5`. To choose another
+The setup wizard defaults to release images tagged `v0.1.6`. To choose another
 release without typing full image names, run:
 
 ```bash
-DIT_IMAGE_TAG=v0.1.5 sudo ./scripts/setup.sh
+DIT_IMAGE_TAG=v0.1.6 sudo ./scripts/setup.sh
 ```
 
 ### TLS with Custom Domain
@@ -139,8 +139,20 @@ See the [dit README](https://github.com/liuxsh9/dit) for full CLI documentation.
 The upgrade script will:
 - Detect the current and latest available version
 - Offer a pre-upgrade backup
-- Pull new images (or checkout source) and restart services
+- Pull matching gateway and core images before changing `.env`, or checkout matching source tags
 - Run health checks and print rollback instructions on failure
+
+Pre-built releases are versioned as a pair:
+
+```bash
+GATEWAY_IMAGE=ghcr.io/liuxsh9/dit-gateway:v0.1.6
+CORE_IMAGE=ghcr.io/liuxsh9/dit-core:v0.1.6
+```
+
+Do not upgrade only one of these images. `./scripts/upgrade.sh` pulls both
+images for the target tag first and leaves `.env` unchanged if either image is
+missing, so a failed pull cannot leave the deployment configured for a
+half-upgrade.
 
 Manual rollback from backup:
 

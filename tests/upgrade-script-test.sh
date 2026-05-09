@@ -59,6 +59,50 @@ STUB
     chmod +x "$tmp_dir/docker"
 }
 
+with_fake_git_tags() {
+    local tmp_dir="$1"
+
+    cat >"$tmp_dir/git" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%q ' "$@" >>"${UPGRADE_TEST_GIT_LOG:?}"
+printf '\n' >>"${UPGRADE_TEST_GIT_LOG:?}"
+
+if [ "$*" = "fetch --tags --quiet" ]; then
+    exit 0
+fi
+
+if [ "$*" = "tag -l v0.* --sort=-version:refname" ]; then
+    printf 'v0.1.6\nv0.1.5\nv0.1.4\n'
+    exit 0
+fi
+
+if [ "$*" = "tag -l v* --sort=-version:refname" ]; then
+    printf 'v15.0.0\nv14.0.0\nv0.1.6\nv0.1.5\n'
+    exit 0
+fi
+
+echo "unexpected git command: $*" >&2
+exit 2
+STUB
+    chmod +x "$tmp_dir/git"
+}
+
+test_latest_available_version_ignores_upstream_forgejo_tags() {
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' RETURN
+    with_fake_git_tags "$tmp_dir"
+
+    PATH="$tmp_dir:$PATH" \
+    UPGRADE_TEST_GIT_LOG="$tmp_dir/git.log" \
+    latest_available_version >"$tmp_dir/latest"
+
+    grep -Fxq "v0.1.6" "$tmp_dir/latest"
+    assert_contains "$tmp_dir/git.log" "tag -l v0.\\* --sort=-version:refname"
+}
+
 test_current_running_version_prefers_actual_container_image() {
     local tmp_dir
     tmp_dir="$(mktemp -d)"
@@ -132,6 +176,7 @@ ENV
     assert_contains "$tmp_dir/.env" "CORE_IMAGE=ghcr.io/liuxsh9/dit-core:v0.1.4"
 }
 
+test_latest_available_version_ignores_upstream_forgejo_tags
 test_current_running_version_prefers_actual_container_image
 test_prebuilt_upgrade_updates_env_after_pull_success
 test_prebuilt_upgrade_keeps_env_when_pull_fails

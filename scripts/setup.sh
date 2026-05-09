@@ -67,7 +67,7 @@ separator() {
     echo -e "${DIM}─────────────────────────────────────────${NC}"
 }
 
-DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.5}"
+DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.6}"
 GATEWAY_EXEC_USER="${GATEWAY_EXEC_USER:-git}"
 
 deployment_mode_label() {
@@ -396,7 +396,9 @@ deploy_services() {
 
     if [ -n "${GATEWAY_IMAGE:-}" ] || [ -n "${CORE_IMAGE:-}" ]; then
         info "Pulling pre-built service images..."
-        docker compose $profile_args pull gateway core
+        if ! docker compose $profile_args pull gateway core; then
+            die "Could not pull both gateway and core images. Check that the selected tag exists for both repositories."
+        fi
 
         info "Starting services from pre-built images..."
         docker compose $profile_args up --no-build -d

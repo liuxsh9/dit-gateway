@@ -97,7 +97,9 @@ current_running_version() {
 
 latest_available_version() {
     git fetch --tags --quiet 2>/dev/null || true
-    git tag -l 'v*' --sort=-version:refname | head -1
+    # This fork keeps upstream Forgejo tags like v15.0.0 in the same git repo.
+    # DIT Gateway release images are published only from the coordinated v0.* line.
+    git tag -l 'v0.*' --sort=-version:refname | head -1
 }
 
 image_strategy() {
