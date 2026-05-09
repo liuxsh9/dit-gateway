@@ -56,30 +56,43 @@
       </div>
     </div>
 
-    <div class="datahub-diff-layout">
+    <div class="datahub-diff-layout" :class="{'is-file-sidebar-collapsed': fileSidebarCollapsed}">
       <aside class="datahub-file-sidebar" aria-label="Changed files">
         <div class="datahub-file-sidebar-header">
-          <strong>Files changed</strong>
-          <span>{{ visibleFiles.length }} shown</span>
+          <div class="datahub-file-sidebar-title">
+            <strong>Files changed</strong>
+            <span>{{ visibleFiles.length }} shown</span>
+          </div>
+          <button
+            type="button"
+            class="datahub-file-sidebar-toggle"
+            :aria-expanded="String(!fileSidebarCollapsed)"
+            :aria-label="fileSidebarCollapsed ? 'Expand files changed sidebar' : 'Collapse files changed sidebar'"
+            @click="toggleFileSidebar"
+          >
+            <SvgIcon :name="fileSidebarCollapsed ? 'octicon-chevron-right' : 'octicon-chevron-left'" :size="14"/>
+          </button>
         </div>
-        <button
-          v-for="file in visibleFiles"
-          :key="file.path"
-          type="button"
-          class="datahub-file-item"
-          :class="{active: file.path === activeFile, viewed: isViewed(file.path)}"
-          @click="selectFile(file.path)"
-        >
-          <span class="datahub-file-path">{{ file.path }}</span>
-          <span class="datahub-file-badges">
-            <span class="datahub-file-viewed" v-if="isViewed(file.path)">Viewed</span>
-            <span class="datahub-file-added" v-if="file.added">+{{ file.added }}</span>
-            <span class="datahub-file-removed" v-if="file.removed">-{{ file.removed }}</span>
-            <span class="datahub-file-refreshed" v-if="file.refreshed">~{{ file.refreshed }}</span>
-          </span>
-        </button>
-        <div class="datahub-file-empty" v-if="files.length && visibleFiles.length === 0">
-          All viewed files are hidden.
+        <div class="datahub-file-sidebar-body" v-if="!fileSidebarCollapsed">
+          <button
+            v-for="file in visibleFiles"
+            :key="file.path"
+            type="button"
+            class="datahub-file-item"
+            :class="{active: file.path === activeFile, viewed: isViewed(file.path)}"
+            @click="selectFile(file.path)"
+          >
+            <span class="datahub-file-path">{{ file.path }}</span>
+            <span class="datahub-file-badges">
+              <span class="datahub-file-viewed" v-if="isViewed(file.path)">Viewed</span>
+              <span class="datahub-file-added" v-if="file.added">+{{ file.added }}</span>
+              <span class="datahub-file-removed" v-if="file.removed">-{{ file.removed }}</span>
+              <span class="datahub-file-refreshed" v-if="file.refreshed">~{{ file.refreshed }}</span>
+            </span>
+          </button>
+          <div class="datahub-file-empty" v-if="files.length && visibleFiles.length === 0">
+            All viewed files are hidden.
+          </div>
         </div>
       </aside>
 
@@ -370,6 +383,7 @@
 
 <script>
 import {datahubFetch} from '../utils/datahub-api.js';
+import {SvgIcon} from '../svg.js';
 import JsonlRowRenderer from './JsonlRowRenderer.vue';
 
 const ROW_PAGE_SIZE = 50;
@@ -377,7 +391,7 @@ const REFRESH_FIELD_SUMMARY_LIMIT = 8;
 const FIELD_VALUE_MAX_LENGTH = 96;
 
 export default {
-  components: {JsonlRowRenderer},
+  components: {JsonlRowRenderer, SvgIcon},
   emits: ['summary-loaded', 'comment-created'],
   props: {
     owner: String,
@@ -416,6 +430,7 @@ export default {
       inlineCommentBody: '',
       submittingCommentKey: null,
       commentError: null,
+      fileSidebarCollapsed: false,
     };
   },
   computed: {
@@ -705,6 +720,9 @@ export default {
     toggleWhitespace() {
       this.whitespaceMode = this.whitespaceMode === 'show' ? 'ignore' : 'show';
     },
+    toggleFileSidebar() {
+      this.fileSidebarCollapsed = !this.fileSidebarCollapsed;
+    },
     fileChangeSummary(file) {
       const parts = [];
       if (file.added) parts.push(`+${file.added}`);
@@ -864,6 +882,7 @@ export default {
 .datahub-diff-view {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .datahub-diff-header,
@@ -878,7 +897,7 @@ export default {
 
 .datahub-diff-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .datahub-diff-stat {
@@ -999,13 +1018,24 @@ export default {
 .datahub-diff-layout {
   align-items: start;
   display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(220px, 28%) minmax(0, 1fr);
+  gap: 12px;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.datahub-diff-layout.is-file-sidebar-collapsed {
+  grid-template-columns: 44px minmax(0, 1fr);
 }
 
 .datahub-file-sidebar {
   max-height: calc(100vh - 180px);
   overflow: auto;
+  position: sticky;
+  top: 12px;
+}
+
+.datahub-diff-layout.is-file-sidebar-collapsed .datahub-file-sidebar {
+  overflow: visible;
 }
 
 .datahub-file-sidebar-header,
@@ -1019,10 +1049,49 @@ export default {
   padding: 10px 12px;
 }
 
+.datahub-file-sidebar-header {
+  min-height: 42px;
+}
+
+.datahub-file-sidebar-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .datahub-file-sidebar-header span,
 .datahub-file-diff-header span {
   color: var(--color-text-light-2);
   font-size: 12px;
+}
+
+.datahub-file-sidebar-toggle {
+  align-items: center;
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 6px;
+  color: var(--color-text-light);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+.datahub-file-sidebar-toggle:hover {
+  background: var(--color-active);
+  color: var(--color-text);
+}
+
+.datahub-diff-layout.is-file-sidebar-collapsed .datahub-file-sidebar-header {
+  justify-content: center;
+  padding: 6px;
+}
+
+.datahub-diff-layout.is-file-sidebar-collapsed .datahub-file-sidebar-title {
+  display: none;
 }
 
 .datahub-file-item {
@@ -1192,7 +1261,7 @@ export default {
   border: 1px solid var(--color-secondary);
   border-radius: 6px;
   display: grid;
-  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(150px, 200px) minmax(0, 1fr);
   height: min(760px, calc(100vh - 260px));
   min-height: 520px;
   overflow: hidden;
@@ -1273,6 +1342,7 @@ export default {
 .datahub-diff-row-review .datahub-selected-row {
   background: var(--color-body);
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   padding: 12px;
 }
@@ -1361,8 +1431,9 @@ export default {
 
 .datahub-diff-refresh-pair {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
 }
 
 .datahub-refresh-field-summary {
@@ -1437,6 +1508,7 @@ export default {
 
 .datahub-diff-refresh-side {
   border-radius: 6px;
+  min-width: 0;
   padding: 10px;
 }
 
@@ -1484,8 +1556,22 @@ export default {
     grid-template-columns: 1fr;
   }
 
+  .datahub-diff-layout.is-file-sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .datahub-file-sidebar {
     max-height: none;
+    position: static;
+  }
+
+  .datahub-diff-layout.is-file-sidebar-collapsed .datahub-file-sidebar-header {
+    justify-content: space-between;
+    padding: 10px 12px;
+  }
+
+  .datahub-diff-layout.is-file-sidebar-collapsed .datahub-file-sidebar-title {
+    display: grid;
   }
 }
 

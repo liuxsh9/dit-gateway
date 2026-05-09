@@ -108,6 +108,44 @@ test('renders github-like files changed controls and reviewed progress in review
   expect(wrapper.text()).toContain('Viewed 1 of 2 files');
 });
 
+test('collapses the changed files sidebar to give the row preview more space', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/diff/old123/new456') {
+      return {
+        summary: {files_changed: 1, rows_added: 1, rows_removed: 0, rows_refreshed: 0},
+        files: [
+          {
+            path: 'single_turn_slow_sample20.jsonl',
+            added: 1,
+            removed: 0,
+            refreshed: 0,
+            added_rows: [
+              {row_hash: 'row-1', content: {messages: [{role: 'user', content: 'wide review target'}]}},
+            ],
+          },
+        ],
+      };
+    }
+    if (path === '/meta/diff/old123/new456') return {files: []};
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataDiffView, {
+    props: {owner: 'alice', repo: 'dataset', oldCommit: 'old123', newCommit: 'new456'},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('wide review target'));
+
+  const toggle = wrapper.find('button.datahub-file-sidebar-toggle');
+  expect(toggle.exists()).toBe(true);
+  expect(toggle.attributes('aria-expanded')).toBe('true');
+
+  await toggle.trigger('click');
+
+  expect(wrapper.find('.datahub-diff-layout').classes()).toContain('is-file-sidebar-collapsed');
+  expect(toggle.attributes('aria-expanded')).toBe('false');
+});
+
 test('renders removed and refreshed summary counts with readable labels', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/diff/old123/new456') {
