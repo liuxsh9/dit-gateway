@@ -244,8 +244,7 @@
 
 .repository.issue-list #issue-filters .issue-list-toolbar-right {
   flex: 1 1 auto;
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: visible;
 }
 
 .repository.issue-list #issue-filters .issue-list-toolbar-left .switch {
@@ -425,8 +424,8 @@
 
   .repository.issue-list #issue-filters .issue-list-toolbar-right .filter.menu {
     justify-content: flex-start;
-    overflow-x: auto;
-    overflow-y: visible;
+    flex-wrap: wrap;
+    overflow: visible;
     width: 100%;
   }
 

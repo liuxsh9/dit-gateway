@@ -3,6 +3,8 @@
 
 // @watch start
 // templates/shared/label_filter.tmpl
+// templates/repo/issue/filter_list.tmpl
+// web_src/css/repo/issue-list.css
 // web_src/js/features/repo-issue-sidebar-list.ts
 // @watch end
 
@@ -44,4 +46,32 @@ test('Label filter exclusion', async ({page}) => {
   await expect(
     page.getByRole('link', {name: 'issue1'}),
   ).toBeVisible();
+});
+
+test('Issue and pull list Type and Sort filters open visible menus', async ({page}) => {
+  for (const listPath of ['/user2/repo1/issues', '/user2/repo1/pulls']) {
+    const response = await page.goto(listPath);
+    expect(response?.status()).toBe(200);
+
+    for (const selector of ['.list-header-type.ui.dropdown', '.list-header-sort.ui.dropdown']) {
+      const dropdown = page.locator(selector);
+      const menu = dropdown.locator('> .menu');
+      await expect(menu).toBeHidden();
+
+      await dropdown.click();
+      await expect(menu).toBeVisible();
+
+      await expect(async () => {
+        expect(await menu.evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 20) return false;
+          const probe = document.elementFromPoint(rect.left + 10, rect.top + 10);
+          return el.contains(probe);
+        })).toBe(true);
+      }).toPass();
+
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+    }
+  }
 });
