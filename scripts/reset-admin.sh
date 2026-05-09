@@ -9,6 +9,7 @@ ADMIN_USER="${ADMIN_USER:-sys}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-${ADMIN_USER}@example.com}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 GATEWAY_SERVICE="${GATEWAY_SERVICE:-gateway}"
+GATEWAY_EXEC_USER="${GATEWAY_EXEC_USER:-git}"
 
 info()  { echo "[INFO] $*"; }
 warn()  { echo "[WARN] $*" >&2; }
@@ -29,7 +30,11 @@ generate_password() {
 }
 
 compose_exec() {
-    docker compose exec -T "$GATEWAY_SERVICE" "$@"
+    local exec_args=(-T)
+    if [ -n "$GATEWAY_EXEC_USER" ]; then
+        exec_args+=(--user "$GATEWAY_EXEC_USER")
+    fi
+    docker compose exec "${exec_args[@]}" "$GATEWAY_SERVICE" "$@"
 }
 
 admin_list_contains_user() {

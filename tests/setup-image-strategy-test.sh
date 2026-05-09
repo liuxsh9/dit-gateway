@@ -92,11 +92,44 @@ test_custom_images() {
     [ "$CORE_IMAGE" = "registry.example/core:dev" ]
 }
 
+test_create_admin_user_executes_as_git() {
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' RETURN
+
+    cat >"$tmp_dir/docker" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%q ' "$@" >>"${SETUP_TEST_DOCKER_LOG:?}"
+printf '\n' >>"${SETUP_TEST_DOCKER_LOG:?}"
+
+if [ "$*" = "compose exec -T --user git gateway forgejo admin user create --username sys --email sys@example.com --password test-password --admin --must-change-password=false" ]; then
+    printf "New user 'sys' has been successfully created!\n"
+    exit 0
+fi
+
+echo "unexpected docker command: $*" >&2
+exit 1
+STUB
+    chmod +x "$tmp_dir/docker"
+
+    ADMIN_USER=sys \
+    ADMIN_EMAIL=sys@example.com \
+    ADMIN_PASSWORD=test-password \
+    SETUP_TEST_DOCKER_LOG="$tmp_dir/docker.log" \
+    PATH="$tmp_dir:$PATH" \
+    create_admin_user >/dev/null
+
+    grep -Fq "compose exec -T --user git gateway forgejo admin user create" "$tmp_dir/docker.log"
+}
+
 test_private_team_access_policy
 test_open_registration_access_policy
 test_login_required_access_policy
 test_default_release_images
 test_custom_release_tag
 test_custom_images
+test_create_admin_user_executes_as_git
 
 echo "setup wizard option tests passed"

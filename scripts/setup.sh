@@ -68,6 +68,7 @@ separator() {
 }
 
 DEFAULT_IMAGE_TAG="${DIT_IMAGE_TAG:-v0.1.4}"
+GATEWAY_EXEC_USER="${GATEWAY_EXEC_USER:-git}"
 
 deployment_mode_label() {
     case "$1" in
@@ -431,18 +432,23 @@ create_admin_user() {
     info "Creating site administrator account..."
 
     local admin_output
-    local password_args
+    local password_args=()
 
     if [ -n "${ADMIN_PASSWORD:-}" ]; then
-        password_args="--password $ADMIN_PASSWORD"
+        password_args=(--password "$ADMIN_PASSWORD")
     else
-        password_args="--random-password --random-password-length 24"
+        password_args=(--random-password --random-password-length 24)
     fi
 
-    admin_output=$(docker compose exec -T gateway forgejo admin user create \
+    local exec_args=(-T)
+    if [ -n "${GATEWAY_EXEC_USER:-}" ]; then
+        exec_args+=(--user "$GATEWAY_EXEC_USER")
+    fi
+
+    admin_output=$(docker compose exec "${exec_args[@]}" gateway forgejo admin user create \
         --username "$ADMIN_USER" \
         --email "$ADMIN_EMAIL" \
-        $password_args \
+        "${password_args[@]}" \
         --admin \
         --must-change-password=false 2>&1) || true
 

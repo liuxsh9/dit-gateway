@@ -44,6 +44,10 @@ shift 2
 if [ "${1:-}" = "-T" ]; then
     shift
 fi
+if [ "${1:-}" = "--user" ]; then
+    [ "${2:-}" = "git" ] || exit 5
+    shift 2
+fi
 
 service="${1:-}"
 shift
@@ -89,11 +93,11 @@ STUB
         exit 1
     fi
 
-    assert_contains "$tmp_dir/docker.log" "compose exec -T gateway forgejo admin user create --username sys --email sys@example.com --password test-password --admin --must-change-password=false"
-    assert_contains "$tmp_dir/docker.log" "compose exec -T gateway forgejo admin user list --admin"
+    assert_contains "$tmp_dir/docker.log" "compose exec -T --user git gateway forgejo admin user create --username sys --email sys@example.com --password test-password --admin --must-change-password=false"
+    assert_contains "$tmp_dir/docker.log" "compose exec -T --user git gateway forgejo admin user list --admin"
 
     if [ "$scenario" = "exists" ]; then
-        assert_contains "$tmp_dir/docker.log" "compose exec -T gateway forgejo admin user change-password --username sys --password test-password --must-change-password=false"
+        assert_contains "$tmp_dir/docker.log" "compose exec -T --user git gateway forgejo admin user change-password --username sys --password test-password --must-change-password=false"
         assert_contains "$tmp_dir/stdout" "password reset"
     else
         assert_contains "$tmp_dir/stdout" "created"

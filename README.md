@@ -67,7 +67,9 @@ prints it once. The helper runs `docker compose exec gateway forgejo ...`, so an
 existing release container such as `v0.1.4` does not need a new image tag just to
 use this script; pull the repository on the server and run the helper from the
 deployment directory. A new tag/image is only needed when the change must be
-baked into the container image or changes runtime compose behavior.
+baked into the container image or changes runtime compose behavior. The helper
+runs Forgejo inside the container as the `git` user, because Forgejo refuses to
+run administrative commands as root.
 
 See `.env.example` for all available options (ports, SSH, TLS domain, pre-built image).
 The setup wizard defaults to release images tagged `v0.1.4`. To choose another
@@ -250,6 +252,8 @@ Do not use `Dockerfile.datahub`; it is deprecated and fails fast intentionally.
 - Keep the `sys` account for emergency administration only. Use separate named accounts for daily work.
 - To force-reset the emergency admin password in a container deployment, use
   `ADMIN_USER=sys ADMIN_PASSWORD='new-strong-password' ./scripts/reset-admin.sh`.
+  The script executes Forgejo as the container `git` user; override
+  `GATEWAY_EXEC_USER` only if your custom image uses a different runtime user.
 - To require password change on handoff, use `--must-change-password=true`.
 
 </details>
