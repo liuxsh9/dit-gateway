@@ -55,8 +55,9 @@ test('mounts a dedicated JSONL preview page with tree navigation and single-row 
   expect(wrapper.text()).toContain('eval');
   expect(wrapper.findComponent(viewerStub).props('singleRowMode')).toBe(true);
   expect(wrapper.text()).toContain('Viewer abcdef1234567890 / train/sft.jsonl');
-  expect(wrapper.find('a[href="/api/v1/repos/alice/dataset/datahub/export/abcdef1234567890/train/sft.jsonl"]').exists()).toBe(true);
-  expect(wrapper.find('a[href="/alice/dataset"]').exists()).toBe(true);
+  expect(wrapper.text()).not.toContain('Raw');
+  expect(wrapper.text()).not.toContain('Dataset summary');
+  expect(wrapper.find('a[href="/api/v1/repos/alice/dataset/datahub/export/abcdef1234567890/train/sft.jsonl"]').exists()).toBe(false);
   expect(wrapper.find('a[href="/alice/dataset/data/commit/abcdef1234567890"]').exists()).toBe(true);
 
   await wrapper.findAll('.datahub-tree-folder').find((button) => button.text() === 'eval').trigger('click');
@@ -643,7 +644,7 @@ test('collapses and restores the preview files sidebar', async () => {
   expect(wrapper.find('.datahub-preview-tree-rail').exists()).toBe(false);
 });
 
-test('warns near the export action when preview rows have open linked issues', async () => {
+test('warns in the preview header when rows have open linked issues', async () => {
   datahubFetch.mockImplementation(async (_owner, _repo, path) => {
     if (path === '/tree/abcdef1234567890') return {entries: [{name: 'eval/safety.jsonl', obj_type: 'manifest'}]};
     if (path === '/stats/abcdef1234567890') return {files: []};

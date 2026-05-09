@@ -14,12 +14,6 @@
           <span>{{ openDataIssueCount }} open data {{ openDataIssueCount === 1 ? 'issue' : 'issues' }} before export</span>
           <a :href="openDataIssuesHref">Review</a>
         </div>
-        <a v-if="canPreviewFile" class="ui small basic button" :href="rawPath" target="_blank" rel="nofollow">
-          Raw
-        </a>
-        <a class="ui small basic button" :href="repoPath">
-          <i class="arrow left icon"></i> Dataset summary
-        </a>
         <a class="ui small basic button" :href="commitPath">
           Commit
         </a>
@@ -166,9 +160,6 @@ export default {
     },
     commitPath() {
       return `${this.repoPath}/data/commit/${encodeURIComponent(this.resolvedCommitHash || this.commitHash)}`;
-    },
-    rawPath() {
-      return `/api/v1/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/datahub/export/${encodeURIComponent(this.resolvedCommitHash)}/${this.resolvedFilePath.split('/').map(encodeURIComponent).join('/')}`;
     },
     treeStateStorageKey() {
       const commit = this.resolvedCommitHash || this.commitHash || '';
