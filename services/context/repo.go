@@ -668,10 +668,7 @@ func RepoAssignment(ctx *Context) context.CancelFunc {
 	}
 
 	isHomeOrSettings := ctx.Link == ctx.Repo.RepoLink || ctx.Link == ctx.Repo.RepoLink+"/settings" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/settings/")
-	isDataHubRoute := strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/data/")
-	isDataHubAllowedNativeRoute := ctx.Link == ctx.Repo.RepoLink+"/issues" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/issues/") ||
-		ctx.Link == ctx.Repo.RepoLink+"/actions" || strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/actions/") ||
-		strings.HasPrefix(ctx.Link, ctx.Repo.RepoLink+"/action/")
+	isDataHubAllowedRoute := isDataHubAllowedRepoRoute(ctx.Link, ctx.Repo.RepoLink)
 
 	if ctx.Repo.Repository.IsDataRepo {
 		ctx.Repo.BranchName = ctx.Repo.Repository.DefaultBranch
@@ -680,7 +677,7 @@ func RepoAssignment(ctx *Context) context.CancelFunc {
 		ctx.Data["BranchName"] = ctx.Repo.Repository.DefaultBranch
 		ctx.Data["BranchNameSubURL"] = ctx.Repo.BranchNameSubURL()
 		ctx.Data["IsViewBranch"] = true
-		if !isHomeOrSettings && !isDataHubRoute && !isDataHubAllowedNativeRoute {
+		if !isDataHubAllowedRoute {
 			ctx.Redirect(ctx.Repo.RepoLink)
 		}
 		return nil
@@ -1117,6 +1114,19 @@ func RepoRefByType(refType RepoRefType, ignoreNotExistErr ...bool) func(*Context
 
 		return cancel
 	}
+}
+
+func isDataHubAllowedRepoRoute(link, repoLink string) bool {
+	return link == repoLink ||
+		link == repoLink+"/settings" ||
+		strings.HasPrefix(link, repoLink+"/settings/") ||
+		strings.HasPrefix(link, repoLink+"/data/") ||
+		link == repoLink+"/issues" ||
+		strings.HasPrefix(link, repoLink+"/issues/") ||
+		strings.HasPrefix(link, repoLink+"/comments/") ||
+		link == repoLink+"/actions" ||
+		strings.HasPrefix(link, repoLink+"/actions/") ||
+		strings.HasPrefix(link, repoLink+"/action/")
 }
 
 // GitHookService checks if repository Git hooks service has been enabled.

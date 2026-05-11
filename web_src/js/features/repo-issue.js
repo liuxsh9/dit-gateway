@@ -119,6 +119,8 @@ export function initRepoIssueCommentDelete() {
       try {
         const response = await POST(deleteButton.getAttribute('data-url'));
         if (!response.ok) throw new Error('Failed to delete comment');
+        if (response.redirected) throw new Error('Request was redirected before the comment was deleted. Reload and try again.');
+        if (response.headers.get('Content-Type')?.includes('text/html')) throw new Error('The server returned a page instead of deleting the comment. Reload and try again.');
 
         const conversationHolder = deleteButton.closest('.conversation-holder');
         const parentTimelineItem = deleteButton.closest('.timeline-item');

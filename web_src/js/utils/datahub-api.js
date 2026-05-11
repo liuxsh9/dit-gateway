@@ -1,14 +1,24 @@
+import {request} from '../modules/fetch.js';
+
 export async function datahubFetch(owner, repo, path, options = {}) {
   const url = `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/datahub${path}`;
-  const resp = await fetch(url, {
+  const {headers = {}, ...requestOptions} = options;
+  const resp = await request(url, {
     headers: {
       'Content-Type': 'application/json',
       'X-Csrf-Token': document.querySelector('meta[name=_csrf]')?.content || '',
+      ...headers,
     },
-    ...options,
+    ...requestOptions,
   });
   if (!resp.ok) {
     throw await datahubResponseError(resp);
+  }
+  if (resp.redirected) {
+    throw new Error('DataHub request was redirected before it completed. Reload and try again.');
+  }
+  if (datahubResponseIsHTML(resp)) {
+    throw new Error('DataHub returned a page instead of API data. Reload and try again.');
   }
   const text = await resp.text();
   return text ? JSON.parse(text) : null;
@@ -16,14 +26,19 @@ export async function datahubFetch(owner, repo, path, options = {}) {
 
 export async function datahubFetchRaw(owner, repo, path, options = {}) {
   const url = `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/datahub${path}`;
-  const resp = await fetch(url, {
+  const {headers = {}, ...requestOptions} = options;
+  const resp = await request(url, {
     headers: {
       'X-Csrf-Token': document.querySelector('meta[name=_csrf]')?.content || '',
+      ...headers,
     },
-    ...options,
+    ...requestOptions,
   });
   if (!resp.ok) {
     throw await datahubResponseError(resp);
+  }
+  if (resp.redirected) {
+    throw new Error('DataHub request was redirected before it completed. Reload and try again.');
   }
   return resp;
 }
@@ -53,4 +68,8 @@ function sanitizeErrorSummary(summary) {
   return summary
     .replace(/\s+/g, ' ')
     .slice(0, 180);
+}
+
+function datahubResponseIsHTML(resp) {
+  return (resp.headers?.get?.('Content-Type') || '').includes('text/html');
 }

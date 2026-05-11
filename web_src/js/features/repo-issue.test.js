@@ -1,11 +1,20 @@
-import {vi} from 'vitest';
+import {beforeEach, expect, test, vi} from 'vitest';
 
 import {issueTitleHTML, excludeLabel} from './repo-issue-sidebar-list.ts';
-import {findWipPrefix} from './repo-issue.js';
+import {findWipPrefix, initRepoIssueCommentDelete} from './repo-issue.js';
+import {POST} from '../modules/fetch.js';
+import {showErrorToast} from '../modules/toast.js';
 
 vi.mock('./comp/ComboMarkdownEditor.js', () => ({}));
 // jQuery is missing
 vi.mock('./common-global.js', () => ({}));
+vi.mock('../modules/fetch.js', () => ({POST: vi.fn()}));
+vi.mock('../modules/toast.js', () => ({showErrorToast: vi.fn()}));
+
+beforeEach(() => {
+  document.body.innerHTML = '';
+  vi.clearAllMocks();
+});
 
 test('Convert issue title to html', () => {
   expect(issueTitleHTML('')).toEqual('');
@@ -64,4 +73,26 @@ test('Finds wip prefix in string', () => {
   expect(findWipPrefix('wip:', ['[WIP]'])).toBe(undefined);
   expect(findWipPrefix('WIP:', ['[WIP]'])).toBe(undefined);
   expect(findWipPrefix('WIP:', ['[WIP]'])).toBe(undefined);
+});
+
+test('does not remove a comment when delete request returns an HTML page', async () => {
+  const response = new Response('<html>login</html>', {
+    status: 200,
+    headers: {'Content-Type': 'text/html'},
+  });
+  vi.mocked(POST).mockResolvedValue(response);
+  window.confirm = vi.fn(() => true);
+
+  document.body.innerHTML = `
+    <div class="timeline-item comment" id="comment-1">
+      <button class="delete-comment" data-comment-id="comment-1" data-url="/repo/comments/1/delete" data-locale="Delete?"></button>
+    </div>
+  `;
+
+  initRepoIssueCommentDelete();
+  document.querySelector('.delete-comment').click();
+
+  await vi.waitFor(() => expect(POST).toHaveBeenCalledWith('/repo/comments/1/delete'));
+  expect(document.getElementById('comment-1')).not.toBeNull();
+  expect(showErrorToast).toHaveBeenCalledWith('The server returned a page instead of deleting the comment. Reload and try again.');
 });

@@ -15,6 +15,7 @@ import (
 	auth_model "forgejo.org/models/auth"
 	"forgejo.org/models/db"
 	git_model "forgejo.org/models/git"
+	issues_model "forgejo.org/models/issues"
 	perm_model "forgejo.org/models/perm"
 	"forgejo.org/models/repo"
 	"forgejo.org/models/unittest"
@@ -743,6 +744,44 @@ func TestDataRepoWatchAndStarActionsReturnPartialHTML(t *testing.T) {
 		htmlDoc := NewHTMLParser(t, resp.Body)
 		htmlDoc.AssertElement(t, "form[action='/user2/"+repoName+"/action/un"+action+"']", true)
 	}
+}
+
+func TestDataRepoNativeCommentActions(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "data-repo-comment-actions"
+	recorder := mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	req := NewRequestWithValues(t, "POST", "/repo/create", map[string]string{
+		"uid":          "2",
+		"repo_name":    repoName,
+		"is_data_repo": "true",
+	})
+	resp := session.MakeRequest(t, req, http.StatusSeeOther)
+	assert.Equal(t, "/user2/"+repoName, test.RedirectURL(resp))
+	recorder.assertCreated(t)
+
+	issueURL := testNewIssue(t, session, "user2", repoName, "Data issue", "Description")
+	commentID := testIssueAddComment(t, session, issueURL, "Original comment", "")
+
+	req = NewRequestWithValues(t, "POST", fmt.Sprintf("/user2/%s/comments/%d", repoName, commentID), map[string]string{
+		"content": "Updated comment",
+	})
+	session.MakeRequest(t, req, http.StatusOK)
+	comment := unittest.AssertExistsAndLoadBean(t, &issues_model.Comment{ID: commentID})
+	assert.Equal(t, "Updated comment", comment.Content)
+
+	req = NewRequestWithValues(t, "POST", fmt.Sprintf("/user2/%s/comments/%d/reactions/react", repoName, commentID), map[string]string{
+		"content": "heart",
+	})
+	resp = session.MakeRequest(t, req, http.StatusOK)
+	assert.Contains(t, resp.Header().Get("Content-Type"), "application/json")
+	unittest.AssertExistsAndLoadBean(t, &issues_model.Reaction{CommentID: commentID, Type: "heart"})
+
+	req = NewRequest(t, "POST", fmt.Sprintf("/user2/%s/comments/%d/delete", repoName, commentID))
+	session.MakeRequest(t, req, http.StatusOK)
+	unittest.AssertNotExistsBean(t, &issues_model.Comment{ID: commentID})
 }
 
 func TestRepoCreateFormExposesDataRepoOption(t *testing.T) {

@@ -42,3 +42,12 @@ test('datahubFetch surfaces JSON detail when message is unavailable', async () =
 
   await expect(datahubFetch('alice', 'dataset', '/tree/bad')).rejects.toThrow("DataHub request failed with 404 Not Found: Ref 'heads/bad' not found.");
 });
+
+test('datahubFetch rejects HTML pages returned from API routes', async () => {
+  vi.spyOn(window, 'fetch').mockResolvedValue(new Response('<html>login</html>', {
+    status: 200,
+    headers: {'Content-Type': 'text/html'},
+  }));
+
+  await expect(datahubFetch('alice', 'dataset', '/pulls/7/comments')).rejects.toThrow('DataHub returned a page instead of API data. Reload and try again.');
+});

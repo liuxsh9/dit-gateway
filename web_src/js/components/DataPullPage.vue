@@ -755,16 +755,20 @@ export default {
       this.syncTabFromHash();
     },
     async loadSupplementalData() {
-      const [comments, reviews, checks, governance] = await Promise.all([
-        this.fetchOptional(`/pulls/${this.pullId}/comments`, []),
+      const [, reviews, checks, governance] = await Promise.all([
+        this.loadConversation(),
         this.fetchOptional(`/pulls/${this.pullId}/reviews`, []),
         this.pull?.source_commit ? this.fetchOptional(`/checks/${this.pull.source_commit}`, {checks: []}) : {checks: []},
         this.fetchOptional(`/governance?target_branch=${encodeURIComponent(this.targetBranch)}`, null),
       ]);
-      this.comments = comments;
       this.reviews = reviews;
       this.checks = this.normalizeList(checks, ['checks']);
       this.governance = governance;
+    },
+    async loadConversation() {
+      const comments = await this.fetchOptional(`/pulls/${this.pullId}/comments`, []);
+      this.comments = comments;
+      return comments;
     },
     async refreshPull() {
       this.pull = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}`);
@@ -810,11 +814,11 @@ export default {
       this.submittingConversation = true;
       this.conversationError = null;
       try {
-        const updatedComment = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments/${comment.id}`, {
+        await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments/${comment.id}`, {
           method: 'PATCH',
           body: JSON.stringify({body}),
         });
-        this.comments = this.normalizedComments.map((item) => item.id === comment.id ? updatedComment : item);
+        await this.loadConversation();
         this.cancelEditComment();
       } catch (e) {
         this.conversationError = e.message;
@@ -830,7 +834,7 @@ export default {
         await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments/${comment.id}`, {
           method: 'DELETE',
         });
-        this.comments = this.normalizedComments.filter((item) => item.id !== comment.id);
+        await this.loadConversation();
         if (this.editingCommentId === comment.id) this.cancelEditComment();
       } catch (e) {
         this.conversationError = e.message;

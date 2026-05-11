@@ -158,6 +158,18 @@ test('replaces the URL hash when an inline row comment returns to conversation',
 });
 
 test('loads a github-like pull request conversation with timeline, checks, commits, and merge box', async () => {
+  let comments = [
+    {
+      id: 1,
+      author: 'erin',
+      body: 'Please verify the slow split before merge.',
+      file_path: 'train.jsonl',
+      row_hash: 'abcdef123456',
+      change_type: 'added',
+      field_path: 'row:1',
+      created_at: '2026-04-28T10:00:00Z',
+    },
+  ];
   datahubFetch.mockImplementation(async (_owner, _repo, path, options = {}) => {
     if (path === '/pulls/7') {
       return {
@@ -180,27 +192,21 @@ test('loads a github-like pull request conversation with timeline, checks, commi
       return {merged: true};
     }
     if (path === '/pulls/7/comments' && options.method === 'POST') {
-      return {id: 3, author: 'carol', body: JSON.parse(options.body).body};
+      const comment = {id: 3, author: 'carol', body: JSON.parse(options.body).body};
+      comments = [...comments, comment];
+      return comment;
     }
     if (path === '/pulls/7/comments/3' && options.method === 'PATCH') {
-      return {id: 3, author: 'carol', body: JSON.parse(options.body).body};
+      const updatedComment = {id: 3, author: 'carol', body: JSON.parse(options.body).body};
+      comments = comments.map((comment) => comment.id === 3 ? updatedComment : comment);
+      return updatedComment;
     }
     if (path === '/pulls/7/comments/3' && options.method === 'DELETE') {
+      comments = comments.filter((comment) => comment.id !== 3);
       return {status: 'deleted', id: 3};
     }
     if (path === '/pulls/7/comments') {
-      return [
-        {
-          id: 1,
-          author: 'erin',
-          body: 'Please verify the slow split before merge.',
-          file_path: 'train.jsonl',
-          row_hash: 'abcdef123456',
-          change_type: 'added',
-          field_path: 'row:1',
-          created_at: '2026-04-28T10:00:00Z',
-        },
-      ];
+      return comments;
     }
     if (path === '/pulls/7/reviews' && options.method === 'POST') {
       const body = JSON.parse(options.body);
@@ -338,6 +344,7 @@ test('loads a github-like pull request conversation with timeline, checks, commi
     method: 'PATCH',
     body: JSON.stringify({body: 'Updated PR comment.'}),
   });
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments');
 
   vi.stubGlobal('confirm', vi.fn(() => true));
   await addedCommentCard.findAll('.datahub-comment-actions button').find((button) => button.text() === 'Delete').trigger('click');
@@ -345,6 +352,7 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments/3', {
     method: 'DELETE',
   });
+  expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments');
 
   await wrapper.find('#datahub-pr-review').setValue('Approved for merge.');
   await wrapper.find('.datahub-review-form select').setValue('approved');
