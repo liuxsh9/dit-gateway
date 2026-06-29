@@ -256,6 +256,15 @@ class ComboMarkdownEditor {
       formData.append('text', this.value());
       formData.append('wiki', this.previewWiki);
       const response = await POST(this.previewUrl, {data: formData});
+      if (response.redirected) {
+        showErrorToast('Request was redirected before the preview was rendered. Reload and try again.');
+        return;
+      }
+      const contentType = response.headers.get('Content-Type') || '';
+      if (!response.ok || contentType.includes('text/html')) {
+        showErrorToast('The server returned a page instead of rendering the preview. Reload and try again.');
+        return;
+      }
       const data = await response.text();
       renderPreviewPanelContent($(panelPreviewer), data);
     });

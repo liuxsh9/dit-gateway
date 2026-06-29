@@ -335,6 +335,8 @@ async function onEditContent(event) {
       }
 
       const response = await POST(editContentZone.getAttribute('data-update-url'), {data: params});
+      if (response.redirected) throw new Error('Request was redirected before the comment was saved. Reload and try again.');
+      if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('The server returned a page instead of saving the comment. Reload and try again.');
       const data = await response.json();
       if (!response.ok) {
         showErrorToast(data.errorMessage || `server error: ${response.status}`);
@@ -578,7 +580,7 @@ function preprocessFragment(context) {
   };
 }
 
-function initRepoIssueCommentEdit() {
+export function initRepoIssueCommentEdit() {
   // Edit issue or comment content
   $(document).on('click', '.edit-content', onEditContent);
 

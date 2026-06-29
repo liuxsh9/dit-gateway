@@ -55,12 +55,29 @@ async function datahubErrorSummary(resp) {
 
   try {
     const body = await resp.clone().json();
-    const summary = [body?.message, body?.detail, body?.error]
+    const summary = [body?.message, summarizeDetail(body?.detail), body?.error]
       .find((value) => typeof value === 'string' && value.trim());
     return sanitizeErrorSummary(summary);
   } catch {
     return '';
   }
+}
+
+function summarizeDetail(detail) {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (!item || typeof item !== 'object') return '';
+        const location = Array.isArray(item.loc) ? item.loc.filter((part) => part !== 'body').join('.') : '';
+        const message = typeof item.msg === 'string' ? item.msg : '';
+        return [location, message].filter(Boolean).join(': ');
+      })
+      .filter(Boolean)
+      .join('; ');
+  }
+  return '';
 }
 
 function sanitizeErrorSummary(summary) {

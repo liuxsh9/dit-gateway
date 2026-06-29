@@ -305,7 +305,7 @@
                         :class="{loading: computingMeta[entry.path]}"
                         :disabled="computingMeta[entry.path]"
                         :aria-label="`Refresh metadata for ${entry.displayName}`"
-                        :title="`Refresh metadata for ${entry.displayName}`"
+                        :title="metaRefreshTitle(entry)"
                         @click="computeMeta(entry)"
                       >
                         <SvgIcon name="octicon-sync" :size="14"/>
@@ -519,6 +519,10 @@ export default {
     owner: String,
     repo: String,
     defaultBranch: String,
+    isSignedIn: {
+      type: Boolean,
+      default: false,
+    },
   },
   data() {
     return {
@@ -1215,6 +1219,10 @@ export default {
       this.loadFolderTree(this.currentPath);
     },
     async computeMeta(entry) {
+      if (!this.isSignedIn) {
+        this.metaComputeError = 'Sign in to refresh dataset metadata.';
+        return;
+      }
       this.computingMeta = {...this.computingMeta, [entry.path]: true};
       this.metaComputeError = null;
       try {
@@ -1230,6 +1238,10 @@ export default {
         delete next[entry.path];
         this.computingMeta = next;
       }
+    },
+    metaRefreshTitle(entry) {
+      if (!this.isSignedIn) return 'Sign in to refresh metadata';
+      return `Refresh metadata for ${entry.displayName}`;
     },
     async loadChecks() {
       if (!this.commitHash) return;

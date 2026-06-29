@@ -5,6 +5,7 @@ package repo
 
 import (
 	"net/http"
+	"net/url"
 
 	"forgejo.org/modules/base"
 	"forgejo.org/modules/setting"
@@ -103,6 +104,38 @@ func DataHubPull(ctx *context.Context) {
 	ctx.Data["PageIsPullList"] = true
 	ctx.Data["DataHubPullID"] = ctx.Params("id")
 	ctx.HTML(http.StatusOK, tplDataHubPull)
+}
+
+func DataHubPullLegacyRedirect(ctx *context.Context, suffix string) bool {
+	if !setting.DataHub.Enabled || !ctx.Repo.Repository.IsDataRepo {
+		return false
+	}
+
+	redirectTo := ctx.Repo.RepoLink + "/data/pulls" + suffix
+	if ctx.Req.URL.RawQuery != "" {
+		redirectTo += "?" + ctx.Req.URL.RawQuery
+	}
+	ctx.Redirect(redirectTo, http.StatusSeeOther)
+	return true
+}
+
+func DataHubPullListLegacyRedirect(ctx *context.Context) {
+	if typ := ctx.Params(":type"); typ == "" || typ == "pulls" {
+		DataHubPullLegacyRedirect(ctx, "")
+	}
+}
+
+func DataHubPullItemLegacyRedirect(ctx *context.Context) {
+	if typ := ctx.Params(":type"); typ == "" || typ == "pulls" {
+		dataHubPullItemLegacyRedirect(ctx)
+	}
+}
+
+func dataHubPullItemLegacyRedirect(ctx *context.Context) bool {
+	if id := url.PathEscape(ctx.Params(":index")); id != "" {
+		return DataHubPullLegacyRedirect(ctx, "/"+id)
+	}
+	return false
 }
 
 func DataHubSecurity(ctx *context.Context) {

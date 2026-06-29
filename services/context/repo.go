@@ -1123,10 +1123,23 @@ func isDataHubAllowedRepoRoute(link, repoLink string) bool {
 		strings.HasPrefix(link, repoLink+"/data/") ||
 		link == repoLink+"/issues" ||
 		strings.HasPrefix(link, repoLink+"/issues/") ||
+		isDataHubLegacyPullRoute(link, repoLink) ||
 		strings.HasPrefix(link, repoLink+"/comments/") ||
+		link == repoLink+"/markup" ||
 		link == repoLink+"/actions" ||
 		strings.HasPrefix(link, repoLink+"/actions/") ||
 		strings.HasPrefix(link, repoLink+"/action/")
+}
+
+func isDataHubLegacyPullRoute(link, repoLink string) bool {
+	if link == repoLink+"/pulls" {
+		return true
+	}
+	if !strings.HasPrefix(link, repoLink+"/pulls/") {
+		return false
+	}
+	legacyPullPath := strings.TrimPrefix(link, repoLink+"/pulls/")
+	return legacyPullPath != "posters" && !strings.Contains(legacyPullPath, "/")
 }
 
 // GitHookService checks if repository Git hooks service has been enabled.

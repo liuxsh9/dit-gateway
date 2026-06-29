@@ -58,7 +58,8 @@
 			<div id="data-repo-home"
 				data-owner="{{.Repository.OwnerName}}"
 				data-repo="{{.Repository.Name}}"
-				data-default-branch="{{.Repository.DefaultBranch}}">
+				data-default-branch="{{.Repository.DefaultBranch}}"
+				data-is-signed="{{.IsSigned}}">
 			</div>
 		{{else}}
 		{{$n := len .TreeNames}}
