@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -241,14 +242,55 @@ func DatahubCreatePull(ctx *context.APIContext) {
 	if !ok {
 		return
 	}
+	body = datahubBodyWithActor(ctx, body)
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
 		return datahub.DefaultClient().CreatePull(ctx, ctx.Repo.Repository.Name, body)
 	})
 }
 
+func datahubBodyWithActor(ctx *context.APIContext, body []byte) []byte {
+	if ctx.Doer == nil || ctx.Doer.Name == "" {
+		return body
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return body
+	}
+	changed := false
+	if author := datahubActorName(payload["author"]); author == "" || datahubPlaceholderActor(author) || datahubActorValueNeedsCurrentUser(payload["author"]) {
+		payload["author"] = ctx.Doer.Name
+		changed = true
+	}
+	if _, exists := payload["reviewer"]; exists {
+		if reviewer := datahubActorName(payload["reviewer"]); reviewer == "" || datahubPlaceholderActor(reviewer) || datahubActorValueNeedsCurrentUser(payload["reviewer"]) {
+			payload["reviewer"] = ctx.Doer.Name
+			changed = true
+		}
+	}
+	if !changed {
+		return body
+	}
+	updated, err := json.Marshal(payload)
+	if err != nil {
+		return body
+	}
+	return updated
+}
+
+func datahubPlaceholderActor(actor string) bool {
+	switch strings.ToLower(strings.TrimSpace(actor)) {
+	case "", "unknown", "unknown-token", "service-token", "reviewer", "unknown reviewer":
+		return true
+	default:
+		return false
+	}
+}
+
 func DatahubGetPull(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().GetPull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+		data, status, err := datahub.DefaultClient().GetPull(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+		return datahubEnrichPullPayload(ctx, data, status), status, err
 	})
 }
 
@@ -335,7 +377,8 @@ func datahubCanCurrentUserMerge(ctx *context.APIContext, targetBranch string) (b
 
 func DatahubListPullComments(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().ListPullComments(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+		data, status, err := datahub.DefaultClient().ListPullComments(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+		return datahubEnrichTimelinePayload(ctx, data, status, "author"), status, err
 	})
 }
 
@@ -344,8 +387,11 @@ func DatahubCreatePullComment(ctx *context.APIContext) {
 	if !ok {
 		return
 	}
+	body = datahubBodyWithActor(ctx, body)
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().CreatePullComment(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+		data, status, err := datahub.DefaultClient().CreatePullComment(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+		data = datahubEnsureCurrentActorPayload(ctx, data, status, "author")
+		return datahubEnrichTimelinePayload(ctx, data, status, "author"), status, err
 	})
 }
 
@@ -367,7 +413,8 @@ func DatahubDeletePullComment(ctx *context.APIContext) {
 
 func DatahubListPullReviews(ctx *context.APIContext) {
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().ListPullReviews(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+		data, status, err := datahub.DefaultClient().ListPullReviews(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"))
+		return datahubEnrichTimelinePayload(ctx, data, status, "reviewer", "author"), status, err
 	})
 }
 
@@ -376,9 +423,214 @@ func DatahubCreatePullReview(ctx *context.APIContext) {
 	if !ok {
 		return
 	}
+	body = datahubBodyWithActor(ctx, body)
 	proxyToDatahub(ctx, func() ([]byte, int, error) {
-		return datahub.DefaultClient().CreatePullReview(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+		data, status, err := datahub.DefaultClient().CreatePullReview(ctx, ctx.Repo.Repository.Name, ctx.Params(":id"), body)
+		data = datahubEnsureCurrentActorPayload(ctx, data, status, "reviewer", "author")
+		return datahubEnrichTimelinePayload(ctx, data, status, "reviewer", "author"), status, err
 	})
+}
+
+func datahubEnsureCurrentActorPayload(ctx *context.APIContext, data []byte, status int, fields ...string) []byte {
+	if status < http.StatusOK || status >= http.StatusMultipleChoices || len(data) == 0 || ctx.Doer == nil || ctx.Doer.Name == "" {
+		return data
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return data
+	}
+	for _, field := range fields {
+		if _, exists := payload[field]; !exists {
+			payload[field] = ctx.Doer.Name
+		}
+	}
+	return datahubMarshalOrOriginal(payload, data)
+}
+
+func datahubEnrichPullPayload(ctx *context.APIContext, data []byte, status int) []byte {
+	if status < http.StatusOK || status >= http.StatusMultipleChoices || len(data) == 0 {
+		return data
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return data
+	}
+	datahubEnrichActorField(ctx, payload, "author")
+	return datahubMarshalOrOriginal(payload, data)
+}
+
+func datahubEnrichTimelinePayload(ctx *context.APIContext, data []byte, status int, fields ...string) []byte {
+	if status < http.StatusOK || status >= http.StatusMultipleChoices || len(data) == 0 {
+		return data
+	}
+
+	var list []map[string]any
+	if err := json.Unmarshal(data, &list); err == nil {
+		for _, item := range list {
+			for _, field := range fields {
+				datahubEnrichActorField(ctx, item, field)
+			}
+		}
+		return datahubMarshalOrOriginal(list, data)
+	}
+
+	var item map[string]any
+	if err := json.Unmarshal(data, &item); err != nil {
+		return data
+	}
+	for _, field := range fields {
+		datahubEnrichActorField(ctx, item, field)
+	}
+	return datahubMarshalOrOriginal(item, data)
+}
+
+func datahubEnrichActorField(ctx *context.APIContext, payload map[string]any, field string) {
+	userPayload, ok := datahubActorPayload(ctx, payload[field])
+	if !ok {
+		return
+	}
+	payload[field] = userPayload
+	if field == "author" {
+		payload["user"] = userPayload
+	}
+	if field == "reviewer" {
+		payload["user"] = userPayload
+	}
+}
+
+func datahubActorPayload(ctx *context.APIContext, value any) (map[string]any, bool) {
+	value = datahubNormalizeActorValue(value)
+	switch actor := value.(type) {
+	case string:
+		name := strings.TrimSpace(actor)
+		if name == "" {
+			return nil, false
+		}
+		return datahubUserPayload(ctx, name), true
+	case map[string]any:
+		return datahubEnrichedActorPayload(ctx, actor), true
+	default:
+		return nil, false
+	}
+}
+
+func datahubEnrichedActorPayload(ctx *context.APIContext, actor map[string]any) map[string]any {
+	name := datahubActorName(actor)
+	if name != "" {
+		user, err := user_model.GetUserByName(ctx, name)
+		if err == nil {
+			return datahubUserPayloadForUser(ctx, user)
+		}
+	}
+
+	payload := make(map[string]any, len(actor)+4)
+	maps.Copy(payload, actor)
+	if name != "" {
+		for _, key := range []string{"login", "username", "name"} {
+			if strings.TrimSpace(datahubStringField(payload, key)) == "" {
+				payload[key] = name
+			}
+		}
+		if strings.TrimSpace(datahubStringField(payload, "html_url")) == "" {
+			payload["html_url"] = "/" + name
+		}
+	}
+	if avatarURL := strings.TrimSpace(datahubStringField(payload, "avatar_url")); avatarURL == "" {
+		payload["avatar_url"] = ""
+	}
+	return payload
+}
+
+func datahubUserPayload(ctx *context.APIContext, name string) map[string]any {
+	name = strings.TrimSpace(name)
+	payload := map[string]any{
+		"login":      name,
+		"username":   name,
+		"name":       name,
+		"html_url":   "/" + name,
+		"avatar_url": "",
+	}
+	user, err := user_model.GetUserByName(ctx, name)
+	if err != nil {
+		return payload
+	}
+	return datahubUserPayloadForUser(ctx, user)
+}
+
+func datahubUserPayloadForUser(ctx *context.APIContext, user *user_model.User) map[string]any {
+	payload := map[string]any{}
+	payload["login"] = user.Name
+	payload["username"] = user.Name
+	payload["name"] = user.Name
+	payload["full_name"] = user.FullName
+	payload["avatar_url"] = user.AvatarLinkWithSize(ctx, 0)
+	payload["html_url"] = user.HomeLink()
+	return payload
+}
+
+func datahubActorName(value any) string {
+	value = datahubNormalizeActorValue(value)
+	switch actor := value.(type) {
+	case string:
+		return strings.TrimSpace(actor)
+	case map[string]any:
+		for _, key := range []string{"login", "username", "name", "full_name"} {
+			if value := strings.TrimSpace(datahubStringField(actor, key)); value != "" {
+				return value
+			}
+		}
+		for _, key := range []string{"author", "reviewer", "user", "poster"} {
+			if value := datahubActorName(actor[key]); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func datahubActorValueNeedsCurrentUser(value any) bool {
+	switch actor := value.(type) {
+	case string:
+		return datahubActorStringPayload(actor) != nil
+	default:
+		return value != nil
+	}
+}
+
+func datahubNormalizeActorValue(value any) any {
+	if actor, ok := value.(string); ok {
+		if payload := datahubActorStringPayload(actor); payload != nil {
+			return payload
+		}
+	}
+	return value
+}
+
+func datahubActorStringPayload(actor string) map[string]any {
+	actor = strings.TrimSpace(actor)
+	if !strings.HasPrefix(actor, "{") {
+		return nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(actor), &payload); err != nil || len(payload) == 0 {
+		return nil
+	}
+	return payload
+}
+
+func datahubStringField(payload map[string]any, key string) string {
+	value, _ := payload[key].(string)
+	return value
+}
+
+func datahubMarshalOrOriginal(value any, original []byte) []byte {
+	updated, err := json.Marshal(value)
+	if err != nil {
+		return original
+	}
+	return updated
 }
 
 func DatahubGovernance(ctx *context.APIContext) {
@@ -428,6 +680,8 @@ func DatahubGovernance(ctx *context.APIContext) {
 	ctx.JSON(http.StatusOK, map[string]any{
 		"repository": map[string]any{
 			"name":                          ctx.Repo.Repository.Name,
+			"is_data_repo":                  ctx.Repo.Repository.IsDataRepo,
+			"default_branch":                ctx.Repo.Repository.DefaultBranch,
 			"permissions":                   datahubGovernancePermissions(ctx),
 			"allow_merge_commits":           pullConfig.AllowMerge,
 			"allow_squash_merge":            pullConfig.AllowSquash,
@@ -438,11 +692,7 @@ func DatahubGovernance(ctx *context.APIContext) {
 		},
 		"reviewers":          datahubGovernanceReviewers(reviewers),
 		"branch_protections": apiProtections,
-		"current_user": map[string]any{
-			"is_authenticated": ctx.Doer != nil,
-			"can_merge":        canMerge,
-			"target_branch":    targetBranch,
-		},
+		"current_user":       datahubGovernanceCurrentUser(ctx, canMerge, targetBranch),
 		"links": map[string]string{
 			"settings":        repoLink + "/settings",
 			"collaboration":   repoLink + "/settings/collaboration",
@@ -450,6 +700,25 @@ func DatahubGovernance(ctx *context.APIContext) {
 			"new_branch_rule": repoLink + "/settings/branches/edit",
 		},
 	})
+}
+
+func datahubGovernanceCurrentUser(ctx *context.APIContext, canMerge bool, targetBranch string) map[string]any {
+	currentUser := map[string]any{
+		"is_authenticated": ctx.Doer != nil,
+		"can_merge":        canMerge,
+		"target_branch":    targetBranch,
+	}
+	if ctx.Doer == nil {
+		return currentUser
+	}
+
+	currentUser["login"] = ctx.Doer.Name
+	currentUser["username"] = ctx.Doer.Name
+	currentUser["name"] = ctx.Doer.Name
+	currentUser["full_name"] = ctx.Doer.FullName
+	currentUser["avatar_url"] = ctx.Doer.AvatarLink(ctx)
+	currentUser["html_url"] = ctx.Doer.HomeLink()
+	return currentUser
 }
 
 func datahubPullRequestsConfig(ctx *context.APIContext, repo *repo_model.Repository) *repo_model.PullRequestsConfig {
@@ -517,6 +786,15 @@ func DatahubExportFile(ctx *context.APIContext) {
 }
 
 func DatahubMetaCompute(ctx *context.APIContext) {
+	if !ctx.IsSigned {
+		ctx.Error(http.StatusUnauthorized, "DatahubMetaCompute", "Sign in to refresh dataset metadata.")
+		return
+	}
+	if !ctx.Repo.CanWrite(unit_model.TypeCode) && !ctx.IsUserRepoAdmin() && !ctx.IsUserSiteAdmin() {
+		ctx.Error(http.StatusForbidden, "DatahubMetaCompute", "You do not have permission to refresh dataset metadata.")
+		return
+	}
+
 	body, ok := readBody(ctx)
 	if !ok {
 		return

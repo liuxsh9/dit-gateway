@@ -38,6 +38,7 @@ type datahubCoreCreateRecorder struct {
 	statsRead      bool
 	dedupRead      bool
 	exportRead     bool
+	pullCreated    bool
 	commentsListed bool
 	reviewsListed  bool
 	commentCreated bool
@@ -130,7 +131,24 @@ func mockDatahubCoreCreate(t *testing.T, expectedRepo string) *datahubCoreCreate
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/pulls/1":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"id":1,"target_ref":"heads/main","source_ref":"heads/import"}`))
+			if strings.Contains(expectedRepo, "string-author") {
+				author := `{"login":"user2","username":"user2","name":"user2","avatar_url":"http://localhost:3000/avatars/bad-localhost","html_url":"/user2"}`
+				_, _ = w.Write(fmt.Appendf(nil, `{"id":1,"author":%q,"target_ref":"heads/main","source_ref":"heads/import","source_commit":"abcdef1234567890"}`, author))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":1,"author":"user2","target_ref":"heads/main","source_ref":"heads/import","source_commit":"abcdef1234567890"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/pulls":
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			assert.JSONEq(t, `{"title":"Dataset update","description":"Adds new rows","source_branch":"feature-new-file","target_branch":"main","author":"user2"}`, string(body))
+
+			recorder.mu.Lock()
+			recorder.pullCreated = true
+			recorder.mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"pull_request_id":1,"title":"Dataset update","source_ref":"heads/feature-new-file","target_ref":"heads/main"}`))
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/pulls/1/comments":
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
@@ -146,7 +164,7 @@ func mockDatahubCoreCreate(t *testing.T, expectedRepo string) *datahubCoreCreate
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/"+expectedRepo+"/pulls/1/reviews":
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
-			assert.JSONEq(t, `{"status":"approved"}`, string(body))
+			assert.JSONEq(t, `{"status":"approved","author":"user2"}`, string(body))
 
 			recorder.mu.Lock()
 			recorder.reviewCreated = true
@@ -220,6 +238,14 @@ func (r *datahubCoreCreateRecorder) assertExportRead(t *testing.T) {
 	assert.True(t, r.exportRead, "expected gateway datahub proxy to probe export through datahub-core")
 }
 
+func (r *datahubCoreCreateRecorder) assertPullCreated(t *testing.T) {
+	t.Helper()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	assert.True(t, r.pullCreated, "expected gateway datahub proxy to create PR in datahub-core")
+}
+
 func (r *datahubCoreCreateRecorder) assertPullConversationListed(t *testing.T) {
 	t.Helper()
 
@@ -270,6 +296,32 @@ func TestAPICreateDataRepo(t *testing.T) {
 	recorder.assertListed(t)
 }
 
+func TestAPIDatahubCreatePullAddsCurrentUserAuthor(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "api-data-repo-create-pr"
+	recorder := mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository, auth_model.AccessTokenScopeWriteUser)
+
+	req := NewRequestWithJSON(t, "POST", "/api/v1/user/repos", map[string]any{
+		"name":         repoName,
+		"is_data_repo": true,
+	}).AddTokenAuth(token)
+	session.MakeRequest(t, req, http.StatusCreated)
+
+	req = NewRequestWithJSON(t, "POST", "/api/v1/repos/user2/"+repoName+"/datahub/pulls", map[string]any{
+		"title":         "Dataset update",
+		"description":   "Adds new rows",
+		"source_branch": "feature-new-file",
+		"target_branch": "main",
+	}).AddTokenAuth(token)
+	resp := session.MakeRequest(t, req, http.StatusCreated)
+	assert.Contains(t, resp.Body.String(), `"pull_request_id":1`)
+	recorder.assertPullCreated(t)
+}
+
 func TestAPIDatahubPullConversationProxy(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 
@@ -288,26 +340,101 @@ func TestAPIDatahubPullConversationProxy(t *testing.T) {
 	req = NewRequest(t, "GET", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1/comments").AddTokenAuth(token)
 	resp := session.MakeRequest(t, req, http.StatusOK)
 	assert.Contains(t, resp.Body.String(), "Looks good")
+	assert.Contains(t, resp.Body.String(), `"login":"reviewer"`)
+	assert.Contains(t, resp.Body.String(), `"html_url":"/reviewer"`)
 
 	req = NewRequest(t, "GET", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1/reviews").AddTokenAuth(token)
 	resp = session.MakeRequest(t, req, http.StatusOK)
 	assert.Contains(t, resp.Body.String(), "approved")
 
 	req = NewRequestWithJSON(t, "POST", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1/comments", map[string]any{
-		"author": "user2",
-		"body":   "Needs owner sign-off",
+		"body": "Needs owner sign-off",
 	}).AddTokenAuth(token)
 	resp = session.MakeRequest(t, req, http.StatusCreated)
 	assert.Contains(t, resp.Body.String(), "Needs owner sign-off")
+	assert.Contains(t, resp.Body.String(), `"login":"user2"`)
+	assert.Contains(t, resp.Body.String(), `"avatar_url":`)
 
 	req = NewRequestWithJSON(t, "POST", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1/reviews", map[string]any{
 		"status": "approved",
 	}).AddTokenAuth(token)
 	resp = session.MakeRequest(t, req, http.StatusCreated)
 	assert.Contains(t, resp.Body.String(), "approved")
+	assert.Contains(t, resp.Body.String(), `"login":"user2"`)
 
 	recorder.assertPullConversationListed(t)
 	recorder.assertPullConversationCreated(t)
+}
+
+func TestAPIDatahubGetPullEnrichesAuthorForUI(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "api-data-repo-pr-author-ui"
+	mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository, auth_model.AccessTokenScopeWriteUser)
+
+	req := NewRequestWithJSON(t, "POST", "/api/v1/user/repos", map[string]any{
+		"name":         repoName,
+		"is_data_repo": true,
+	}).AddTokenAuth(token)
+	session.MakeRequest(t, req, http.StatusCreated)
+
+	req = NewRequest(t, "GET", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1").AddTokenAuth(token)
+	resp := session.MakeRequest(t, req, http.StatusOK)
+	assert.Contains(t, resp.Body.String(), `"login":"user2"`)
+	assert.Contains(t, resp.Body.String(), `"html_url":"/user2"`)
+	assert.Contains(t, resp.Body.String(), `"avatar_url":`)
+	assert.Contains(t, resp.Body.String(), `"source_commit":"abcdef1234567890"`)
+}
+
+func TestAPIDatahubGetPullNormalizesStringifiedAuthorForUI(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "api-data-repo-pr-string-author-ui"
+	mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository, auth_model.AccessTokenScopeWriteUser)
+
+	req := NewRequestWithJSON(t, "POST", "/api/v1/user/repos", map[string]any{
+		"name":         repoName,
+		"is_data_repo": true,
+	}).AddTokenAuth(token)
+	session.MakeRequest(t, req, http.StatusCreated)
+
+	req = NewRequest(t, "GET", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1").AddTokenAuth(token)
+	resp := session.MakeRequest(t, req, http.StatusOK)
+	assert.Contains(t, resp.Body.String(), `"author":{`)
+	assert.Contains(t, resp.Body.String(), `"login":"user2"`)
+	assert.Contains(t, resp.Body.String(), `"html_url":"/user2"`)
+	assert.Contains(t, resp.Body.String(), `"avatar_url":"/`)
+	assert.NotContains(t, resp.Body.String(), `"{\"`)
+}
+
+func TestAPIDatahubMetaComputeRequiresSignedInUserFriendlyMessage(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+
+	repoName := "api-data-repo-meta-anonymous"
+	mockDatahubCoreCreate(t, repoName)
+
+	session := loginUser(t, "user2")
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository, auth_model.AccessTokenScopeWriteUser)
+
+	req := NewRequestWithJSON(t, "POST", "/api/v1/user/repos", map[string]any{
+		"name":         repoName,
+		"is_data_repo": true,
+	}).AddTokenAuth(token)
+	session.MakeRequest(t, req, http.StatusCreated)
+
+	req = NewRequestWithJSON(t, "POST", "/api/v1/repos/user2/"+repoName+"/datahub/meta/compute", map[string]any{
+		"file":    "train.jsonl",
+		"refresh": true,
+	})
+	resp := MakeRequest(t, req, http.StatusUnauthorized)
+	assert.Contains(t, resp.Body.String(), "Sign in to refresh dataset metadata")
+	assert.NotContains(t, resp.Body.String(), "token is required")
 }
 
 func TestDatahubPullRequestTemplateManagement(t *testing.T) {
@@ -572,6 +699,10 @@ func TestAPIDatahubGovernance(t *testing.T) {
 
 	currentUser := payload["current_user"].(map[string]any)
 	assert.Equal(t, true, currentUser["is_authenticated"])
+	assert.Equal(t, "user2", currentUser["login"])
+	assert.Equal(t, "user2", currentUser["username"])
+	assert.NotEmpty(t, currentUser["avatar_url"])
+	assert.Equal(t, "/user2", currentUser["html_url"])
 	assert.Equal(t, false, currentUser["can_merge"])
 	assert.Equal(t, "main", currentUser["target_branch"])
 
@@ -653,8 +784,7 @@ func TestAPIDatahubPullConversationAcceptsSignedInWebSession(t *testing.T) {
 	recorder.assertCreated(t)
 
 	req = NewRequestWithJSON(t, "POST", "/api/v1/repos/user2/"+repoName+"/datahub/pulls/1/comments", map[string]any{
-		"author": "user2",
-		"body":   "Needs owner sign-off",
+		"body": "Needs owner sign-off",
 	})
 	req.AddCookie(session.GetCookie(setting.SessionConfig.CookieName))
 	session.MakeRequest(t, req, http.StatusCreated)
@@ -693,6 +823,15 @@ func TestWebCreateDataRepo(t *testing.T) {
 	htmlDoc := NewHTMLParser(t, resp.Body)
 	htmlDoc.AssertElement(t, "#data-repo-home[data-owner='user2'][data-repo='"+repoName+"']", true)
 	htmlDoc.AssertElement(t, "overflow-menu .item[href='/user2/"+repoName+"']", true)
+
+	resp = session.MakeRequest(t, NewRequest(t, "GET", "/user2/"+repoName+"/pulls"), http.StatusSeeOther)
+	assert.Equal(t, "/user2/"+repoName+"/data/pulls", test.RedirectURL(resp))
+
+	resp = session.MakeRequest(t, NewRequest(t, "GET", "/user2/"+repoName+"/pulls/new?target=main"), http.StatusSeeOther)
+	assert.Equal(t, "/user2/"+repoName+"/data/pulls/new?target=main", test.RedirectURL(resp))
+
+	resp = session.MakeRequest(t, NewRequest(t, "GET", "/user2/"+repoName+"/pulls/7"), http.StatusSeeOther)
+	assert.Equal(t, "/user2/"+repoName+"/data/pulls/7", test.RedirectURL(resp))
 }
 
 func TestDataRepoActionsPageDoesNotRequireGitRepo(t *testing.T) {

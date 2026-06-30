@@ -1,6 +1,11 @@
-FROM --platform=$BUILDPLATFORM data.forgejo.org/oci/xx AS xx
+ARG DOCKER_MIRROR=docker.m.daocloud.io
 
-FROM --platform=$BUILDPLATFORM data.forgejo.org/oci/golang:1.26-alpine3.23 AS build-env
+FROM --platform=$BUILDPLATFORM ${DOCKER_MIRROR}/tonistiigi/xx AS xx
+
+FROM --platform=$BUILDPLATFORM ${DOCKER_MIRROR}/library/golang:1.26-alpine3.23 AS build-env
+
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories
 
 ARG GOPROXY
 ENV GOPROXY=${GOPROXY:-https://proxy.golang.org,direct}
@@ -51,8 +56,9 @@ RUN chmod 755 /tmp/local/usr/bin/entrypoint \
               /go/src/forgejo.org/environment-to-ini
 RUN chmod 644 /go/src/forgejo.org/contrib/autocompletion/bash_autocomplete
 
-FROM data.forgejo.org/oci/alpine:3.23
+FROM ${DOCKER_MIRROR}/library/alpine:3.23
 ARG RELEASE_VERSION
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
 LABEL maintainer="contact@forgejo.org" \
       org.opencontainers.image.authors="Forgejo" \
       org.opencontainers.image.url="https://forgejo.org" \
@@ -65,6 +71,8 @@ LABEL maintainer="contact@forgejo.org" \
       org.opencontainers.image.description="Forgejo is a self-hosted lightweight software forge. Easy to install and low maintenance, it just does the job."
 
 EXPOSE 22 3000
+
+RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories
 
 RUN apk --no-cache add \
     bash \

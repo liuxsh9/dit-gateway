@@ -5,6 +5,27 @@ if (typeof window !== 'undefined') {
 
   window.__webpack_public_path__ = '';
 
+  const storage = () => {
+    const values = new Map();
+    return {
+      clear: () => values.clear(),
+      getItem: (key) => values.get(String(key)) ?? null,
+      key: (index) => Array.from(values.keys())[index] ?? null,
+      removeItem: (key) => values.delete(String(key)),
+      setItem: (key, value) => values.set(String(key), String(value)),
+      get length() {
+        return values.size;
+      },
+    };
+  };
+
+  if (!window.localStorage) {
+    Object.defineProperty(window, 'localStorage', {value: storage(), configurable: true});
+  }
+  if (!window.sessionStorage) {
+    Object.defineProperty(window, 'sessionStorage', {value: storage(), configurable: true});
+  }
+
   window.config = {
     pageData: {},
     i18n: {},

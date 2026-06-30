@@ -8,6 +8,7 @@ export function initDatahubDataRepoHome() {
       owner: el.dataset.owner,
       repo: el.dataset.repo,
       defaultBranch: el.dataset.defaultBranch,
+      isSignedIn: el.dataset.isSigned === 'true',
     }).mount(el);
   });
 }

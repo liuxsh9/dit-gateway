@@ -12,7 +12,7 @@
             <i :class="statusIcon"></i>
             {{ statusLabel(pull.status) }}
           </span>
-          <strong>{{ pull.author || 'unknown author' }}</strong>
+          <strong>{{ displayUserName(pull) }}</strong>
           wants to merge
           <span class="datahub-branch">{{ sourceBranch }}</span>
           into
@@ -57,18 +57,18 @@
             <div class="datahub-pr-main-column">
               <div class="datahub-timeline">
                 <article class="datahub-timeline-item">
-                  <div class="datahub-timeline-marker is-open">
-                    <i class="code branch icon"></i>
-                  </div>
+                  <a class="datahub-timeline-avatar" :href="profileHref(pullUser(pull))" :aria-label="`View ${displayUserName(pull)} profile`">
+                    <img :src="avatarSrc(pullUser(pull))" :alt="displayUserName(pull)" @error="useFallbackAvatar">
+                  </a>
                   <div class="datahub-timeline-card">
                     <div class="datahub-timeline-card-header">
-                      <strong>{{ pull.author || 'unknown author' }}</strong>
+                      <a class="datahub-author-link" :href="profileHref(pullUser(pull))">{{ displayUserName(pull) }}</a>
                       opened this data pull request
                       <span class="datahub-muted">{{ formatTimestamp(pull.created_at || pull.created) }}</span>
                     </div>
                     <div class="datahub-timeline-body">
                       <p>
-                        {{ pull.author || 'unknown author' }} opened this data pull request from
+                        {{ displayUserName(pull) }} opened this data pull request from
                         <span class="datahub-branch">{{ sourceBranch }}</span>
                         into
                         <span class="datahub-branch">{{ targetBranch }}</span>.
@@ -87,12 +87,12 @@
                   :key="`comment-${comment.id || comment.created_at || comment.body}`"
                   class="datahub-timeline-item"
                 >
-                  <div class="datahub-timeline-marker">
-                    <i class="comment outline icon"></i>
-                  </div>
+                  <a class="datahub-timeline-avatar" :href="profileHref(commentUser(comment))" :aria-label="`View ${commentUserName(comment)} profile`">
+                    <img :src="avatarSrc(commentUser(comment))" :alt="commentUserName(comment)" @error="useFallbackAvatar">
+                  </a>
                   <div class="datahub-timeline-card">
                     <div class="datahub-timeline-card-header">
-                      <strong>{{ comment.author || comment.user || 'unknown reviewer' }}</strong>
+                      <a class="datahub-author-link" :href="profileHref(commentUser(comment))">{{ commentUserName(comment) }}</a>
                       commented<span v-if="comment.file_path"> on {{ comment.file_path }}</span>
                       <span class="datahub-muted">{{ formatTimestamp(comment.created_at || comment.updated_at) }}</span>
                       <div v-if="canWriteConversation && comment.id" class="datahub-comment-actions" @click.stop>
@@ -131,13 +131,16 @@
                   :key="`review-${review.id || review.created_at || review.status}`"
                   class="datahub-timeline-item"
                 >
-                  <div class="datahub-timeline-marker" :class="reviewMarkerClass(review)">
-                    <i :class="reviewIcon(review)"></i>
-                  </div>
+                  <a class="datahub-timeline-avatar" :href="profileHref(reviewUser(review))" :aria-label="`View ${reviewUserName(review)} profile`">
+                    <img :src="avatarSrc(reviewUser(review))" :alt="reviewUserName(review)" @error="useFallbackAvatar">
+                  </a>
                   <div class="datahub-timeline-card">
                     <div class="datahub-timeline-card-header">
-                      <strong>{{ review.author || review.reviewer || 'reviewer' }}</strong>
+                      <a class="datahub-author-link" :href="profileHref(reviewUser(review))">{{ reviewUserName(review) }}</a>
                       {{ reviewVerb(review) }}
+                      <span class="datahub-review-state-icon" :class="reviewMarkerClass(review)">
+                        <i :class="reviewIcon(review)"></i>
+                      </span>
                       <span class="datahub-muted">{{ formatTimestamp(review.created_at || review.submitted_at) }}</span>
                     </div>
                     <div class="datahub-timeline-body" v-if="review.body || review.message">
@@ -318,14 +321,14 @@
             </div>
           </div>
           <div class="datahub-commit-list">
-            <article class="datahub-commit-row" v-if="pull.source_commit">
+            <a class="datahub-commit-row" v-if="pull.source_commit" :href="commitHref(pull.source_commit)" @click.stop>
               <div class="datahub-commit-dot"></div>
               <div class="datahub-commit-main">
                 <strong>{{ pull.title || 'Update dataset' }}</strong>
-                <span>authored by {{ pull.author || 'unknown author' }}</span>
+                <span>authored by {{ displayUserName(pull) }}</span>
               </div>
               <code>{{ shortHash(pull.source_commit) }}</code>
-            </article>
+            </a>
             <div class="ui message" v-else>No comparable DIT commits are available for this pull request yet.</div>
           </div>
           <div class="datahub-commit-range">
@@ -532,7 +535,11 @@ export default {
       return this.governance?.current_user || {};
     },
     currentReviewerName() {
-      return this.currentUserGovernance.login || this.currentUserGovernance.username || this.currentUserGovernance.name || this.pull?.author || 'reviewer';
+      return this.currentUserGovernance.login || this.currentUserGovernance.username || this.currentUserGovernance.name || this.principalName(this.pull?.author) || 'reviewer';
+    },
+    currentReviewerProfile() {
+      if (!this.isSignedInForGovernance) return null;
+      return this.currentUserGovernance;
     },
     requiredApprovalsCount() {
       return Number(this.activeBranchProtection?.required_approvals || 0);
@@ -791,7 +798,7 @@ export default {
           method: 'POST',
           body: JSON.stringify({author: this.currentReviewerName, body}),
         });
-        this.comments = [...this.normalizedComments, comment];
+        this.comments = [...this.normalizedComments, this.enrichWithCurrentUser(comment)];
         this.newCommentBody = '';
       } catch (e) {
         this.conversationError = e.message;
@@ -854,16 +861,17 @@ export default {
       try {
         const review = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/reviews`, {
           method: 'POST',
-          body: JSON.stringify({status: this.reviewDecision}),
+          body: JSON.stringify({status: this.reviewDecision, author: this.currentReviewerName, reviewer: this.currentReviewerName}),
         });
-        let timelineReview = review;
+        let timelineReview = this.enrichWithCurrentUser(review, 'reviewer');
         if (body) {
           const comment = await datahubFetch(this.owner, this.repo, `/pulls/${this.pullId}/comments`, {
             method: 'POST',
             body: JSON.stringify({author: this.currentReviewerName, body}),
           });
-          this.comments = [...this.normalizedComments, comment];
+          this.comments = [...this.normalizedComments, this.enrichWithCurrentUser(comment)];
           timelineReview = {...review, body};
+          timelineReview = this.enrichWithCurrentUser(timelineReview, 'reviewer');
         }
         this.reviews = [...this.normalizedReviews, timelineReview];
         this.newReviewBody = '';
@@ -898,7 +906,7 @@ export default {
       this.diffFilesCount = payload?.filesCount || 0;
     },
     recordInlineComment(comment) {
-      this.comments = [...this.normalizedComments, comment];
+      this.comments = [...this.normalizedComments, this.enrichWithCurrentUser(comment)];
       this.selectTab('conversation', {replace: true});
     },
     commentLocationText(comment) {
@@ -979,9 +987,28 @@ export default {
       return [];
     },
     principalName(value) {
+      value = this.normalizeActorValue(value);
       if (!value) return '';
       if (typeof value === 'string') return value;
-      return value.login || value.username || value.name || value.full_name || '';
+      for (const key of ['login', 'username', 'name', 'full_name']) {
+        if (typeof value[key] === 'string' && value[key].trim()) return value[key];
+      }
+      for (const key of ['author', 'reviewer', 'user', 'poster']) {
+        if (value[key]) return this.principalName(value[key]);
+      }
+      return '';
+    },
+    pullUser(pull) {
+      const user = pull?.user || pull?.poster || pull?.author || pull;
+      return this.resolveDisplayUser(user);
+    },
+    commentUser(comment) {
+      const user = comment?.user || comment?.poster || comment?.author || comment;
+      return this.resolveDisplayUser(user);
+    },
+    reviewUser(review) {
+      const user = review?.user || review?.reviewer || review?.author || review;
+      return this.resolveDisplayUser(user);
     },
     formatPrincipalList(value, emptyText) {
       const names = this.normalizeList(value, []).map((item) => this.principalName(item)).filter(Boolean);
@@ -1006,6 +1033,77 @@ export default {
     },
     shortHash(hash) {
       return hash ? String(hash).slice(0, 7) : '-';
+    },
+    commitHref(hash) {
+      return `${this.repoPath}/data/commit/${encodeURIComponent(hash)}`;
+    },
+    displayUserName(value) {
+      return this.principalName(this.pullUser(value)) || 'unknown author';
+    },
+    commentUserName(comment) {
+      return this.principalName(this.commentUser(comment)) || 'unknown reviewer';
+    },
+    reviewUserName(review) {
+      return this.principalName(this.reviewUser(review)) || 'reviewer';
+    },
+    profileHref(value) {
+      value = this.resolveDisplayUser(value);
+      if (value && typeof value === 'object') {
+        const direct = value.html_url || value.htmlUrl || value.profile_url || value.profileUrl;
+        if (direct) return direct;
+        const nested = value.user || value.author || value.reviewer || value.poster;
+        if (nested && nested !== value) return this.profileHref(nested);
+      }
+      const userName = this.principalName(value);
+      return userName ? `/${encodeURIComponent(userName)}` : '#';
+    },
+    avatarSrc(value) {
+      value = this.resolveDisplayUser(value);
+      if (!value) return this.fallbackAvatarSrc('');
+      if (typeof value === 'object') {
+        const direct = value.avatar_url || value.avatar || value.avatar_link;
+        if (direct) return direct;
+        const nested = value.user || value.author || value.reviewer || value.poster;
+        if (nested && nested !== value) return this.avatarSrc(nested);
+      }
+      return this.fallbackAvatarSrc(this.principalName(value));
+    },
+    fallbackAvatarSrc(name) {
+      return `${window.config?.assetUrlPrefix || '/assets'}/img/avatar_default.png`;
+    },
+    useFallbackAvatar(event) {
+      event.target.src = this.fallbackAvatarSrc(event.target.alt);
+    },
+    enrichWithCurrentUser(value, field = 'author') {
+      if (!value || !this.currentReviewerProfile) return value;
+      return {
+        ...value,
+        [field]: this.currentReviewerProfile,
+      };
+    },
+    resolveDisplayUser(value) {
+      value = this.normalizeActorValue(value);
+      const name = this.principalName(value);
+      if (!this.isPlaceholderActorValue(value, name)) return value;
+      return this.currentReviewerProfile || value;
+    },
+    normalizeActorValue(value) {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      if (!trimmed || trimmed[0] !== '{') return value;
+      try {
+        const parsed = JSON.parse(trimmed);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : value;
+      } catch {
+        return value;
+      }
+    },
+    isPlaceholderActor(name) {
+      return ['', 'unknown', 'unknown-token', 'service-token', 'reviewer', 'unknown reviewer'].includes(String(name || '').trim().toLowerCase());
+    },
+    isPlaceholderActorValue(value, name = this.principalName(value)) {
+      if (typeof value === 'string') return this.isPlaceholderActor(name);
+      return ['', 'unknown', 'unknown-token', 'service-token', 'unknown reviewer'].includes(String(name || '').trim().toLowerCase());
     },
     formatCount(value) {
       return Number(value || 0).toLocaleString();
@@ -1221,6 +1319,47 @@ export default {
   background: var(--color-red);
   border-color: var(--color-red);
   color: var(--color-white);
+}
+
+.datahub-timeline-avatar {
+  align-items: center;
+  background: var(--color-box-body);
+  border: 1px solid var(--color-secondary);
+  border-radius: 50%;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  overflow: hidden;
+  width: 34px;
+}
+
+.datahub-timeline-avatar img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.datahub-author-link {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.datahub-review-state-icon {
+  align-items: center;
+  border-radius: 50%;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
+.datahub-review-state-icon.is-approved {
+  color: var(--color-green);
+}
+
+.datahub-review-state-icon.is-blocked {
+  color: var(--color-red);
 }
 
 .datahub-timeline-card,
@@ -1527,10 +1666,17 @@ export default {
 .datahub-check-row {
   align-items: center;
   border-bottom: 1px solid var(--color-secondary);
+  color: var(--color-text);
   display: grid;
   gap: 12px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   padding: 12px 14px;
+  text-decoration: none;
+}
+
+.datahub-commit-row:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
 }
 
 .datahub-commit-row:last-child,

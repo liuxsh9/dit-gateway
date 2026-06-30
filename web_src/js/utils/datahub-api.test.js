@@ -43,6 +43,18 @@ test('datahubFetch surfaces JSON detail when message is unavailable', async () =
   await expect(datahubFetch('alice', 'dataset', '/tree/bad')).rejects.toThrow("DataHub request failed with 404 Not Found: Ref 'heads/bad' not found.");
 });
 
+test('datahubFetch summarizes FastAPI validation details', async () => {
+  vi.spyOn(window, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+    detail: [{loc: ['body', 'author'], msg: 'Field required'}],
+  }), {
+    status: 422,
+    statusText: 'Unprocessable Entity',
+    headers: {'Content-Type': 'application/json'},
+  }));
+
+  await expect(datahubFetch('alice', 'dataset', '/pulls')).rejects.toThrow('DataHub request failed with 422 Unprocessable Entity: author: Field required.');
+});
+
 test('datahubFetch rejects HTML pages returned from API routes', async () => {
   vi.spyOn(window, 'fetch').mockResolvedValue(new Response('<html>login</html>', {
     status: 200,

@@ -1411,10 +1411,12 @@ func registerRoutes(m *web.Route) {
 	}, context.RepoAssignment, context.RepoMustNotBeArchived(), reqRepoAdmin)
 
 	m.Group("/{username}/{reponame}", func() {
+		m.Get("/{type:^(pulls)$}", repo.DataHubPullListLegacyRedirect, context.RepoRef(), repo.Issues)
+		m.Get("/{type:^(pulls)$}/{index}", repo.DataHubPullItemLegacyRedirect, context.RepoRef(), repo.ViewIssue)
 		m.Group("", func() {
 			m.Get("/issues/posters", repo.IssuePosters) // it can't use {type:issues|pulls} because other routes like "/pulls/{index}" has higher priority
-			m.Get("/{type:^(issues|pulls)$}", repo.Issues)
-			m.Get("/{type:^(issues|pulls)$}/{index}", repo.ViewIssue)
+			m.Get("/{type:^(issues)$}", repo.Issues)
+			m.Get("/{type:^(issues)$}/{index}", repo.ViewIssue)
 			m.Group("/{type:^(issues|pulls)$}/{index}/content-history", func() {
 				m.Get("/overview", repo.GetContentHistoryOverview)
 				m.Get("/list", repo.GetContentHistoryList)
@@ -1617,7 +1619,7 @@ func registerRoutes(m *web.Route) {
 					m.Post("/submit", web.Bind(forms.SubmitReviewForm{}), repo.SubmitReview)
 				}, context.RepoMustNotBeArchived())
 			})
-		}, repo.MustAllowPulls)
+		}, repo.DataHubPullItemLegacyRedirect, repo.MustAllowPulls)
 
 		m.Group("/media", func() {
 			m.Get("/branch/*", context.RepoRefByType(context.RepoRefBranch), repo.SingleDownloadOrLFS)

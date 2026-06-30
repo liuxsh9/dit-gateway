@@ -312,6 +312,10 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   expect(wrapper.text()).toContain('erin, frank');
   expect(wrapper.find('a[href="/alice/dataset/settings/collaboration"]').exists()).toBe(true);
   expect(wrapper.find('a[href="/alice/dataset/settings/branches"]').exists()).toBe(true);
+  expect(wrapper.find('a.datahub-author-link[href="/carol"]').exists()).toBe(true);
+  expect(wrapper.find('a.datahub-author-link[href="/erin"]').exists()).toBe(true);
+  expect(wrapper.find('a.datahub-timeline-avatar[href="/carol"] img').attributes('src')).toBe('/assets/img/avatar_default.png');
+  expect(wrapper.find('a.datahub-commit-row[href="/alice/dataset/data/commit/sourcecommit123456"]').exists()).toBe(true);
   expect(wrapper.find('.datahub-pr-summary-bar').exists()).toBe(false);
   expect(wrapper.find('.datahub-pull-page').classes()).not.toContain('is-files-tab');
 
@@ -360,7 +364,7 @@ test('loads a github-like pull request conversation with timeline, checks, commi
   await vi.waitFor(() => expect(wrapper.text()).toContain('Approved for merge.'));
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/reviews', {
     method: 'POST',
-    body: JSON.stringify({status: 'approved'}),
+    body: JSON.stringify({status: 'approved', author: 'carol', reviewer: 'carol'}),
   });
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7/comments', {
     method: 'POST',
@@ -376,6 +380,127 @@ test('loads a github-like pull request conversation with timeline, checks, commi
     }),
   }));
   expect(datahubFetch).toHaveBeenCalledWith('alice', 'dataset', '/pulls/7');
+});
+
+test('uses current user profile when datahub returns service-token actors', async () => {
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls/7') {
+      return {
+        pull_request_id: 7,
+        title: 'Token actor cleanup',
+        author: 'service-token',
+        status: 'open',
+        source_ref: 'heads/safety-refresh',
+        target_ref: 'heads/main',
+        source_commit: 'sourcecommit123456',
+        target_commit: 'targetcommit123456',
+      };
+    }
+    if (path === '/pulls/7/comments') {
+      return [{id: 1, author: 'service-token', body: 'Rendered as the signed-in user'}];
+    }
+    if (path === '/pulls/7/reviews') {
+      return [{id: 2, reviewer: 'service-token', status: 'approved'}];
+    }
+    if (path === '/checks/sourcecommit123456') return {checks: []};
+    if (path === '/governance?target_branch=main') {
+      return {
+        repository: {permissions: {push: true, pull: true}, allow_squash_merge: true},
+        reviewers: [],
+        current_user: {
+          is_authenticated: true,
+          can_merge: true,
+          login: 'carol',
+          avatar_url: '/avatars/carol.png',
+          html_url: '/carol',
+        },
+        branch_protections: [],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullPage, {
+    props: {owner: 'alice', repo: 'dataset', pullId: '7'},
+    global: {stubs: {DataDiffView: diffStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Token actor cleanup'));
+  expect(wrapper.text()).not.toContain('service-token');
+  expect(wrapper.text()).toContain('carol opened this data pull request');
+  expect(wrapper.text()).toContain('carol commented');
+  expect(wrapper.text()).toContain('carol approved these changes');
+  expect(wrapper.find('a.datahub-author-link[href="/carol"]').exists()).toBe(true);
+  expect(wrapper.find('a.datahub-timeline-avatar[href="/carol"] img').attributes('src')).toBe('/avatars/carol.png');
+  expect(wrapper.find('a.datahub-commit-row[href="/alice/dataset/data/commit/sourcecommit123456"]').exists()).toBe(true);
+});
+
+test('renders stringified user objects as linked users with avatars', async () => {
+  const sysProfile = JSON.stringify({
+    login: 'sys',
+    username: 'sys',
+    name: 'sys',
+    full_name: '',
+    avatar_url: '/avatars/sys.png',
+    html_url: '/sys',
+  });
+  const reviewerProfile = JSON.stringify({
+    login: 'reviewer',
+    avatar_url: '/avatars/reviewer.png',
+    html_url: '/reviewer',
+  });
+
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/pulls/7') {
+      return {
+        pull_request_id: 7,
+        title: 'String actor cleanup',
+        author: sysProfile,
+        status: 'open',
+        source_ref: 'heads/string-actor',
+        target_ref: 'heads/main',
+        source_commit: 'sourcecommit123456',
+        target_commit: 'targetcommit123456',
+      };
+    }
+    if (path === '/pulls/7/comments') {
+      return [{id: 1, author: sysProfile, body: 'Rendered from a JSON string actor'}];
+    }
+    if (path === '/pulls/7/reviews') {
+      return [{id: 2, reviewer: reviewerProfile, status: 'approved'}];
+    }
+    if (path === '/checks/sourcecommit123456') return {checks: []};
+    if (path === '/governance?target_branch=main') {
+      return {
+        repository: {permissions: {push: true, pull: true}, allow_squash_merge: true},
+        reviewers: [],
+        current_user: {
+          is_authenticated: true,
+          can_merge: true,
+          login: 'writer',
+          avatar_url: '/avatars/writer.png',
+          html_url: '/writer',
+        },
+        branch_protections: [],
+      };
+    }
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataPullPage, {
+    props: {owner: 'alice', repo: 'dataset', pullId: '7'},
+    global: {stubs: {DataDiffView: diffStub}},
+  });
+
+  await vi.waitFor(() => expect(wrapper.text()).toContain('String actor cleanup'));
+  expect(wrapper.text()).not.toContain('"avatar_url"');
+  expect(wrapper.text()).toContain('sys opened this data pull request');
+  expect(wrapper.text()).toContain('sys commented');
+  expect(wrapper.text()).toContain('reviewer approved these changes');
+  expect(wrapper.find('a.datahub-author-link[href="/sys"]').exists()).toBe(true);
+  expect(wrapper.find('a.datahub-author-link[href="/reviewer"]').exists()).toBe(true);
+  expect(wrapper.find('a.datahub-timeline-avatar[href="/sys"] img').attributes('src')).toBe('/avatars/sys.png');
+  expect(wrapper.find('a.datahub-timeline-avatar[href="/reviewer"] img').attributes('src')).toBe('/avatars/reviewer.png');
 });
 
 test('disables merge for anonymous users even when the pull is otherwise mergeable', async () => {
