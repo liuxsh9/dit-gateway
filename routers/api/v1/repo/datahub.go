@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -525,9 +526,7 @@ func datahubEnrichedActorPayload(ctx *context.APIContext, actor map[string]any) 
 	}
 
 	payload := make(map[string]any, len(actor)+4)
-	for key, value := range actor {
-		payload[key] = value
-	}
+	maps.Copy(payload, actor)
 	if name != "" {
 		for _, key := range []string{"login", "username", "name"} {
 			if strings.TrimSpace(datahubStringField(payload, key)) == "" {
