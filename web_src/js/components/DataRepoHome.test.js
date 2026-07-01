@@ -95,6 +95,40 @@ test('restores the branch selected on the data page from the URL', async () => {
   window.history.pushState({}, '', '/');
 });
 
+test('defaults to the repository main branch instead of the last locally selected branch', async () => {
+  window.history.pushState({}, '', '/alice/dataset');
+  window.localStorage.setItem('datahub-current-branch:alice/dataset', 'feature/sft-refresh');
+  datahubFetch.mockImplementation(async (_owner, _repo, path) => {
+    if (path === '/refs') {
+      return [
+        {name: 'heads/main', target_hash: 'maincommit'},
+        {name: 'heads/feature/sft-refresh', target_hash: 'featurecommit'},
+      ];
+    }
+    if (path === '/refs/heads/main') return {target_hash: 'maincommit'};
+    if (path === '/tree/maincommit') return {entries: []};
+    if (path === '/stats/maincommit') {
+      return {
+        files: [],
+        totals: {file_count: 0, row_count: 0, char_count: 0, token_estimate: 0, lang_distribution: {}},
+      };
+    }
+    if (path === '/checks/maincommit') return {checks: []};
+    if (path === '/log?ref=heads/main&limit=5') return {commits: []};
+    if (path === '/pulls?status=open') return [];
+    throw new Error(`unexpected path ${path}`);
+  });
+
+  const wrapper = mount(DataRepoHome, {
+    props: {owner: 'alice', repo: 'dataset', defaultBranch: 'main', isSignedIn: true},
+  });
+  await vi.waitFor(() => expect(wrapper.vm.currentBranch).toBe('heads/main'));
+
+  expect(datahubFetch).not.toHaveBeenCalledWith('alice', 'dataset', '/refs/heads/feature/sft-refresh');
+  expect(window.location.search).toBe('?branch=main');
+  window.history.pushState({}, '', '/');
+});
+
 test('keeps the selected data branch in the URL when switching branches', async () => {
   window.history.pushState({}, '', '/alice/dataset');
   datahubFetch.mockImplementation(async (owner, repo, path) => {

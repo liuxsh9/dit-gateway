@@ -713,9 +713,6 @@ export default {
     currentBranchName() {
       return this.currentBranch ? this.branchName(this.currentBranch) : (this.defaultBranch || 'main');
     },
-    branchStorageKey() {
-      return `datahub-current-branch:${this.owner}/${this.repo}`;
-    },
     commitsHref() {
       return `${this.repoPath}/data/commits/${encodeURIComponent(this.branchName(this.currentBranch) || this.defaultBranch || 'main')}`;
     },
@@ -1297,7 +1294,6 @@ export default {
     resolveInitialBranch() {
       const candidates = [
         this.branchRefFromName(new URLSearchParams(window.location?.search || '').get('branch')),
-        this.branchRefFromName(this.readStoredBranch()),
         this.branchRefFromName(this.defaultBranch),
       ].filter(Boolean);
       for (const candidate of candidates) {
@@ -1309,23 +1305,11 @@ export default {
       if (!this.currentBranch) return;
       const branch = this.branchName(this.currentBranch);
       try {
-        window.localStorage?.setItem(this.branchStorageKey, branch);
-      } catch {
-        // Ignore unavailable storage; the URL remains the canonical visible state.
-      }
-      try {
         const url = new URL(window.location.href);
         url.searchParams.set('branch', branch);
         window.history?.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
       } catch {
         // Ignore non-browser or locked history environments.
-      }
-    },
-    readStoredBranch() {
-      try {
-        return window.localStorage?.getItem(this.branchStorageKey) || '';
-      } catch {
-        return '';
       }
     },
     branchRefFromName(branch) {
