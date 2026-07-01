@@ -54,6 +54,17 @@ func TestSignUpDefault(t *testing.T) {
 	assert.Contains(t, resp.Body.String(), ctx.Locale.Tr("username"))
 }
 
+func TestSignUpClearsStaleRedirectCookie(t *testing.T) {
+	ctx, resp := contexttest.MockContext(t, "/user/sign_up",
+		contexttest.MockContextOption{Render: templates.HTMLRenderer()})
+	ctx.Req.AddCookie(&http.Cookie{Name: "redirect_to", Value: "/user/forgot_password"})
+
+	SignUp(ctx)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Contains(t, resp.Header().Values("Set-Cookie"), "redirect_to=; Max-Age=0; HttpOnly; SameSite=Lax")
+}
+
 func TestSignUpDisabled(t *testing.T) {
 	ctx, resp := contexttest.MockContext(t, "/user/sign_up",
 		contexttest.MockContextOption{Render: templates.HTMLRenderer()})
