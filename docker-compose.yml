@@ -49,6 +49,13 @@ services:
       FORGEJO__repository__MAX_CREATION_LIMIT: "${USER_REPO_CREATION_LIMIT:-0}"
       FORGEJO__service__DEFAULT_ALLOW_CREATE_ORGANIZATION: "${ALLOW_USER_ORG_CREATION:-false}"
       FORGEJO__admin__DISABLE_REGULAR_ORG_CREATION: "${DISABLE_REGULAR_ORG_CREATION:-true}"
+      FORGEJO__mailer__ENABLED: "${MAILER_ENABLED:-false}"
+      FORGEJO__mailer__PROTOCOL: "${MAILER_PROTOCOL:-smtp}"
+      FORGEJO__mailer__SMTP_ADDR: "${MAILER_SMTP_ADDR:-mailpit}"
+      FORGEJO__mailer__SMTP_PORT: "${MAILER_SMTP_PORT:-1025}"
+      FORGEJO__mailer__USER: "${MAILER_USER:-}"
+      FORGEJO__mailer__PASSWD: "${MAILER_PASSWD:-}"
+      FORGEJO__mailer__FROM: "${MAILER_FROM:-noreply@localhost}"
       FORGEJO__datahub__ENABLED: "true"
       FORGEJO__datahub__CORE_URL: "http://core:8000"
       FORGEJO__datahub__SERVICE_TOKEN: "${SERVICE_TOKEN:?set SERVICE_TOKEN in .env}"
@@ -57,6 +64,8 @@ services:
         condition: service_healthy
       core:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     volumes:
       - forgejo-data:/data
     healthcheck:
@@ -72,6 +81,19 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+  mailpit:
+    image: ${MAILPIT_IMAGE:-axllent/mailpit:latest}
+    ports:
+      - "${MAILPIT_WEB_PORT:-8025}:8025"
+    expose:
+      - "1025"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   core:
     image: ${CORE_IMAGE:-dit-core:local}

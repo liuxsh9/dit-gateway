@@ -418,6 +418,8 @@ func SignUp(ctx *context.Context) {
 	redirectTo := ctx.FormString("redirect_to")
 	if len(redirectTo) > 0 {
 		middleware.SetRedirectToCookie(ctx.Resp, redirectTo)
+	} else {
+		middleware.DeleteRedirectToCookie(ctx.Resp)
 	}
 
 	ctx.HTML(http.StatusOK, tplSignUp)
